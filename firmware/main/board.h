@@ -1,4 +1,7 @@
 #pragma once
+#include "driver/spi_master.h"  // SPI2_HOST / SPI3_HOST
+#include "driver/i2c.h"         // I2C_NUM_0 (i2c_port_t)
+#include "esp_adc/adc_oneshot.h" // ADC_CHANNEL_3 (adc_channel_t)
 // Pin-map Waveshare ESP32-S3-ePaper-1.54G (modulo ESP32-S3-PICO-1-N8R8) — UNICA fonte dei GPIO.
 //
 // Valori ricavati da: github.com/waveshareteam/ESP32-S3-ePaper-1.54G (clone di riferimento,
