@@ -38,8 +38,12 @@ static const char *TAG = "power";
 
 void power_init(void)
 {
+    // BOARD_BTN_USER (dev-mode/wake) e BOARD_BTN_PWR configurati insieme,
+    // stessa polarita' attivo-basso: BOARD_BTN_PWR viene incluso qui solo a
+    // scopo diagnostico bring-up (mappatura dei due tasti fisici), non e'
+    // ancora usato dalla logica di boot mode.
     gpio_config_t io = {
-        .pin_bit_mask = 1ULL << BOARD_BTN_USER,
+        .pin_bit_mask = (1ULL << BOARD_BTN_USER) | (1ULL << BOARD_BTN_PWR),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = BOARD_BTN_ACTIVE_LOW ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE,
         .pull_down_en = BOARD_BTN_ACTIVE_LOW ? GPIO_PULLDOWN_DISABLE : GPIO_PULLDOWN_ENABLE,
