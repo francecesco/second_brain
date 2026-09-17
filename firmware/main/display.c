@@ -1,20 +1,23 @@
-// e-Paper display driver (1.54", 200x200, Waveshare "1.54G" panel).
+// e-Paper display driver (1.54", 200x200, Waveshare "ESP32-S3 1.54inch e-Paper
+// Dev Board" B/W, hardware V2).
 //
-// Ported from the Waveshare reference repo (Task 2/3 source):
-//   github.com/waveshareteam/ESP32-S3-ePaper-1.54G (clone di riferimento, non incluso nel repo)
-//   Example/ESP-IDF_5.5.1/09_E_Paper_Test/components/epaper_port/epaper_port.c
-//     -> SPI bring-up (SPI3_HOST, manual CS/DC/RST, BUSY polling) e sequenza di init pannello
-//        (comandi 0x4D/0x00 PSR/0x06 BTST_P/0x50 CDI/0x61 TRES/0xE9/0x30 PLL/0x04 power-on,
-//        0x10 data-start-transmission, 0x12 display-refresh).
-//   Example/ESP-IDF_5.5.1/09_E_Paper_Test/components/epaper_src/Fonts/font12.cpp
-//     -> tabella bitmap font (Courier New 12pt, 7x12, spazio..'~'), copiata verbatim.
-//
-// NOTA sul pannello: il modulo reale è un e-Paper 4 colori (nero/bianco/giallo/rosso,
-// 2 bit/pixel, 4 pixel/byte) e non un pannello 1-bit puro. L'interfaccia richiesta da
-// questo task (`display_blit_1bit`, buffer 200x200 1 bit/pixel) resta comunque valida:
-// ogni pixel del buffer 1-bit viene mappato sui soli indici colore NERO(0x0)/BIANCO(0x1)
-// del controller, che sono bit-compatibili con una resa bianco/nero. Segnalato come nota,
-// non come problema di pin (i pin BOARD_EPD_* sono confermati dal repo di riferimento).
+// REDO: la scheda reale monta un pannello B/N (pannello GDEH0154D67, controller
+// SSD1681), NON il pannello 4 colori usato per errore nel tentativo precedente.
+// Ported from the CORRECT Waveshare reference repo:
+//   github.com/waveshareteam/ESP32-S3-ePaper-1.54 (clone di riferimento in /tmp,
+//   non incluso nel repo)
+//   02_Example/ESP-IDF/V2/12_RTC_Sleep_Test/components/epaper_driver_bsp/epaper_driver_bsp.{h,cpp}
+//     -> init pannello SSD1681 (SWRESET 0x12, Driver Output Control 0x01, Data
+//        Entry Mode 0x11, RAM X/Y window 0x44/0x45, RAM X/Y counter 0x4E/0x4F,
+//        Border Waveform 0x3C, Temperature Sensor 0x18, Display Update Control
+//        0x22 + Master Activation 0x20, LUT custom via 0x32/0x3F/0x03/0x04/0x2C),
+//        BUSY polarity (read_busy(): "LOW: idle, HIGH: busy"), refresh (Write
+//        RAM B/W 0x24 + Display Update Control 0x22=0xC7 + Master Activation
+//        0x20). Il font (font12, Courier New 7x12) e la logica di rendering
+//        testo di questo file non provengono da questo driver (che non ha un
+//        livello testo) e sono stati mantenuti dal tentativo precedente.
+//   02_Example/ESP-IDF/V2/12_RTC_Sleep_Test/main/user_config.h
+//     -> pin map (vedi board.h)
 
 #include "display.h"
 #include "board.h"
@@ -29,12 +32,10 @@
 
 static const char *TAG = "epd";
 
-// Indici colore del controller (solo bianco/nero usati da questo driver).
-#define EPD_COLOR_BLACK 0x0
-#define EPD_COLOR_WHITE 0x1
-
-// Fix round 2: alzato da 15000 a 25000 per non tagliare la traccia diagnostica
-// di un refresh reale del pannello 4 colori, che puo' durare 15-20s.
+// Timeout BUSY: un refresh full-update SSD1681 può richiedere alcuni secondi
+// (tipicamente 1-3s per un pannello 1.54" 200x200); teniamo comunque un
+// margine ampio (25s) per non tagliare la traccia diagnostica in caso di
+// comportamento anomalo sull'hardware reale.
 #define EPD_BUSY_TIMEOUT_MS 25000
 #define EPD_SPI_CLOCK_HZ (20 * 1000 * 1000)
 
@@ -42,10 +43,48 @@ static spi_device_handle_t s_spi;
 static bool s_ready = false;
 
 // Framebuffer 1 bit/pixel, 200x200 -> 5000 byte, statico (niente PSRAM su questa scheda).
+// Contratto pubblico (invariato): bit=1 -> nero, bit=0 -> bianco (vedi app_main.c).
 static uint8_t s_fb[(DISPLAY_W * DISPLAY_H) / 8];
 
+// Buffer di appoggio per l'invio alla RAM del controller SSD1681: la RAM B/N
+// del SSD1681 usa la convenzione opposta al nostro framebuffer pubblico
+// (bit=1 -> bianco, bit=0 -> nero, come da EPD_Clear()/EPD_DrawColorPixel() del
+// driver di riferimento: DRIVER_COLOR_WHITE=0xFF che imposta i bit, DRIVER_COLOR_BLACK=0x0
+// che li azzera). display_blit_1bit inverte quindi ogni byte prima di scriverlo
+// in RAM via comando 0x24.
+static uint8_t s_panel_buf[(DISPLAY_W * DISPLAY_H) / 8];
+
 // ---------------------------------------------------------------------------
-// Font bitmap (Courier New 12pt, 7x12), portato verbatim da font12.cpp Waveshare.
+// LUT full-refresh SSD1681 per pannello 1.54" (WF_Full_1IN54), 159 byte,
+// copiata verbatim da epaper_driver_bsp.cpp (driver ufficiale di riferimento).
+// Layout: [0..152] = LUT (0x32), [153] = VGH/VSH1/VSH2/VSL (0x3F),
+// [154] = timing (0x03), [155..157] = timing (0x04, 3 byte), [158] = frame
+// rate register (0x2C).
+// ---------------------------------------------------------------------------
+static const uint8_t s_lut_full_1in54[159] = {
+    0x80, 0x48, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x40, 0x48, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x80, 0x48, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x40, 0x48, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x08, 0x01, 0x00, 0x08, 0x01, 0x00, 0x02,
+    0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x00, 0x00, 0x00,
+    0x22, 0x17, 0x41, 0x00, 0x32, 0x20,
+};
+
+// ---------------------------------------------------------------------------
+// Font bitmap (Courier New 12pt, 7x12), invariato dal tentativo precedente.
 // Glifi da ' ' (0x20) a '~' (0x7E), 1 byte/riga (larghezza 7 <= 8 bit), 12 righe/glifo.
 // ---------------------------------------------------------------------------
 #define FONT_W 7
@@ -247,7 +286,8 @@ static const uint8_t s_font12_table[] = {
 };
 
 // ---------------------------------------------------------------------------
-// GPIO / SPI low level (CS/DC/RST manuali, come nel driver di riferimento)
+// GPIO / SPI low level (CS/DC/RST manuali, come nel driver di riferimento:
+// spics_io_num = -1, toggling manuale di CS/DC via gpio_set_level).
 // ---------------------------------------------------------------------------
 
 static inline void epd_rst(int level) { gpio_set_level(BOARD_EPD_RST, level); }
@@ -263,10 +303,6 @@ static esp_err_t epd_spi_send_byte(uint8_t byte)
     return spi_device_polling_transmit(s_spi, &t);
 }
 
-// Finding B (fix round 1): epd_send_command/epd_send_data ora restituiscono
-// esp_err_t, cosi' epd_panel_init()/display_blit_1bit() possono rilevare e
-// propagare un errore SPI a livello di singolo byte, invece di scoprirlo solo
-// (o non scoprirlo affatto) tramite un successivo timeout di BUSY.
 static esp_err_t epd_send_command(uint8_t reg)
 {
     epd_dc(0);
@@ -291,42 +327,61 @@ static esp_err_t epd_send_data(uint8_t data)
     return err;
 }
 
-// Fix round 4: ripristinata la polarita' BUSY di riferimento idle=HIGH(1) /
-// busy=LOW(0), confermata dal driver Waveshare epaper_port.c
-// (`epaper_readbusyh`: `if (ReadBusy) return;`, cioe' esce=rilasciato quando
-// il livello e' 1). L'inversione del round 3 (busy=HIGH) faceva interpretare
-// la linea BUSY, che a riposo sta stabilmente a 1 (idle), come "occupata per
-// sempre": il wait di power-on/refresh andava in timeout a 25s e
-// ESP_ERROR_CHECK(display_init()) abortiva -> BOOT LOOP. Con la polarita'
-// corretta la linea a 1 viene letta come idle e il handshake non blocca piu'
-// il boot.
+// Trasferimento bulk (usato per la LUT a 153 byte e per il framebuffer a 5000
+// byte), porting di writeBytes() in epaper_driver_bsp.cpp: un'unica transazione
+// SPI con DC=1/CS=0 per tutta la durata del blocco, invece di un byte per volta.
+static esp_err_t epd_write_bytes(const uint8_t *data, size_t len)
+{
+    epd_dc(1);
+    epd_cs(0);
+    spi_transaction_t t;
+    memset(&t, 0, sizeof(t));
+    t.length = 8 * len;
+    t.tx_buffer = data;
+    esp_err_t err = spi_device_polling_transmit(s_spi, &t);
+    epd_cs(1);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "SPI error writing %u bytes: %s", (unsigned)len, esp_err_to_name(err));
+    }
+    return err;
+}
+
+// ---------------------------------------------------------------------------
+// BUSY handshake.
 //
-// La strumentazione del round 2 (livello raw iniziale, log di ogni
-// transizione con timestamp, tempo totale osservato in stato busy, timeout
-// 25s, debounce a 3 campioni) e' mantenuta invariata: serve a distinguere sul
-// prossimo capture seriale "il pannello entra davvero in busy per secondi"
-// (fix riuscito) da "BUSY non scende mai, refresh mai eseguito".
+// Redo (SSD1681 B/W): polarità confermata dal driver ufficiale della scheda
+// CORRETTA (epaper_driver_bsp.cpp, read_busy()):
+//   "while(gpio_get_level(busy) == 1) vTaskDelay(...); // LOW: idle, HIGH: busy"
+// cioè BUSY=HIGH(1) mentre il pannello è occupato, BUSY=LOW(0) quando è
+// idle/pronto. Confermato indipendentemente dal crate Rust epd-waveshare
+// (epd1in54_v2, stesso pannello GDEH0154D67): IS_BUSY_LOW = false.
+// QUESTO È L'OPPOSTO della polarità "idle=HIGH" usata nel tentativo precedente
+// (derivata dal driver del pannello 4 colori sbagliato).
 //
-// Polarita' implementata: BUSY==1 (HIGH) = idle, BUSY==0 (LOW) = occupato;
-// rilascio dichiarato dopo EPD_BUSY_IDLE_CONFIRM_SAMPLES campioni HIGH stabili.
+// Strumentazione mantenuta invariata rispetto al tentativo precedente (livello
+// raw all'avvio, log di ogni transizione con timestamp, tempo totale osservato
+// in stato busy, timeout 25s, debounce a 3 campioni) per poter confermare sul
+// prossimo capture seriale che il refresh reale tiene la linea busy per
+// secondi (comportamento atteso di un vero full-refresh SSD1681), invece dei
+// millisecondi che avrebbe prodotto una polarità invertita per errore.
 #define EPD_BUSY_POLL_MS 100
-#define EPD_BUSY_IDLE_CONFIRM_SAMPLES 3 // ~300ms di idle (HIGH) stabile prima di dichiarare "rilasciato"
+#define EPD_BUSY_IDLE_CONFIRM_SAMPLES 3 // ~300ms di idle (LOW) stabile prima di dichiarare "rilasciato"
 
 static esp_err_t epd_wait_busy(const char *phase)
 {
     int level = gpio_get_level(BOARD_EPD_BUSY);
     int last_level = level;
-    int idle_run = (level == 1) ? 1 : 0;
+    int idle_run = (level == 0) ? 1 : 0;
     uint32_t total_busy_ms = 0;
     TickType_t t_start = xTaskGetTickCount();
-    TickType_t t_busy_since = (level == 0) ? t_start : 0;
+    TickType_t t_busy_since = (level == 1) ? t_start : 0;
 
-    ESP_LOGI(TAG, "epd: %s - waiting BUSY (livello raw iniziale=%d)", phase, level);
+    ESP_LOGI(TAG, "epd: %s - waiting BUSY (livello raw iniziale=%d; busy=HIGH/idle=LOW)", phase, level);
 
     for (;;) {
         uint32_t elapsed_ms = (uint32_t)((xTaskGetTickCount() - t_start) * portTICK_PERIOD_MS);
 
-        if (level == 1 && idle_run >= EPD_BUSY_IDLE_CONFIRM_SAMPLES) {
+        if (level == 0 && idle_run >= EPD_BUSY_IDLE_CONFIRM_SAMPLES) {
             ESP_LOGI(TAG, "epd: %s - BUSY released a t=%ums (tempo totale osservato in stato busy: %ums)",
                      phase, (unsigned int)elapsed_ms, (unsigned int)total_busy_ms);
             return ESP_OK;
@@ -344,7 +399,7 @@ static esp_err_t epd_wait_busy(const char *phase)
         if (level != last_level) {
             ESP_LOGI(TAG, "epd: %s - BUSY transizione a t=%ums: livello %d -> %d",
                      phase, (unsigned int)elapsed_ms, last_level, level);
-            if (level == 0) {
+            if (level == 1) {
                 t_busy_since = xTaskGetTickCount();
                 idle_run = 0;
             } else {
@@ -352,20 +407,22 @@ static esp_err_t epd_wait_busy(const char *phase)
                 idle_run = 1;
             }
             last_level = level;
-        } else if (level == 1) {
+        } else if (level == 0) {
             idle_run++;
         }
     }
 }
 
+// Reset hardware: RST=1, 50ms; RST=0, 20ms; RST=1, 50ms — timing esatto del
+// driver di riferimento (EPD_Init(), righe iniziali).
 static void epd_reset(void)
 {
     epd_rst(1);
-    vTaskDelay(pdMS_TO_TICKS(200));
+    vTaskDelay(pdMS_TO_TICKS(50));
     epd_rst(0);
     vTaskDelay(pdMS_TO_TICKS(20));
     epd_rst(1);
-    vTaskDelay(pdMS_TO_TICKS(200));
+    vTaskDelay(pdMS_TO_TICKS(50));
 }
 
 static esp_err_t epd_gpio_init(void)
@@ -383,21 +440,9 @@ static esp_err_t epd_gpio_init(void)
         return err;
     }
 
-    // Fix round 1 (Finding A): il driver di riferimento Waveshare configura BUSY
-    // riusando lo stesso gpio_config_t degli output CS/DC/RST, che ha
-    // pull_up_en = GPIO_PULLUP_ENABLE (vedi epaper_gpio_init() in epaper_port.c:
-    // il campo non viene mai azzerato prima della seconda gpio_config() per
-    // l'ingresso BUSY). La nostra versione precedente disabilitava esplicitamente
-    // il pull-up: se la scheda non ha un pull-up esterno su BUSY, il pin poteva
-    // leggere "idle" (1) per flottaggio invece che per reale rilascio del
-    // pannello, facendo sembrare riuscito un refresh che il controller e-Paper
-    // non aveva ancora completato (o non aveva nemmeno iniziato). Riallineato
-    // al riferimento abilitando il pull-up interno.
-    // Nota fix round 4: la polarita' BUSY e' stata riportata a idle=HIGH(1)/
-    // busy=LOW(0), quella del driver di riferimento (l'inversione del round 3
-    // causava il boot loop). Il pull-up interno su BUSY resta abilitato, come
-    // nel riferimento (epaper_gpio_init riusa la stessa struct con pull_up
-    // ENABLE per l'ingresso BUSY): coerente e innocuo.
+    // Come nel driver di riferimento (spi_gpio_init in epaper_driver_bsp.cpp):
+    // la struct gpio_config_t viene riusata cambiando solo mode/pin_bit_mask,
+    // quindi pull_up_en resta ENABLE anche per l'ingresso BUSY.
     gpio_config_t busy_conf = {
         .pin_bit_mask = (1ULL << BOARD_EPD_BUSY),
         .mode = GPIO_MODE_INPUT,
@@ -448,7 +493,7 @@ static esp_err_t epd_spi_init(void)
 }
 
 // Propaga il primo errore SPI incontrato invece di continuare a inviare byte
-// dopo un guasto (Finding B, fix round 1).
+// dopo un guasto.
 #define EPD_TRY(expr)                     \
     do {                                  \
         esp_err_t _epd_err = (expr);      \
@@ -457,48 +502,106 @@ static esp_err_t epd_spi_init(void)
         }                                 \
     } while (0)
 
-// Sequenza di init pannello, portata da epaper_port_init() (Waveshare).
-static esp_err_t epd_panel_init(void)
+// SET_RAM_X/Y_ADDRESS_START_END_POSITION (0x44/0x45). Porting letterale di
+// EPD_SetWindows() del driver di riferimento, inclusa la chiamata con
+// argomenti (0, Width-1, Height-1, 0) usata da EPD_Init() qui sotto: dato che
+// il pannello è quadrato (200x200) il risultato numerico coincide con la
+// finestra RAM completa 0..199 su entrambi gli assi.
+static esp_err_t epd_set_windows(uint16_t xstart, uint16_t ystart, uint16_t xend, uint16_t yend)
 {
-    EPD_TRY(epd_send_command(0x4D));
-    EPD_TRY(epd_send_data(0x78));
+    EPD_TRY(epd_send_command(0x44));
+    EPD_TRY(epd_send_data((xstart >> 3) & 0xFF));
+    EPD_TRY(epd_send_data((xend >> 3) & 0xFF));
 
-    EPD_TRY(epd_send_command(0x00)); // PSR
-    EPD_TRY(epd_send_data(0x0F));
-    EPD_TRY(epd_send_data(0x29));
-
-    EPD_TRY(epd_send_command(0x06)); // BTST_P
-    EPD_TRY(epd_send_data(0x0D));
-    EPD_TRY(epd_send_data(0x12));
-    EPD_TRY(epd_send_data(0x30));
-    EPD_TRY(epd_send_data(0x20));
-    EPD_TRY(epd_send_data(0x19));
-    EPD_TRY(epd_send_data(0x2A));
-    EPD_TRY(epd_send_data(0x22));
-
-    EPD_TRY(epd_send_command(0x50)); // CDI
-    EPD_TRY(epd_send_data(0x37));
-
-    EPD_TRY(epd_send_command(0x61)); // TRES: risoluzione pannello
-    EPD_TRY(epd_send_data(DISPLAY_W / 256));
-    EPD_TRY(epd_send_data(DISPLAY_W % 256));
-    EPD_TRY(epd_send_data(DISPLAY_H / 256));
-    EPD_TRY(epd_send_data(DISPLAY_H % 256));
-
-    EPD_TRY(epd_send_command(0xE9));
-    EPD_TRY(epd_send_data(0x01));
-
-    EPD_TRY(epd_send_command(0x30)); // PLL
-    EPD_TRY(epd_send_data(0x08));
-
-    EPD_TRY(epd_send_command(0x04)); // Power on
-    return epd_wait_busy("power-on");
+    EPD_TRY(epd_send_command(0x45));
+    EPD_TRY(epd_send_data(ystart & 0xFF));
+    EPD_TRY(epd_send_data((ystart >> 8) & 0xFF));
+    EPD_TRY(epd_send_data(yend & 0xFF));
+    EPD_TRY(epd_send_data((yend >> 8) & 0xFF));
+    return ESP_OK;
 }
 
+// SET_RAM_X/Y_ADDRESS_COUNTER (0x4E/0x4F).
+static esp_err_t epd_set_cursor(uint16_t xstart, uint16_t ystart)
+{
+    EPD_TRY(epd_send_command(0x4E));
+    EPD_TRY(epd_send_data(xstart & 0xFF));
+
+    EPD_TRY(epd_send_command(0x4F));
+    EPD_TRY(epd_send_data(ystart & 0xFF));
+    EPD_TRY(epd_send_data((ystart >> 8) & 0xFF));
+    return ESP_OK;
+}
+
+// Carica la LUT custom (159 byte: 153 di LUT + 6 di voltage/timing/frame-rate),
+// porting letterale di EPD_SetLut().
+static esp_err_t epd_set_lut(const uint8_t *lut)
+{
+    EPD_TRY(epd_send_command(0x32));
+    EPD_TRY(epd_write_bytes(lut, 153));
+    EPD_TRY(epd_wait_busy("lut-load"));
+
+    EPD_TRY(epd_send_command(0x3F));
+    EPD_TRY(epd_send_data(lut[153]));
+
+    EPD_TRY(epd_send_command(0x03));
+    EPD_TRY(epd_send_data(lut[154]));
+
+    EPD_TRY(epd_send_command(0x04));
+    EPD_TRY(epd_send_data(lut[155]));
+    EPD_TRY(epd_send_data(lut[156]));
+    EPD_TRY(epd_send_data(lut[157]));
+
+    EPD_TRY(epd_send_command(0x2C));
+    EPD_TRY(epd_send_data(lut[158]));
+    return ESP_OK;
+}
+
+// Sequenza di init pannello SSD1681, porting letterale di EPD_Init() (la parte
+// successiva al reset hardware, che resta separata in epd_reset() sopra così
+// display_init() può loggare le due fasi distintamente come nel tentativo
+// precedente).
+static esp_err_t epd_panel_init(void)
+{
+    EPD_TRY(epd_wait_busy("post-reset"));
+
+    EPD_TRY(epd_send_command(0x12)); // SWRESET
+    EPD_TRY(epd_wait_busy("swreset"));
+
+    EPD_TRY(epd_send_command(0x01)); // Driver output control: MUX = 199 (altezza 200-1)
+    EPD_TRY(epd_send_data(0xC7));
+    EPD_TRY(epd_send_data(0x00));
+    EPD_TRY(epd_send_data(0x01));
+
+    EPD_TRY(epd_send_command(0x11)); // Data entry mode
+    EPD_TRY(epd_send_data(0x01));
+
+    EPD_TRY(epd_set_windows(0, DISPLAY_W - 1, DISPLAY_H - 1, 0));
+
+    EPD_TRY(epd_send_command(0x3C)); // Border waveform
+    EPD_TRY(epd_send_data(0x01));
+
+    EPD_TRY(epd_send_command(0x18)); // Temperature sensor: interno
+    EPD_TRY(epd_send_data(0x80));
+
+    EPD_TRY(epd_send_command(0x22)); // Load temperature & waveform setting
+    EPD_TRY(epd_send_data(0xB1));
+    EPD_TRY(epd_send_command(0x20)); // Master activation
+
+    EPD_TRY(epd_set_cursor(0, DISPLAY_H - 1));
+    EPD_TRY(epd_wait_busy("init-load-waveform"));
+
+    EPD_TRY(epd_set_lut(s_lut_full_1in54));
+    return ESP_OK;
+}
+
+// Attivazione refresh full-update: Display Update Control (0x22=0xC7) +
+// Master Activation (0x20) + attesa BUSY, porting letterale di EPD_TurnOnDisplay().
 static esp_err_t epd_turn_on_display(void)
 {
-    EPD_TRY(epd_send_command(0x12)); // DISPLAY_REFRESH
-    EPD_TRY(epd_send_data(0x00));
+    EPD_TRY(epd_send_command(0x22));
+    EPD_TRY(epd_send_data(0xC7));
+    EPD_TRY(epd_send_command(0x20));
     return epd_wait_busy("refresh");
 }
 
@@ -561,8 +664,6 @@ static void draw_string(uint8_t *fb, int x0, int y0, const char *s)
 esp_err_t display_init(void)
 {
     ESP_LOGI(TAG, "epd: power on (BOARD_EPD_PWR -> ON, attivo basso)");
-    // Fix round 4: pull-up abilitato su PWR come nel riferimento
-    // (epaper_power_up in user_app.cpp: gpio6 output, pull_up ENABLE, set 0).
     gpio_config_t pwr_conf = {
         .pin_bit_mask = (1ULL << BOARD_EPD_PWR),
         .mode = GPIO_MODE_OUTPUT,
@@ -579,11 +680,6 @@ esp_err_t display_init(void)
     // Tempo di assestamento del ramo di alimentazione prima di reset/init.
     vTaskDelay(pdMS_TO_TICKS(30));
 
-    // Fix round 4: ordine di init allineato al riferimento Waveshare
-    // (epaper_port_init: prima epaper_spi_init(), poi epaper_gpio_init(), poi
-    // reset). In Task 3 l'ordine era invertito (gpio poi spi): riportato
-    // all'ordine provato del riferimento per eliminare ogni discrepanza nel
-    // percorso di bring-up.
     ESP_LOGI(TAG, "epd: SPI + GPIO init (host=%d)", (int)BOARD_EPD_SPI_HOST);
     err = epd_spi_init();
     if (err != ESP_OK) {
@@ -594,18 +690,17 @@ esp_err_t display_init(void)
         return err;
     }
 
-    // Fix round 2: livello raw di BUSY prima di inviare qualsiasi comando SPI
-    // al pannello (subito dopo la config GPIO, prima di reset/init). Utile per
-    // capire lo stato di riposo "naturale" della linea prima che qualunque
-    // comando la tocchi. Con la polarita' di riferimento (idle=HIGH) un valore
-    // stabile a 1 qui indica linea a riposo/idle.
+    // Livello raw di BUSY prima di inviare qualsiasi comando SPI al pannello,
+    // utile per capire lo stato di riposo "naturale" della linea. Con la
+    // polarità SSD1681 corretta (busy=HIGH/idle=LOW) un valore stabile a 0 qui
+    // indica linea a riposo/idle.
     ESP_LOGI(TAG, "epd: BUSY livello raw all'avvio (prima di reset/init) = %d",
              gpio_get_level(BOARD_EPD_BUSY));
 
     ESP_LOGI(TAG, "epd: reset");
     epd_reset();
 
-    ESP_LOGI(TAG, "epd: panel init sequence");
+    ESP_LOGI(TAG, "epd: panel init sequence (SSD1681)");
     err = epd_panel_init();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "epd: panel init failed: %s", esp_err_to_name(err));
@@ -629,30 +724,18 @@ void display_blit_1bit(const uint8_t *buf, int w, int h)
         return;
     }
 
-    const int src_stride = DISPLAY_W / 8;             // 25 byte/riga sorgente (1bpp)
-    const int packed_w = DISPLAY_W / 4;                // 50 byte/riga verso il pannello (2bpp)
-
-    ESP_LOGI(TAG, "epd: full refresh - invio framebuffer %dx%d", w, h);
-    esp_err_t err = epd_send_command(0x10); // DATA_START_TRANSMISSION
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "epd: full refresh aborted, DATA_START_TRANSMISSION failed: %s",
-                 esp_err_to_name(err));
-        return;
+    // Contratto pubblico display_blit_1bit: bit=1 -> nero, bit=0 -> bianco.
+    // RAM B/N del SSD1681 (nessuna inversione via 0x21, non usata da questo
+    // driver): bit=1 -> bianco, bit=0 -> nero (vedi EPD_Clear()/EPD_DrawColorPixel()
+    // del driver di riferimento). Si inverte quindi ogni byte prima di scriverlo.
+    for (size_t i = 0; i < sizeof(s_panel_buf); i++) {
+        s_panel_buf[i] = (uint8_t)~buf[i];
     }
-    for (int y = 0; y < DISPLAY_H && err == ESP_OK; y++) {
-        for (int gx = 0; gx < packed_w; gx++) {
-            uint8_t out = 0;
-            for (int k = 0; k < 4; k++) {
-                int x = gx * 4 + k;
-                int bit = (buf[y * src_stride + (x / 8)] >> (7 - (x % 8))) & 0x1;
-                uint8_t color = bit ? EPD_COLOR_BLACK : EPD_COLOR_WHITE;
-                out |= (uint8_t)((color & 0x3) << (6 - k * 2));
-            }
-            err = epd_send_data(out);
-            if (err != ESP_OK) {
-                break; // interrompi subito: niente senso continuare a scrivere dopo un guasto SPI
-            }
-        }
+
+    ESP_LOGI(TAG, "epd: full refresh - invio framebuffer %dx%d (5000 byte 1bpp -> RAM 0x24)", w, h);
+    esp_err_t err = epd_send_command(0x24); // WRITE_RAM (Black/White)
+    if (err == ESP_OK) {
+        err = epd_write_bytes(s_panel_buf, sizeof(s_panel_buf));
     }
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "epd: full refresh aborted, SPI error while sending pixel data: %s",

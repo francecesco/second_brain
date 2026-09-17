@@ -18,7 +18,13 @@
 
 // e-Paper (SPI) — CS/DC/RST pilotati via GPIO manuale (spics_io_num = -1 nel driver di
 // riferimento), non tramite CS hardware dell'SPI driver.
-#define BOARD_EPD_SPI_HOST   SPI3_HOST        // confermato in epaper_port.c (spi_bus_initialize(SPI3_HOST, ...))
+//
+// Redo (SSD1681 B/W): la scheda reale è la Waveshare "ESP32-S3 1.54inch e-Paper
+// Dev Board" B/N (pannello GDEH0154D67, controller SSD1681), repo di riferimento
+// corretto github.com/waveshareteam/ESP32-S3-ePaper-1.54 (NON il repo "-1.54G" a
+// 4 colori usato per errore in precedenza). Da
+// 02_Example/ESP-IDF/V2/12_RTC_Sleep_Test/main/user_config.h: EPD_SPI_NUM = SPI2_HOST.
+#define BOARD_EPD_SPI_HOST   SPI2_HOST
 #define BOARD_EPD_SCK        /* GPIO */ 12
 #define BOARD_EPD_MOSI       /* GPIO */ 13
 #define BOARD_EPD_CS         /* GPIO */ 11
