@@ -70,6 +70,8 @@
 #define BOARD_BAT_ADC_CHAN   /* adc_channel_t */ ADC_CHANNEL_3   // GPIO4
 #define BOARD_BAT_DIVIDER    2.0f            // partitore 2:1, confermato da adc_bsp.c di riferimento
 #define BOARD_BAT_ADC_EN     /* GPIO */ 17    // VBAT_PWR_PIN: abilita il partitore prima della lettura, attivo alto (1=ON)
-#define BOARD_BTN_USER       /* GPIO */ 0     // BOOT_BUTTON_PIN: tasto dev-mode / wake
+#define BOARD_BTN_USER       /* GPIO */ 0     // BOOT_BUTTON_PIN: tasto utente generico (capture/wake); NON usato per
+                                               // dev-mode perche' e' anche il pin di strapping BOOT (vedi power.c)
 #define BOARD_BTN_ACTIVE_LOW 1
-#define BOARD_BTN_PWR        /* GPIO */ 18    // PWR_BUTTON_PIN: tasto power/dedicato (attivo basso, pull-up interno)
+#define BOARD_BTN_PWR        /* GPIO */ 18    // PWR_BUTTON_PIN: tasto power/dedicato (attivo basso, pull-up interno);
+                                               // usato come trigger dev-mode al boot, non e' un pin di strapping

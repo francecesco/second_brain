@@ -7,41 +7,34 @@
 
 static const char *TAG = "power";
 
-// Finestra (e passo) di polling per il rilevamento del boot mode.
+// Trigger dev-mode al boot: BOARD_BTN_PWR (GPIO18), non BOARD_BTN_USER.
 //
 // BOARD_BTN_USER e' collegato a GPIO0, che sulla ESP32-S3 e' anche il pin di
-// strapping BOOT: se viene letto basso dalla ROM durante il reset/power-on,
-// il chip entra in modalita' download seriale invece di avviare il nostro
-// firmware. Per questo NON possiamo implementare "tasto tenuto premuto al
-// reset -> dev mode" leggendo il pin a freddo: bloccherebbe l'avvio.
+// strapping BOOT: se la ROM lo trova basso durante il reset/power-on, il
+// chip entra in modalita' download seriale invece di avviare il nostro
+// firmware. Per questo il tasto USER non puo' essere tenuto premuto durante
+// il reset, e un rilevamento "dev mode" basato su di esso e' costretto a un
+// pattern fragile (finestra di polling DOPO il boot, sincronizzata a mano
+// con l'istante del reset) verificato su hardware reale come poco
+// affidabile in pratica.
 //
-// Il repo di riferimento Waveshare (button_bsp nei suoi esempi, es.
-// 02_Example/ESP-IDF/V2/12_RTC_Sleep_Test/components/button_bsp/button_bsp.c)
-// conferma questo pattern: BOOT_BUTTON_PIN (= GPIO0) viene configurato come
-// input con pull-up e poi letto a runtime tramite un task/timer periodico,
-// mai campionato "a bordo" del reset. Adottiamo lo stesso principio: lo
-// strapping viene consumato dalla ROM prima che app_main() giri, quindi
-// leggere il GPIO *dopo* l'avvio dell'app e' sicuro.
+// BOARD_BTN_PWR (GPIO18) NON e' un pin di strapping: puo' essere tenuto
+// premuto per tutta la sequenza power-up/reset senza alcun rischio di
+// entrare in download mode. Possiamo quindi campionarlo una sola volta,
+// subito dopo il boot, con un semplice debounce: se risulta premuto in
+// tutti i campioni presi in una finestra breve (~300ms) -> dev mode.
+// Verificato su hardware (log diagnostico round 2): la pressione di PWR
+// porta BOARD_BTN_PWR stabilmente a livello basso.
 //
-// power_boot_mode() apre percio' una finestra subito dopo il boot e
-// campiona il tasto a intervalli; se rileva una pressione durante la
-// finestra, riporta BOOT_DEV, altrimenti BOOT_NORMAL.
-//
-// Fix round 1: finestra allargata a 4.0s (era 2.5s) per essere piu'
-// tollerante ai tempi di reazione umani, e aggiunta instrumentazione
-// (livello raw del GPIO a inizio finestra e periodicamente durante il
-// poll) per capire, da una cattura seriale, se il tasto viene letto
-// correttamente oppure se il problema e' solo di timing.
-#define POWER_BOOT_WINDOW_MS 4000
-#define POWER_BOOT_POLL_MS   50
-#define POWER_BOOT_LOG_EVERY_MS 250
+// BOARD_BTN_USER resta disponibile per altri usi (capture, wake generico),
+// tramite power_button_pressed().
+#define POWER_PWR_DEBOUNCE_SAMPLES 6
+#define POWER_PWR_DEBOUNCE_STEP_MS 50   // ~300ms totali (6 x 50ms)
 
 void power_init(void)
 {
-    // BOARD_BTN_USER (dev-mode/wake) e BOARD_BTN_PWR configurati insieme,
-    // stessa polarita' attivo-basso: BOARD_BTN_PWR viene incluso qui solo a
-    // scopo diagnostico bring-up (mappatura dei due tasti fisici), non e'
-    // ancora usato dalla logica di boot mode.
+    // BOARD_BTN_USER e BOARD_BTN_PWR configurati insieme, stessa polarita'
+    // attivo-basso (pull-up interno).
     gpio_config_t io = {
         .pin_bit_mask = (1ULL << BOARD_BTN_USER) | (1ULL << BOARD_BTN_PWR),
         .mode = GPIO_MODE_INPUT,
@@ -58,33 +51,32 @@ bool power_button_pressed(void)
     return BOARD_BTN_ACTIVE_LOW ? (lvl == 0) : (lvl == 1);
 }
 
+static bool power_pwr_pressed(void)
+{
+    int lvl = gpio_get_level(BOARD_BTN_PWR);
+    return BOARD_BTN_ACTIVE_LOW ? (lvl == 0) : (lvl == 1);
+}
+
 boot_mode_t power_boot_mode(void)
 {
-    int raw = gpio_get_level(BOARD_BTN_USER);
-    ESP_LOGI(TAG, "boot-mode: BTN_USER raw level at start = %d (pressed=%d)",
-             raw, power_button_pressed());
-    ESP_LOGI(TAG, "boot-mode: premi ora il tasto utente per DEV (finestra 4s)");
+    int raw = gpio_get_level(BOARD_BTN_PWR);
+    ESP_LOGI(TAG, "boot-mode: BTN_PWR raw level at start = %d (pressed=%d)",
+             raw, power_pwr_pressed());
 
-    TickType_t start = xTaskGetTickCount();
-    TickType_t last_log = start;
-    while ((xTaskGetTickCount() - start) < pdMS_TO_TICKS(POWER_BOOT_WINDOW_MS)) {
-        TickType_t now = xTaskGetTickCount();
-        int elapsed_ms = (int)((now - start) * portTICK_PERIOD_MS);
-
-        if (power_button_pressed()) {
-            ESP_LOGI(TAG, "boot-mode: press detected at t=%dms -> DEV", elapsed_ms);
-            return BOOT_DEV;
+    bool held = true;
+    for (int i = 0; i < POWER_PWR_DEBOUNCE_SAMPLES; i++) {
+        if (!power_pwr_pressed()) {
+            held = false;
+            break;
         }
-
-        if ((now - last_log) >= pdMS_TO_TICKS(POWER_BOOT_LOG_EVERY_MS)) {
-            ESP_LOGI(TAG, "boot-mode poll t=%dms raw=%d pressed=%d",
-                     elapsed_ms, gpio_get_level(BOARD_BTN_USER), power_button_pressed());
-            last_log = now;
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(POWER_BOOT_POLL_MS));
+        vTaskDelay(pdMS_TO_TICKS(POWER_PWR_DEBOUNCE_STEP_MS));
     }
-    ESP_LOGI(TAG, "boot-mode: nessuna pressione rilevata entro %dms -> NORMAL",
-             (int)POWER_BOOT_WINDOW_MS);
-    return BOOT_NORMAL;
+
+    boot_mode_t mode = held ? BOOT_DEV : BOOT_NORMAL;
+    ESP_LOGI(TAG, "boot-mode: BTN_PWR %s su %d campioni (%dms) -> %s",
+             held ? "tenuto premuto" : "non tenuto premuto",
+             POWER_PWR_DEBOUNCE_SAMPLES,
+             POWER_PWR_DEBOUNCE_SAMPLES * POWER_PWR_DEBOUNCE_STEP_MS,
+             mode == BOOT_DEV ? "DEV" : "NORMAL");
+    return mode;
 }
