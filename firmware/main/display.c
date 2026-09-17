@@ -291,44 +291,49 @@ static esp_err_t epd_send_data(uint8_t data)
     return err;
 }
 
-// Fix round 2: la polarità BUSY (idle=1 / busy=0) e' stata ri-verificata contro
-// l'UNICO file del repo Waveshare con pin-map identico al nostro board.h
-// (Example/ESP-IDF_5.5.1/09_E_Paper_Test/components/epaper_port/epaper_port.c:
-// `if (ReadBusy) return; // release` con ReadBusy = gpio_get_level(BUSY)) e non
-// e' stata cambiata: nessuna evidenza di inversione nel nostro porting rispetto
-// a quel riferimento (vedi sezione "Fix round 2" nel report per il dettaglio
-// dell'indagine, inclusa un'altra copia dello stesso driver che usa la stessa
-// convenzione, e un commento discordante ma non affidabile trovato altrove nel
-// repo). Quello che invece era certamente fragile: la vecchia implementazione
-// dichiarava "rilasciato" al primissimo campione (dopo un'unica attesa fissa di
-// 100ms), senza alcuna conferma. Questo e' l'esatto sintomo osservato in
-// campo (rilascio a ~100ms sia per power-on che per refresh, mentre un
-// refresh reale dura secondi). Ora la funzione: logga il livello raw
-// all'ingresso, campiona ogni 100ms fino a ~25s, logga ogni transizione con
-// timestamp, richiede che il livello "idle" (1) sia stabile per piu' campioni
-// consecutivi prima di dichiarare completato (debounce anti falso-positivo),
-// e infine logga il tempo totale osservato in stato "busy" (0). Questo non
-// presume quale sia la causa reale (polarità vs races temporali vs mancata
-// comunicazione) ma dà un segnale diagnostico completo al prossimo flash,
-// e riduce il rischio di un falso "fatto" dovuto a un singolo campione.
+// Fix round 3: la traccia BUSY strumentata nel fix round 2 ha dato la prova
+// hardware decisiva, CONTRARIA al codice del repo di riferimento letto nei
+// round precedenti. Cattura seriale reale (build e65bd42):
+//   "BUSY livello raw all'avvio (prima di reset/init) = 0"   -> pannello
+//   davvero IDLE all'avvio legge 0 (LOW)
+//   "power-on - waiting BUSY (livello raw iniziale=1)"       -> durante
+//   power-on legge 1 (HIGH)
+//   "refresh - waiting BUSY (livello raw iniziale=1)"        -> durante il
+//   refresh legge 1 (HIGH)
+// Su QUESTO pannello reale: idle=LOW(0), busy=HIGH(1) — l'opposto di
+// idle=1/busy=0 assunto (e verificato solo contro il codice, non contro
+// l'hardware) nei round 1-2. Combacia esattamente con il commento
+// "// LOW: idle, HIGH: busy" trovato nel round 2 in
+// epaper_driver_bsp.cpp (07_Audio_Test) e allora scartato come inaffidabile
+// perché contraddiceva il codice di quel file: il commento era corretto,
+// era il codice (sia quello di quel file sia, evidentemente, quello di
+// epaper_port.c copiato nei round precedenti) a non riflettere il
+// comportamento di questo specifico pannello fisico.
+//
+// Polarità corretta ora implementata: BUSY==1 (HIGH) = occupato,
+// BUSY==0 (LOW) stabile per il debounce = pronto/rilasciato. Strumentazione
+// (livello raw iniziale, log di ogni transizione, tempo totale osservato in
+// stato "busy", timeout 25s) invariata rispetto al fix round 2, per
+// confermare dal prossimo capture seriale che il refresh ora resta occupato
+// per secondi reali invece di ~100-200ms.
 #define EPD_BUSY_POLL_MS 100
-#define EPD_BUSY_IDLE_CONFIRM_SAMPLES 3 // ~300ms di idle stabile prima di dichiarare "rilasciato"
+#define EPD_BUSY_IDLE_CONFIRM_SAMPLES 3 // ~300ms di idle (LOW) stabile prima di dichiarare "rilasciato"
 
 static esp_err_t epd_wait_busy(const char *phase)
 {
     int level = gpio_get_level(BOARD_EPD_BUSY);
     int last_level = level;
-    int idle_run = (level == 1) ? 1 : 0;
+    int idle_run = (level == 0) ? 1 : 0;
     uint32_t total_busy_ms = 0;
     TickType_t t_start = xTaskGetTickCount();
-    TickType_t t_busy_since = (level == 0) ? t_start : 0;
+    TickType_t t_busy_since = (level == 1) ? t_start : 0;
 
     ESP_LOGI(TAG, "epd: %s - waiting BUSY (livello raw iniziale=%d)", phase, level);
 
     for (;;) {
         uint32_t elapsed_ms = (uint32_t)((xTaskGetTickCount() - t_start) * portTICK_PERIOD_MS);
 
-        if (level == 1 && idle_run >= EPD_BUSY_IDLE_CONFIRM_SAMPLES) {
+        if (level == 0 && idle_run >= EPD_BUSY_IDLE_CONFIRM_SAMPLES) {
             ESP_LOGI(TAG, "epd: %s - BUSY released a t=%ums (tempo totale osservato in stato busy: %ums)",
                      phase, (unsigned int)elapsed_ms, (unsigned int)total_busy_ms);
             return ESP_OK;
@@ -346,7 +351,7 @@ static esp_err_t epd_wait_busy(const char *phase)
         if (level != last_level) {
             ESP_LOGI(TAG, "epd: %s - BUSY transizione a t=%ums: livello %d -> %d",
                      phase, (unsigned int)elapsed_ms, last_level, level);
-            if (level == 0) {
+            if (level == 1) {
                 t_busy_since = xTaskGetTickCount();
                 idle_run = 0;
             } else {
@@ -354,7 +359,7 @@ static esp_err_t epd_wait_busy(const char *phase)
                 idle_run = 1;
             }
             last_level = level;
-        } else if (level == 1) {
+        } else if (level == 0) {
             idle_run++;
         }
     }
@@ -395,6 +400,12 @@ static esp_err_t epd_gpio_init(void)
     // pannello, facendo sembrare riuscito un refresh che il controller e-Paper
     // non aveva ancora completato (o non aveva nemmeno iniziato). Riallineato
     // al riferimento abilitando il pull-up interno.
+    // Nota fix round 3: la traccia hardware (vedi epd_wait_busy) dimostra che
+    // BUSY è in realtà attivamente pilotato dal pannello (0 a riposo, 1 durante
+    // l'attività), non flottante: la vera causa del sintomo era la polarità
+    // invertita corretta in epd_wait_busy, non l'assenza del pull-up. Il
+    // pull-up interno resta comunque abilitato (innocuo, coerente col
+    // riferimento) ma non era la correzione risolutiva.
     gpio_config_t busy_conf = {
         .pin_bit_mask = (1ULL << BOARD_EPD_BUSY),
         .mode = GPIO_MODE_INPUT,
