@@ -492,6 +492,25 @@ static esp_err_t epd_spi_init(void)
     return ESP_OK;
 }
 
+// Rollback di epd_spi_init(): rimuove il device e libera il bus SPI. Usata da
+// display_init() quando un passo successivo (GPIO, init pannello) fallisce
+// dopo che bus+device sono già stati creati, cosi' una successiva chiamata a
+// display_init() puo' ripartire da zero invece di trovare il bus gia'
+// inizializzato (spi_bus_initialize() fallirebbe con ESP_ERR_INVALID_STATE).
+// Best-effort: logga eventuali errori ma non li propaga, per non mascherare
+// l'errore originale che ha innescato il rollback.
+static void epd_spi_deinit(void)
+{
+    esp_err_t err = spi_bus_remove_device(s_spi);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "epd: spi_bus_remove_device failed durante rollback: %s", esp_err_to_name(err));
+    }
+    err = spi_bus_free(BOARD_EPD_SPI_HOST);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "epd: spi_bus_free failed durante rollback: %s", esp_err_to_name(err));
+    }
+}
+
 // Propaga il primo errore SPI incontrato invece di continuare a inviare byte
 // dopo un guasto.
 #define EPD_TRY(expr)                     \
@@ -685,8 +704,14 @@ esp_err_t display_init(void)
     if (err != ESP_OK) {
         return err;
     }
+    // Da qui in poi, bus SPI + device sono acquisiti: qualunque fallimento
+    // successivo deve rilasciarli (epd_spi_deinit()) prima di propagare
+    // l'errore, altrimenti una successiva display_init() troverebbe il bus
+    // già inizializzato e fallirebbe con ESP_ERR_INVALID_STATE invece di
+    // poter ritentare da zero.
     err = epd_gpio_init();
     if (err != ESP_OK) {
+        epd_spi_deinit();
         return err;
     }
 
@@ -704,6 +729,7 @@ esp_err_t display_init(void)
     err = epd_panel_init();
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "epd: panel init failed: %s", esp_err_to_name(err));
+        epd_spi_deinit();
         return err;
     }
     ESP_LOGI(TAG, "epd: panel init done");
