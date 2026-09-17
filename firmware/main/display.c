@@ -261,7 +261,11 @@ static esp_err_t epd_spi_send_byte(uint8_t byte)
     return spi_device_polling_transmit(s_spi, &t);
 }
 
-static void epd_send_command(uint8_t reg)
+// Finding B (fix round 1): epd_send_command/epd_send_data ora restituiscono
+// esp_err_t, cosi' epd_panel_init()/display_blit_1bit() possono rilevare e
+// propagare un errore SPI a livello di singolo byte, invece di scoprirlo solo
+// (o non scoprirlo affatto) tramite un successivo timeout di BUSY.
+static esp_err_t epd_send_command(uint8_t reg)
 {
     epd_dc(0);
     epd_cs(0);
@@ -270,9 +274,10 @@ static void epd_send_command(uint8_t reg)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "SPI error sending command 0x%02X: %s", reg, esp_err_to_name(err));
     }
+    return err;
 }
 
-static void epd_send_data(uint8_t data)
+static esp_err_t epd_send_data(uint8_t data)
 {
     epd_dc(1);
     epd_cs(0);
@@ -281,6 +286,7 @@ static void epd_send_data(uint8_t data)
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "SPI error sending data 0x%02X: %s", data, esp_err_to_name(err));
     }
+    return err;
 }
 
 // BUSY su questo pannello è idle=1 / busy=0 (confermato dal driver di riferimento
@@ -326,10 +332,20 @@ static esp_err_t epd_gpio_init(void)
         return err;
     }
 
+    // Fix round 1 (Finding A): il driver di riferimento Waveshare configura BUSY
+    // riusando lo stesso gpio_config_t degli output CS/DC/RST, che ha
+    // pull_up_en = GPIO_PULLUP_ENABLE (vedi epaper_gpio_init() in epaper_port.c:
+    // il campo non viene mai azzerato prima della seconda gpio_config() per
+    // l'ingresso BUSY). La nostra versione precedente disabilitava esplicitamente
+    // il pull-up: se la scheda non ha un pull-up esterno su BUSY, il pin poteva
+    // leggere "idle" (1) per flottaggio invece che per reale rilascio del
+    // pannello, facendo sembrare riuscito un refresh che il controller e-Paper
+    // non aveva ancora completato (o non aveva nemmeno iniziato). Riallineato
+    // al riferimento abilitando il pull-up interno.
     gpio_config_t busy_conf = {
         .pin_bit_mask = (1ULL << BOARD_EPD_BUSY),
         .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type = GPIO_INTR_DISABLE,
     };
@@ -375,48 +391,58 @@ static esp_err_t epd_spi_init(void)
     return ESP_OK;
 }
 
+// Propaga il primo errore SPI incontrato invece di continuare a inviare byte
+// dopo un guasto (Finding B, fix round 1).
+#define EPD_TRY(expr)                     \
+    do {                                  \
+        esp_err_t _epd_err = (expr);      \
+        if (_epd_err != ESP_OK) {         \
+            return _epd_err;              \
+        }                                 \
+    } while (0)
+
 // Sequenza di init pannello, portata da epaper_port_init() (Waveshare).
 static esp_err_t epd_panel_init(void)
 {
-    epd_send_command(0x4D);
-    epd_send_data(0x78);
+    EPD_TRY(epd_send_command(0x4D));
+    EPD_TRY(epd_send_data(0x78));
 
-    epd_send_command(0x00); // PSR
-    epd_send_data(0x0F);
-    epd_send_data(0x29);
+    EPD_TRY(epd_send_command(0x00)); // PSR
+    EPD_TRY(epd_send_data(0x0F));
+    EPD_TRY(epd_send_data(0x29));
 
-    epd_send_command(0x06); // BTST_P
-    epd_send_data(0x0D);
-    epd_send_data(0x12);
-    epd_send_data(0x30);
-    epd_send_data(0x20);
-    epd_send_data(0x19);
-    epd_send_data(0x2A);
-    epd_send_data(0x22);
+    EPD_TRY(epd_send_command(0x06)); // BTST_P
+    EPD_TRY(epd_send_data(0x0D));
+    EPD_TRY(epd_send_data(0x12));
+    EPD_TRY(epd_send_data(0x30));
+    EPD_TRY(epd_send_data(0x20));
+    EPD_TRY(epd_send_data(0x19));
+    EPD_TRY(epd_send_data(0x2A));
+    EPD_TRY(epd_send_data(0x22));
 
-    epd_send_command(0x50); // CDI
-    epd_send_data(0x37);
+    EPD_TRY(epd_send_command(0x50)); // CDI
+    EPD_TRY(epd_send_data(0x37));
 
-    epd_send_command(0x61); // TRES: risoluzione pannello
-    epd_send_data(DISPLAY_W / 256);
-    epd_send_data(DISPLAY_W % 256);
-    epd_send_data(DISPLAY_H / 256);
-    epd_send_data(DISPLAY_H % 256);
+    EPD_TRY(epd_send_command(0x61)); // TRES: risoluzione pannello
+    EPD_TRY(epd_send_data(DISPLAY_W / 256));
+    EPD_TRY(epd_send_data(DISPLAY_W % 256));
+    EPD_TRY(epd_send_data(DISPLAY_H / 256));
+    EPD_TRY(epd_send_data(DISPLAY_H % 256));
 
-    epd_send_command(0xE9);
-    epd_send_data(0x01);
+    EPD_TRY(epd_send_command(0xE9));
+    EPD_TRY(epd_send_data(0x01));
 
-    epd_send_command(0x30); // PLL
-    epd_send_data(0x08);
+    EPD_TRY(epd_send_command(0x30)); // PLL
+    EPD_TRY(epd_send_data(0x08));
 
-    epd_send_command(0x04); // Power on
+    EPD_TRY(epd_send_command(0x04)); // Power on
     return epd_wait_busy("power-on");
 }
 
 static esp_err_t epd_turn_on_display(void)
 {
-    epd_send_command(0x12); // DISPLAY_REFRESH
-    epd_send_data(0x00);
+    EPD_TRY(epd_send_command(0x12)); // DISPLAY_REFRESH
+    EPD_TRY(epd_send_data(0x00));
     return epd_wait_busy("refresh");
 }
 
@@ -536,8 +562,13 @@ void display_blit_1bit(const uint8_t *buf, int w, int h)
     const int packed_w = DISPLAY_W / 4;                // 50 byte/riga verso il pannello (2bpp)
 
     ESP_LOGI(TAG, "epd: full refresh - invio framebuffer %dx%d", w, h);
-    epd_send_command(0x10); // DATA_START_TRANSMISSION
-    for (int y = 0; y < DISPLAY_H; y++) {
+    esp_err_t err = epd_send_command(0x10); // DATA_START_TRANSMISSION
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "epd: full refresh aborted, DATA_START_TRANSMISSION failed: %s",
+                 esp_err_to_name(err));
+        return;
+    }
+    for (int y = 0; y < DISPLAY_H && err == ESP_OK; y++) {
         for (int gx = 0; gx < packed_w; gx++) {
             uint8_t out = 0;
             for (int k = 0; k < 4; k++) {
@@ -546,11 +577,19 @@ void display_blit_1bit(const uint8_t *buf, int w, int h)
                 uint8_t color = bit ? EPD_COLOR_BLACK : EPD_COLOR_WHITE;
                 out |= (uint8_t)((color & 0x3) << (6 - k * 2));
             }
-            epd_send_data(out);
+            err = epd_send_data(out);
+            if (err != ESP_OK) {
+                break; // interrompi subito: niente senso continuare a scrivere dopo un guasto SPI
+            }
         }
     }
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "epd: full refresh aborted, SPI error while sending pixel data: %s",
+                 esp_err_to_name(err));
+        return;
+    }
 
-    esp_err_t err = epd_turn_on_display();
+    err = epd_turn_on_display();
     if (err == ESP_OK) {
         ESP_LOGI(TAG, "epd: full refresh done");
     } else {
