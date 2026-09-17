@@ -33,10 +33,22 @@ static const char *TAG = "ota";
 // viene scritto usando quel totale reale: senza questo, cJSON_Parse (che
 // richiede una stringa C valida) puo' leggere oltre la fine dei dati validi
 // o non trovare mai un terminatore.
-static esp_err_t http_get_to_buffer(const char *url, char **out_buf, int *out_len)
+//
+// Il loop di lettura chiama SEMPRE esp_http_client_read() prima di
+// controllare esp_http_client_is_complete_data_received(): se il corpo
+// intero arriva insieme agli header nello stesso segmento TCP,
+// is_complete_data_received() puo' gia' risultare vero PRIMA di qualunque
+// chiamata a read(), ma i byte vanno comunque prelevati con un read()
+// esplicito (sono bufferizzati internamente dal parser HTTP, non ancora
+// copiati nel nostro buffer). Controllare la condizione prima di leggere
+// (bug del round precedente) faceva uscire dal loop con total==0 in quel
+// caso, producendo in modo intermittente un manifest vuoto/troncato a
+// seconda di come i dati arrivavano sulla socket.
+static esp_err_t http_get_to_buffer(const char *url, char **out_buf, int *out_len, int64_t *out_content_length)
 {
     *out_buf = NULL;
     *out_len = 0;
+    *out_content_length = 0;
 
     esp_http_client_config_t config = {
         .url = url,
@@ -88,7 +100,7 @@ static esp_err_t http_get_to_buffer(const char *url, char **out_buf, int *out_le
     }
 
     size_t total = 0;
-    while (!esp_http_client_is_complete_data_received(client) && total < capacity) {
+    while (total < capacity) {
         int r = esp_http_client_read(client, buf + total, capacity - total);
         if (r < 0) {
             ESP_LOGE(TAG, "manifest read error");
@@ -98,9 +110,34 @@ static esp_err_t http_get_to_buffer(const char *url, char **out_buf, int *out_le
             return ESP_FAIL;
         }
         if (r == 0) {
+            // Nessun byte da questo read: o la connessione e' stata
+            // chiusa, o non c'e' altro da leggere. Il controllo su
+            // total (sotto, rispetto a content_length) distingue un EOF
+            // legittimo da un download incompleto.
             break;
         }
         total += (size_t)r;
+        if (esp_http_client_is_complete_data_received(client)) {
+            break;
+        }
+        // Altrimenti: read parziale (short read, normale con TCP) ma il
+        // corpo non e' ancora arrivato tutto -> si continua a leggere.
+    }
+
+    if (total == 0) {
+        ESP_LOGE(TAG, "manifest fetch: 0 byte letti");
+        free(buf);
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return ESP_FAIL;
+    }
+    if (content_length > 0 && (int64_t)total != content_length) {
+        ESP_LOGE(TAG, "manifest incompleto: %u/%lld byte letti",
+                 (unsigned)total, (long long)content_length);
+        free(buf);
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return ESP_FAIL;
     }
     buf[total] = '\0'; // sempre in bounds: total <= capacity, buffer e' capacity+1
 
@@ -109,6 +146,7 @@ static esp_err_t http_get_to_buffer(const char *url, char **out_buf, int *out_le
 
     *out_buf = buf;
     *out_len = (int)total;
+    *out_content_length = content_length;
     return ESP_OK;
 }
 
@@ -264,11 +302,18 @@ esp_err_t ota_pull(const char *manifest_url)
     // buffer audio nel Task 6).
     char *buf = NULL;
     int len = 0;
-    esp_err_t err = http_get_to_buffer(manifest_url, &buf, &len);
+    int64_t content_length = 0;
+    esp_err_t err = http_get_to_buffer(manifest_url, &buf, &len, &content_length);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "GET manifest fallito: %s", esp_err_to_name(err));
         return err; // buf resta NULL sugli errori di http_get_to_buffer
     }
+
+    // Diagnostica per il round 3: il parse falliva in modo intermittente
+    // per un manifest troncato/vuoto; questo log rende conclusivo il
+    // prossimo test hardware (contenuto letto per intero vs atteso).
+    ESP_LOGI(TAG, "manifest fetch: content_length=%d total=%d body=<%s>",
+             (int)content_length, len, buf);
 
     ota_manifest_t *m = malloc(sizeof(ota_manifest_t));
     if (!m) {
