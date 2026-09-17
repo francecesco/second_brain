@@ -14,15 +14,30 @@
 
 static const char *TAG = "ota";
 
-// Buffer per il manifest JSON (piccolo, poche centinaia di byte).
-#define OTA_MANIFEST_BUF_LEN 2048
+// Limite di sicurezza per la dimensione del manifest JSON (normalmente
+// poche centinaia di byte); usato anche come capacita' di fallback quando
+// il server non dichiara Content-Length (es. risposta chunked).
+#define OTA_MANIFEST_MAX_LEN 4096
 // Chunk di lettura per lo streaming del binario verso la partizione OTA.
 #define OTA_DOWNLOAD_CHUNK 4096
 
-// Scarica interamente url in buf (fino a buf_len-1 byte, poi termina con
-// '\0') usando esp_http_client. Pensato per risposte piccole (il manifest).
-static esp_err_t http_get_to_buffer(const char *url, char *buf, size_t buf_len, int *out_len)
+// Scarica interamente il corpo di url e lo ritorna in *out_buf come stringa
+// C NUL-terminata allocata sull'HEAP (il chiamante deve fare free() su
+// ESP_OK). Pensato per risposte piccole (il manifest).
+//
+// Il buffer viene allocato con capacity+1 byte (capacity = Content-Length
+// se il server lo dichiara, altrimenti OTA_MANIFEST_MAX_LEN di fallback),
+// cosi' c'e' sempre spazio per il terminatore '\0' dopo l'ultimo byte letto
+// senza sforare l'allocazione. *out_len riporta i byte effettivamente letti
+// (accumulati nel loop, non assunti pari a capacity), e buf[total] = '\0'
+// viene scritto usando quel totale reale: senza questo, cJSON_Parse (che
+// richiede una stringa C valida) puo' leggere oltre la fine dei dati validi
+// o non trovare mai un terminatore.
+static esp_err_t http_get_to_buffer(const char *url, char **out_buf, int *out_len)
 {
+    *out_buf = NULL;
+    *out_len = 0;
+
     esp_http_client_config_t config = {
         .url = url,
         .timeout_ms = 10000,
@@ -40,7 +55,6 @@ static esp_err_t http_get_to_buffer(const char *url, char *buf, size_t buf_len, 
     }
 
     int64_t content_length = esp_http_client_fetch_headers(client);
-    (void)content_length;
     int status = esp_http_client_get_status_code(client);
     if (status != 200) {
         ESP_LOGE(TAG, "manifest GET status %d", status);
@@ -49,11 +63,36 @@ static esp_err_t http_get_to_buffer(const char *url, char *buf, size_t buf_len, 
         return ESP_FAIL;
     }
 
-    int total = 0;
-    while (!esp_http_client_is_complete_data_received(client) && total < (int)buf_len - 1) {
-        int r = esp_http_client_read(client, buf + total, buf_len - 1 - total);
+    size_t capacity;
+    if (content_length > 0) {
+        if (content_length > OTA_MANIFEST_MAX_LEN) {
+            ESP_LOGE(TAG, "manifest troppo grande: %lld byte (max %d)",
+                     (long long)content_length, OTA_MANIFEST_MAX_LEN);
+            esp_http_client_close(client);
+            esp_http_client_cleanup(client);
+            return ESP_ERR_INVALID_SIZE;
+        }
+        capacity = (size_t)content_length;
+    } else {
+        // Content-Length assente/sconosciuto (es. chunked): usa il tetto
+        // fisso come capacita' massima.
+        capacity = OTA_MANIFEST_MAX_LEN;
+    }
+
+    char *buf = malloc(capacity + 1); // +1 per il terminatore NUL
+    if (!buf) {
+        ESP_LOGE(TAG, "malloc buffer manifest fallita (%u byte)", (unsigned)(capacity + 1));
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return ESP_ERR_NO_MEM;
+    }
+
+    size_t total = 0;
+    while (!esp_http_client_is_complete_data_received(client) && total < capacity) {
+        int r = esp_http_client_read(client, buf + total, capacity - total);
         if (r < 0) {
             ESP_LOGE(TAG, "manifest read error");
+            free(buf);
             esp_http_client_close(client);
             esp_http_client_cleanup(client);
             return ESP_FAIL;
@@ -61,13 +100,15 @@ static esp_err_t http_get_to_buffer(const char *url, char *buf, size_t buf_len, 
         if (r == 0) {
             break;
         }
-        total += r;
+        total += (size_t)r;
     }
-    buf[total] = '\0';
-    *out_len = total;
+    buf[total] = '\0'; // sempre in bounds: total <= capacity, buffer e' capacity+1
 
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
+
+    *out_buf = buf;
+    *out_len = (int)total;
     return ESP_OK;
 }
 
@@ -215,23 +256,18 @@ static esp_err_t ota_download_and_apply(const ota_manifest_t *m)
 
 esp_err_t ota_pull(const char *manifest_url)
 {
-    // Buffer del JSON e struct manifest allocati sull'HEAP: il task "main"
-    // ha uno stack limitato (~3.5KB di default) e la catena esp_http_client
-    // + esp-tls + mbedtls usa già parecchio stack da sola; array locali di
-    // queste dimensioni causavano uno stack overflow su hardware reale
-    // (stessa classe di bug del buffer audio nel Task 6).
-    char *buf = malloc(OTA_MANIFEST_BUF_LEN);
-    if (!buf) {
-        ESP_LOGE(TAG, "malloc buffer manifest fallita");
-        return ESP_ERR_NO_MEM;
-    }
-
+    // Buffer del JSON (allocato da http_get_to_buffer) e struct manifest
+    // allocati sull'HEAP: il task "main" ha uno stack limitato (~3.5KB di
+    // default) e la catena esp_http_client + esp-tls + mbedtls usa già
+    // parecchio stack da sola; array locali di queste dimensioni causavano
+    // uno stack overflow su hardware reale (stessa classe di bug del
+    // buffer audio nel Task 6).
+    char *buf = NULL;
     int len = 0;
-    esp_err_t err = http_get_to_buffer(manifest_url, buf, OTA_MANIFEST_BUF_LEN, &len);
+    esp_err_t err = http_get_to_buffer(manifest_url, &buf, &len);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "GET manifest fallito: %s", esp_err_to_name(err));
-        free(buf);
-        return err;
+        return err; // buf resta NULL sugli errori di http_get_to_buffer
     }
 
     ota_manifest_t *m = malloc(sizeof(ota_manifest_t));
