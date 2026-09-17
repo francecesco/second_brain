@@ -215,26 +215,51 @@ static esp_err_t ota_download_and_apply(const ota_manifest_t *m)
 
 esp_err_t ota_pull(const char *manifest_url)
 {
-    char buf[OTA_MANIFEST_BUF_LEN];
+    // Buffer del JSON e struct manifest allocati sull'HEAP: il task "main"
+    // ha uno stack limitato (~3.5KB di default) e la catena esp_http_client
+    // + esp-tls + mbedtls usa già parecchio stack da sola; array locali di
+    // queste dimensioni causavano uno stack overflow su hardware reale
+    // (stessa classe di bug del buffer audio nel Task 6).
+    char *buf = malloc(OTA_MANIFEST_BUF_LEN);
+    if (!buf) {
+        ESP_LOGE(TAG, "malloc buffer manifest fallita");
+        return ESP_ERR_NO_MEM;
+    }
+
     int len = 0;
-    esp_err_t err = http_get_to_buffer(manifest_url, buf, sizeof(buf), &len);
+    esp_err_t err = http_get_to_buffer(manifest_url, buf, OTA_MANIFEST_BUF_LEN, &len);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "GET manifest fallito: %s", esp_err_to_name(err));
+        free(buf);
         return err;
     }
 
-    ota_manifest_t m;
-    if (!ota_manifest_parse(buf, &m)) {
+    ota_manifest_t *m = malloc(sizeof(ota_manifest_t));
+    if (!m) {
+        ESP_LOGE(TAG, "malloc manifest struct fallita");
+        free(buf);
+        return ESP_ERR_NO_MEM;
+    }
+    if (!ota_manifest_parse(buf, m)) {
         ESP_LOGW(TAG, "manifest non valido/non parsabile");
+        free(buf);
+        free(m);
         return ESP_ERR_INVALID_RESPONSE;
     }
-    ESP_LOGI(TAG, "manifest: version=%s url=%s", m.version, m.url);
+    free(buf); // il JSON grezzo non serve più, il manifest è già parsato in m
 
-    if (!ota_should_update(fw_version(), &m)) {
-        ESP_LOGI(TAG, "nessun aggiornamento (corrente=%s manifest=%s)", fw_version(), m.version);
+    ESP_LOGI(TAG, "manifest: version=%s url=%s", m->version, m->url);
+
+    if (!ota_should_update(fw_version(), m)) {
+        ESP_LOGI(TAG, "nessun aggiornamento (corrente=%s manifest=%s)", fw_version(), m->version);
+        free(m);
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "aggiornamento disponibile: %s -> %s", fw_version(), m.version);
-    return ota_download_and_apply(&m);
+    ESP_LOGI(TAG, "aggiornamento disponibile: %s -> %s", fw_version(), m->version);
+    esp_err_t r = ota_download_and_apply(m);
+    // Raggiunto solo sui path di errore: su successo ota_download_and_apply
+    // chiama esp_restart() e non ritorna mai.
+    free(m);
+    return r;
 }
