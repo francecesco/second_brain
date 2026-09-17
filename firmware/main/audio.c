@@ -253,8 +253,15 @@ esp_err_t audio_record_wav(const char *relpath, int seconds)
     }
 
     uint32_t bytes_written_total = 0;
-    int chunk_idx = 0;
     esp_err_t ret = ESP_OK;
+
+    // Livello audio complessivo (picco massimo e RMS globale su tutta la
+    // registrazione), riassunto in una singola riga di log a fine funzione:
+    // la diagnostica per-chunk (usata per il bring-up hardware) e' stata
+    // rimossa ora che il mic/lo slot I2S sono verificati su hardware reale.
+    int overall_peak = 0;
+    int64_t overall_sum_sq = 0;
+    uint32_t overall_samples = 0;
 
     while (bytes_written_total < data_bytes) {
         size_t to_read = AUDIO_CHUNK_SAMPLES * sizeof(int16_t);
@@ -273,22 +280,16 @@ esp_err_t audio_record_wav(const char *relpath, int seconds)
             continue;
         }
 
-        // Istrumentazione livello audio: peak e RMS del chunk, per verificare
-        // la pipeline (e lo slot I2S scelto, LEFT) senza dover estrarre la SD.
         size_t samples = bytes_read / sizeof(int16_t);
-        int peak = 0;
-        int64_t sum_sq = 0;
         for (size_t s = 0; s < samples; s++) {
             int v = chunk[s];
             int av = (v < 0) ? -v : v;
-            if (av > peak) {
-                peak = av;
+            if (av > overall_peak) {
+                overall_peak = av;
             }
-            sum_sq += (int64_t)v * (int64_t)v;
+            overall_sum_sq += (int64_t)v * (int64_t)v;
         }
-        int rms = (samples > 0) ? (int)sqrt((double)sum_sq / (double)samples) : 0;
-        ESP_LOGI(TAG, "rec chunk %d: peak=%d rms=%d", chunk_idx, peak, rms);
-        chunk_idx++;
+        overall_samples += (uint32_t)samples;
 
         size_t written = fwrite(chunk, 1, bytes_read, f);
         if (written != bytes_read) {
@@ -301,11 +302,20 @@ esp_err_t audio_record_wav(const char *relpath, int seconds)
 
     free(chunk);
 
-    if (ret == ESP_OK && bytes_written_total != data_bytes) {
-        // Patch header con la dimensione realmente scritta (se l'I2S ha reso meno byte del previsto).
-        wav_header_fill(&header, bytes_written_total);
-        if (fseek(f, 0, SEEK_SET) == 0) {
-            fwrite(&header, 1, sizeof(header), f);
+    // Ripatcha SEMPRE l'header con i byte realmente scritti, anche in caso di
+    // errore/interruzione: cosi' anche una registrazione troncata lascia sulla
+    // SD un WAV valido (RIFF/data size coerenti con il PCM effettivamente
+    // presente) invece di dichiarare la durata nominale con meno dati reali.
+    wav_header_fill(&header, bytes_written_total);
+    if (fseek(f, 0, SEEK_SET) != 0) {
+        ESP_LOGE(TAG, "fseek su %s fallita: impossibile ripatchare l'header WAV", path);
+        if (ret == ESP_OK) {
+            ret = ESP_FAIL;
+        }
+    } else if (fwrite(&header, 1, sizeof(header), f) != sizeof(header)) {
+        ESP_LOGE(TAG, "riscrittura header WAV su %s fallita", path);
+        if (ret == ESP_OK) {
+            ret = ESP_FAIL;
         }
     }
 
@@ -316,6 +326,10 @@ esp_err_t audio_record_wav(const char *relpath, int seconds)
         return ret;
     }
 
-    ESP_LOGI(TAG, "registrazione completata: %s (%lu byte PCM)", path, (unsigned long)bytes_written_total);
+    int overall_rms = (overall_samples > 0)
+                           ? (int)sqrt((double)overall_sum_sq / (double)overall_samples)
+                           : 0;
+    ESP_LOGI(TAG, "registrazione completata: %s (%lu byte PCM, peak max=%d, rms medio=%d)",
+             path, (unsigned long)bytes_written_total, overall_peak, overall_rms);
     return ESP_OK;
 }
