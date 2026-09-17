@@ -5,6 +5,8 @@
 #include "fw_version.h"
 #include "display.h"
 #include "power.h"
+#include "storage.h"
+#include <string.h>
 
 static const char *TAG = "app";
 
@@ -19,6 +21,14 @@ void app_main(void)
     ESP_ERROR_CHECK(display_init());
 
     display_text("secondbrain", mode == BOOT_DEV ? "DEV MODE" : fw_version());
+
+    ESP_ERROR_CHECK(storage_mount());
+    const char *msg = "hello-sd";
+    ESP_ERROR_CHECK(storage_write("bringup.txt", (const uint8_t *)msg, strlen(msg)));
+    uint8_t rb[16] = {0};
+    size_t n = 0;
+    ESP_ERROR_CHECK(storage_read("bringup.txt", rb, sizeof(rb), &n));
+    ESP_LOGI(TAG, "SD read back (%d): %.*s", (int)n, (int)n, rb);
 
     while (true) {
         ESP_LOGI(TAG, "alive");
