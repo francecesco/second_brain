@@ -1,0 +1,240 @@
+#include "ota.h"
+#include "ota_manifest.h"
+#include "fw_version.h"
+
+#include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <inttypes.h>
+
+#include "esp_log.h"
+#include "esp_http_client.h"
+#include "esp_ota_ops.h"
+#include "mbedtls/sha256.h"
+
+static const char *TAG = "ota";
+
+// Buffer per il manifest JSON (piccolo, poche centinaia di byte).
+#define OTA_MANIFEST_BUF_LEN 2048
+// Chunk di lettura per lo streaming del binario verso la partizione OTA.
+#define OTA_DOWNLOAD_CHUNK 4096
+
+// Scarica interamente url in buf (fino a buf_len-1 byte, poi termina con
+// '\0') usando esp_http_client. Pensato per risposte piccole (il manifest).
+static esp_err_t http_get_to_buffer(const char *url, char *buf, size_t buf_len, int *out_len)
+{
+    esp_http_client_config_t config = {
+        .url = url,
+        .timeout_ms = 10000,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (!client) {
+        return ESP_FAIL;
+    }
+
+    esp_err_t err = esp_http_client_open(client, 0);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "http open failed: %s", esp_err_to_name(err));
+        esp_http_client_cleanup(client);
+        return err;
+    }
+
+    int64_t content_length = esp_http_client_fetch_headers(client);
+    (void)content_length;
+    int status = esp_http_client_get_status_code(client);
+    if (status != 200) {
+        ESP_LOGE(TAG, "manifest GET status %d", status);
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return ESP_FAIL;
+    }
+
+    int total = 0;
+    while (!esp_http_client_is_complete_data_received(client) && total < (int)buf_len - 1) {
+        int r = esp_http_client_read(client, buf + total, buf_len - 1 - total);
+        if (r < 0) {
+            ESP_LOGE(TAG, "manifest read error");
+            esp_http_client_close(client);
+            esp_http_client_cleanup(client);
+            return ESP_FAIL;
+        }
+        if (r == 0) {
+            break;
+        }
+        total += r;
+    }
+    buf[total] = '\0';
+    *out_len = total;
+
+    esp_http_client_close(client);
+    esp_http_client_cleanup(client);
+    return ESP_OK;
+}
+
+static void sha256_to_hex(const uint8_t digest[32], char out[65])
+{
+    static const char hexd[] = "0123456789abcdef";
+    for (int i = 0; i < 32; i++) {
+        out[i * 2]     = hexd[digest[i] >> 4];
+        out[i * 2 + 1] = hexd[digest[i] & 0x0F];
+    }
+    out[64] = '\0';
+}
+
+// Scarica m->url in streaming, scrivendolo nella partizione OTA inattiva e
+// calcolando in parallelo lo sha256. Verifica l'hash contro m->sha256 PRIMA
+// di impostare il boot: se non combacia, aborta senza toccare la partizione
+// di boot corrente e ritorna un errore. Se tutto va bene, non ritorna mai
+// (esp_restart()).
+static esp_err_t ota_download_and_apply(const ota_manifest_t *m)
+{
+    const esp_partition_t *update_partition = esp_ota_get_next_update_partition(NULL);
+    if (!update_partition) {
+        ESP_LOGE(TAG, "nessuna partizione OTA inattiva disponibile");
+        return ESP_FAIL;
+    }
+    ESP_LOGI(TAG, "scrivo su partizione '%s' @0x%08" PRIx32,
+             update_partition->label, update_partition->address);
+
+    esp_http_client_config_t config = {
+        .url = m->url,
+        .timeout_ms = 15000,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (!client) {
+        return ESP_FAIL;
+    }
+
+    esp_err_t err = esp_http_client_open(client, 0);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "download open failed: %s", esp_err_to_name(err));
+        esp_http_client_cleanup(client);
+        return err;
+    }
+
+    int64_t content_length = esp_http_client_fetch_headers(client);
+    int status = esp_http_client_get_status_code(client);
+    if (status != 200) {
+        ESP_LOGE(TAG, "firmware GET status %d", status);
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return ESP_FAIL;
+    }
+    ESP_LOGI(TAG, "download avviato, content-length=%lld", (long long)content_length);
+
+    esp_ota_handle_t ota_handle = 0;
+    err = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &ota_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_ota_begin failed: %s", esp_err_to_name(err));
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return err;
+    }
+
+    mbedtls_sha256_context sha_ctx;
+    mbedtls_sha256_init(&sha_ctx);
+    mbedtls_sha256_starts(&sha_ctx, 0 /* 0 = sha256, non sha224 */);
+
+    uint8_t *buf = malloc(OTA_DOWNLOAD_CHUNK);
+    if (!buf) {
+        ESP_LOGE(TAG, "malloc buffer download fallita");
+        mbedtls_sha256_free(&sha_ctx);
+        esp_ota_abort(ota_handle);
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return ESP_ERR_NO_MEM;
+    }
+
+    int total_written = 0;
+    esp_err_t dl_err = ESP_OK;
+    while (!esp_http_client_is_complete_data_received(client)) {
+        int r = esp_http_client_read(client, (char *)buf, OTA_DOWNLOAD_CHUNK);
+        if (r < 0) {
+            ESP_LOGE(TAG, "errore lettura download a byte %d", total_written);
+            dl_err = ESP_FAIL;
+            break;
+        }
+        if (r == 0) {
+            break;
+        }
+        err = esp_ota_write(ota_handle, buf, r);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_ota_write failed: %s", esp_err_to_name(err));
+            dl_err = err;
+            break;
+        }
+        mbedtls_sha256_update(&sha_ctx, buf, r);
+        total_written += r;
+    }
+    free(buf);
+    esp_http_client_close(client);
+    esp_http_client_cleanup(client);
+
+    if (dl_err != ESP_OK) {
+        mbedtls_sha256_free(&sha_ctx);
+        esp_ota_abort(ota_handle);
+        return dl_err;
+    }
+    if (content_length > 0 && total_written != content_length) {
+        ESP_LOGE(TAG, "download incompleto: %d/%lld byte", total_written, (long long)content_length);
+        mbedtls_sha256_free(&sha_ctx);
+        esp_ota_abort(ota_handle);
+        return ESP_FAIL;
+    }
+
+    uint8_t digest[32];
+    mbedtls_sha256_finish(&sha_ctx, digest);
+    mbedtls_sha256_free(&sha_ctx);
+
+    char digest_hex[65];
+    sha256_to_hex(digest, digest_hex);
+    ESP_LOGI(TAG, "download completo: %d byte, sha256=%s", total_written, digest_hex);
+
+    if (strcasecmp(digest_hex, m->sha256) != 0) {
+        ESP_LOGE(TAG, "sha256 mismatch! atteso=%s calcolato=%s -> OTA abortita", m->sha256, digest_hex);
+        esp_ota_abort(ota_handle);
+        return ESP_ERR_INVALID_CRC;
+    }
+
+    err = esp_ota_end(ota_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_ota_end failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    err = esp_ota_set_boot_partition(update_partition);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_ota_set_boot_partition failed: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    ESP_LOGI(TAG, "OTA verificata e applicata (v%s), riavvio...", m->version);
+    esp_restart();
+    return ESP_OK; // mai raggiunto
+}
+
+esp_err_t ota_pull(const char *manifest_url)
+{
+    char buf[OTA_MANIFEST_BUF_LEN];
+    int len = 0;
+    esp_err_t err = http_get_to_buffer(manifest_url, buf, sizeof(buf), &len);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "GET manifest fallito: %s", esp_err_to_name(err));
+        return err;
+    }
+
+    ota_manifest_t m;
+    if (!ota_manifest_parse(buf, &m)) {
+        ESP_LOGW(TAG, "manifest non valido/non parsabile");
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+    ESP_LOGI(TAG, "manifest: version=%s url=%s", m.version, m.url);
+
+    if (!ota_should_update(fw_version(), &m)) {
+        ESP_LOGI(TAG, "nessun aggiornamento (corrente=%s manifest=%s)", fw_version(), m.version);
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "aggiornamento disponibile: %s -> %s", fw_version(), m.version);
+    return ota_download_and_apply(&m);
+}

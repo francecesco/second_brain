@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdbool.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -9,6 +10,8 @@
 #include "audio.h"
 #include "sensors.h"
 #include "wifi.h"
+#include "ota.h"
+#include "secrets.h"
 #include <string.h>
 
 static const char *TAG = "app";
@@ -54,13 +57,21 @@ void app_main(void)
                  now.tm_hour, now.tm_min, now.tm_sec);
     }
 
+    bool wifi_ok = false;
     if (wifi_connect(15000) == ESP_OK) {
+        wifi_ok = true;
         char ip[16];
         wifi_get_ip(ip, sizeof(ip));
         ESP_LOGI(TAG, "wifi ok, ip=%s", ip);
         display_text("wifi ok", ip);
     } else {
         ESP_LOGW(TAG, "wifi failed");
+    }
+
+    if (mode == BOOT_NORMAL && wifi_ok) {
+        ESP_LOGI(TAG, "checking OTA manifest...");
+        esp_err_t r = ota_pull(OTA_MANIFEST_URL);
+        ESP_LOGI(TAG, "ota_pull -> %s", esp_err_to_name(r));
     }
 
     if (mode == BOOT_NORMAL) {
