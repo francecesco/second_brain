@@ -7,6 +7,7 @@
 #include "power.h"
 #include "storage.h"
 #include "audio.h"
+#include "sensors.h"
 #include <string.h>
 
 static const char *TAG = "app";
@@ -35,6 +36,22 @@ void app_main(void)
     ESP_LOGI(TAG, "recording 3s...");
     ESP_ERROR_CHECK(audio_record_wav("bringup.wav", 3));
     ESP_LOGI(TAG, "recording done");
+
+    ESP_ERROR_CHECK(sensors_init());
+    float temp_c = 0, humidity = 0, bat_v = 0;
+    int bat_pct = 0;
+    if (sensors_read_climate(&temp_c, &humidity) == ESP_OK) {
+        ESP_LOGI(TAG, "climate: temp %.1fC hum %.0f%%", temp_c, humidity);
+    }
+    if (sensors_read_battery(&bat_v, &bat_pct) == ESP_OK) {
+        ESP_LOGI(TAG, "battery: %.2fV (%d%%)", bat_v, bat_pct);
+    }
+    struct tm now;
+    if (sensors_read_time(&now) == ESP_OK) {
+        ESP_LOGI(TAG, "rtc: %04d-%02d-%02d %02d:%02d:%02d",
+                 now.tm_year + 1900, now.tm_mon + 1, now.tm_mday,
+                 now.tm_hour, now.tm_min, now.tm_sec);
+    }
 
     while (true) {
         ESP_LOGI(TAG, "alive");
