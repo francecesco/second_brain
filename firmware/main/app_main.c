@@ -6,6 +6,7 @@
 #include "display.h"
 #include "power.h"
 #include "storage.h"
+#include "audio.h"
 #include <string.h>
 
 static const char *TAG = "app";
@@ -29,6 +30,11 @@ void app_main(void)
     size_t n = 0;
     ESP_ERROR_CHECK(storage_read("bringup.txt", rb, sizeof(rb), &n));
     ESP_LOGI(TAG, "SD read back (%d): %.*s", (int)n, (int)n, rb);
+
+    ESP_ERROR_CHECK(audio_init());
+    ESP_LOGI(TAG, "recording 3s...");
+    ESP_ERROR_CHECK(audio_record_wav("bringup.wav", 3));
+    ESP_LOGI(TAG, "recording done");
 
     while (true) {
         ESP_LOGI(TAG, "alive");
