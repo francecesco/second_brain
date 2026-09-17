@@ -1,9 +1,11 @@
 #include "power.h"
 #include "board.h"
 #include "driver/gpio.h"
+#include "driver/rtc_io.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "esp_sleep.h"
 
 static const char *TAG = "power";
 
@@ -79,4 +81,29 @@ boot_mode_t power_boot_mode(void)
              POWER_PWR_DEBOUNCE_SAMPLES * POWER_PWR_DEBOUNCE_STEP_MS,
              mode == BOOT_DEV ? "DEV" : "NORMAL");
     return mode;
+}
+
+// Wake da deep sleep: usiamo BOARD_BTN_PWR (GPIO18), NON BOARD_BTN_USER (GPIO0).
+//
+// GPIO0 e' il pin di strapping BOOT: se durante il risveglio/reset la ROM lo
+// trova basso, il chip entra in download mode invece di rilanciare il nostro
+// firmware. Tenere premuto un tasto collegato a GPIO0 per svegliare la scheda
+// romperebbe quindi il boot normale. BOARD_BTN_PWR (GPIO18) e' RTC-capable
+// sulla ESP32-S3 (RTC GPIO 0-21) e non e' un pin di strapping: e' la scelta
+// sicura per un wake-source EXT1.
+void power_deep_sleep(void)
+{
+    // In deep sleep il dominio digitale (e con esso la pull-up impostata da
+    // gpio_config in power_init) e' spento: per mantenere il pin in idle alto
+    // durante il sonno serve una pull-up nel dominio RTC.
+    rtc_gpio_pullup_en(BOARD_BTN_PWR);
+    rtc_gpio_pulldown_dis(BOARD_BTN_PWR);
+
+    // Tasto attivo-basso -> wake quando il livello scende (EXT1, ANY_LOW).
+    ESP_ERROR_CHECK(esp_sleep_enable_ext1_wakeup(1ULL << BOARD_BTN_PWR,
+                                                  ESP_EXT1_WAKEUP_ANY_LOW));
+
+    ESP_LOGI(TAG, "entering deep sleep; press PWR to wake");
+    esp_deep_sleep_start();
+    // Non si torna qui: il risveglio riparte da un reset (nuovo app_main()).
 }

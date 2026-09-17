@@ -53,8 +53,18 @@ void app_main(void)
                  now.tm_hour, now.tm_min, now.tm_sec);
     }
 
+    if (mode == BOOT_NORMAL) {
+        ESP_LOGI(TAG, "entering deep sleep; press PWR to wake");
+        display_text("secondbrain", "sleeping");
+        vTaskDelay(pdMS_TO_TICKS(500));
+        power_deep_sleep();
+        return; // mai raggiunto: power_deep_sleep() non ritorna.
+    }
+
+    // DEV boot: resta sveglia (nessun deep sleep) per lasciare la console
+    // disponibile durante lo sviluppo/debug.
     while (true) {
-        ESP_LOGI(TAG, "alive");
+        ESP_LOGI(TAG, "alive (DEV mode, no sleep)");
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
