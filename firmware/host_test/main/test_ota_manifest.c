@@ -22,6 +22,22 @@ void test_parse_malformed_returns_false(void) {
     TEST_ASSERT_FALSE(ota_manifest_parse("not json", &m));
 }
 
+void test_parse_oversized_field_returns_false(void) {
+    // sha256[65] ha spazio per 64 caratteri + terminatore: una stringa piu'
+    // lunga deve essere rifiutata, non troncata silenziosamente.
+    const char *j =
+        "{\"version\":\"0.2.0\",\"url\":\"http://h/f.bin\","
+        "\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000000000\"}";
+    ota_manifest_t m;
+    TEST_ASSERT_FALSE(ota_manifest_parse(j, &m));
+}
+
+void test_parse_missing_field_returns_false(void) {
+    const char *j = "{\"version\":\"1.0.0\"}";
+    ota_manifest_t m;
+    TEST_ASSERT_FALSE(ota_manifest_parse(j, &m));
+}
+
 void test_should_update(void) {
     ota_manifest_t m; strcpy(m.version, "0.2.0");
     TEST_ASSERT_TRUE(ota_should_update("0.1.0", &m));
@@ -34,6 +50,8 @@ void app_main(void) {
     RUN_TEST(test_semver_cmp);
     RUN_TEST(test_parse_valid);
     RUN_TEST(test_parse_malformed_returns_false);
+    RUN_TEST(test_parse_oversized_field_returns_false);
+    RUN_TEST(test_parse_missing_field_returns_false);
     RUN_TEST(test_should_update);
     UNITY_END();
 }

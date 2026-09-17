@@ -11,6 +11,15 @@ bool ota_manifest_parse(const char *json, ota_manifest_t *out) {
     cJSON *s = cJSON_GetObjectItem(root, "sha256");
     bool ok = cJSON_IsString(v) && cJSON_IsString(u) && cJSON_IsString(s);
     if (ok) {
+        /* snprintf tronca silenziosamente un campo troppo lungo pur
+         * ritornando "successo": per un hash/URL OTA una troncatura silente
+         * e' peggio di un rifiuto esplicito, quindi verifichiamo prima che
+         * ogni campo entri nel buffer di destinazione. */
+        ok = strlen(v->valuestring) < sizeof(out->version) &&
+             strlen(u->valuestring) < sizeof(out->url) &&
+             strlen(s->valuestring) < sizeof(out->sha256);
+    }
+    if (ok) {
         snprintf(out->version, sizeof(out->version), "%s", v->valuestring);
         snprintf(out->url, sizeof(out->url), "%s", u->valuestring);
         snprintf(out->sha256, sizeof(out->sha256), "%s", s->valuestring);
