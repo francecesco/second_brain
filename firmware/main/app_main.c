@@ -8,6 +8,7 @@
 #include "storage.h"
 #include "audio.h"
 #include "sensors.h"
+#include "wifi.h"
 #include <string.h>
 
 static const char *TAG = "app";
@@ -51,6 +52,15 @@ void app_main(void)
         ESP_LOGI(TAG, "rtc: %04d-%02d-%02d %02d:%02d:%02d",
                  now.tm_year + 1900, now.tm_mon + 1, now.tm_mday,
                  now.tm_hour, now.tm_min, now.tm_sec);
+    }
+
+    if (wifi_connect(15000) == ESP_OK) {
+        char ip[16];
+        wifi_get_ip(ip, sizeof(ip));
+        ESP_LOGI(TAG, "wifi ok, ip=%s", ip);
+        display_text("wifi ok", ip);
+    } else {
+        ESP_LOGW(TAG, "wifi failed");
     }
 
     if (mode == BOOT_NORMAL) {
