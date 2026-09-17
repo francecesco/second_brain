@@ -33,7 +33,9 @@ static const char *TAG = "epd";
 #define EPD_COLOR_BLACK 0x0
 #define EPD_COLOR_WHITE 0x1
 
-#define EPD_BUSY_TIMEOUT_MS 15000
+// Fix round 2: alzato da 15000 a 25000 per non tagliare la traccia diagnostica
+// di un refresh reale del pannello 4 colori, che puo' durare 15-20s.
+#define EPD_BUSY_TIMEOUT_MS 25000
 #define EPD_SPI_CLOCK_HZ (20 * 1000 * 1000)
 
 static spi_device_handle_t s_spi;
@@ -289,22 +291,73 @@ static esp_err_t epd_send_data(uint8_t data)
     return err;
 }
 
-// BUSY su questo pannello è idle=1 / busy=0 (confermato dal driver di riferimento
-// Waveshare epaper_port.c: `if (ReadBusy) return;` con ReadBusy = gpio_get_level(BUSY)).
+// Fix round 2: la polarità BUSY (idle=1 / busy=0) e' stata ri-verificata contro
+// l'UNICO file del repo Waveshare con pin-map identico al nostro board.h
+// (Example/ESP-IDF_5.5.1/09_E_Paper_Test/components/epaper_port/epaper_port.c:
+// `if (ReadBusy) return; // release` con ReadBusy = gpio_get_level(BUSY)) e non
+// e' stata cambiata: nessuna evidenza di inversione nel nostro porting rispetto
+// a quel riferimento (vedi sezione "Fix round 2" nel report per il dettaglio
+// dell'indagine, inclusa un'altra copia dello stesso driver che usa la stessa
+// convenzione, e un commento discordante ma non affidabile trovato altrove nel
+// repo). Quello che invece era certamente fragile: la vecchia implementazione
+// dichiarava "rilasciato" al primissimo campione (dopo un'unica attesa fissa di
+// 100ms), senza alcuna conferma. Questo e' l'esatto sintomo osservato in
+// campo (rilascio a ~100ms sia per power-on che per refresh, mentre un
+// refresh reale dura secondi). Ora la funzione: logga il livello raw
+// all'ingresso, campiona ogni 100ms fino a ~25s, logga ogni transizione con
+// timestamp, richiede che il livello "idle" (1) sia stabile per piu' campioni
+// consecutivi prima di dichiarare completato (debounce anti falso-positivo),
+// e infine logga il tempo totale osservato in stato "busy" (0). Questo non
+// presume quale sia la causa reale (polarità vs races temporali vs mancata
+// comunicazione) ma dà un segnale diagnostico completo al prossimo flash,
+// e riduce il rischio di un falso "fatto" dovuto a un singolo campione.
+#define EPD_BUSY_POLL_MS 100
+#define EPD_BUSY_IDLE_CONFIRM_SAMPLES 3 // ~300ms di idle stabile prima di dichiarare "rilasciato"
+
 static esp_err_t epd_wait_busy(const char *phase)
 {
-    ESP_LOGI(TAG, "epd: %s - waiting BUSY", phase);
-    vTaskDelay(pdMS_TO_TICKS(100));
-    TickType_t start = xTaskGetTickCount();
-    while (gpio_get_level(BOARD_EPD_BUSY) == 0) {
-        if ((xTaskGetTickCount() - start) * portTICK_PERIOD_MS > EPD_BUSY_TIMEOUT_MS) {
-            ESP_LOGE(TAG, "epd: %s - BUSY timeout after %d ms", phase, EPD_BUSY_TIMEOUT_MS);
+    int level = gpio_get_level(BOARD_EPD_BUSY);
+    int last_level = level;
+    int idle_run = (level == 1) ? 1 : 0;
+    uint32_t total_busy_ms = 0;
+    TickType_t t_start = xTaskGetTickCount();
+    TickType_t t_busy_since = (level == 0) ? t_start : 0;
+
+    ESP_LOGI(TAG, "epd: %s - waiting BUSY (livello raw iniziale=%d)", phase, level);
+
+    for (;;) {
+        uint32_t elapsed_ms = (uint32_t)((xTaskGetTickCount() - t_start) * portTICK_PERIOD_MS);
+
+        if (level == 1 && idle_run >= EPD_BUSY_IDLE_CONFIRM_SAMPLES) {
+            ESP_LOGI(TAG, "epd: %s - BUSY released a t=%ums (tempo totale osservato in stato busy: %ums)",
+                     phase, (unsigned int)elapsed_ms, (unsigned int)total_busy_ms);
+            return ESP_OK;
+        }
+        if (elapsed_ms > EPD_BUSY_TIMEOUT_MS) {
+            ESP_LOGE(TAG, "epd: %s - BUSY timeout dopo %ums (livello raw=%d, tempo totale osservato in stato busy: %ums)",
+                     phase, (unsigned int)elapsed_ms, level, (unsigned int)total_busy_ms);
             return ESP_ERR_TIMEOUT;
         }
-        vTaskDelay(pdMS_TO_TICKS(50));
+
+        vTaskDelay(pdMS_TO_TICKS(EPD_BUSY_POLL_MS));
+        level = gpio_get_level(BOARD_EPD_BUSY);
+        elapsed_ms = (uint32_t)((xTaskGetTickCount() - t_start) * portTICK_PERIOD_MS);
+
+        if (level != last_level) {
+            ESP_LOGI(TAG, "epd: %s - BUSY transizione a t=%ums: livello %d -> %d",
+                     phase, (unsigned int)elapsed_ms, last_level, level);
+            if (level == 0) {
+                t_busy_since = xTaskGetTickCount();
+                idle_run = 0;
+            } else {
+                total_busy_ms += (uint32_t)((xTaskGetTickCount() - t_busy_since) * portTICK_PERIOD_MS);
+                idle_run = 1;
+            }
+            last_level = level;
+        } else if (level == 1) {
+            idle_run++;
+        }
     }
-    ESP_LOGI(TAG, "epd: %s - BUSY released", phase);
-    return ESP_OK;
 }
 
 static void epd_reset(void)
@@ -526,6 +579,14 @@ esp_err_t display_init(void)
     if (err != ESP_OK) {
         return err;
     }
+
+    // Fix round 2: livello raw di BUSY prima di inviare qualsiasi comando SPI
+    // al pannello (subito dopo la config GPIO, prima di reset/init). Utile per
+    // capire lo stato di riposo "naturale" della linea (con il pull-up interno
+    // ora abilitato dal fix round 1) prima che qualunque comando la tocchi.
+    ESP_LOGI(TAG, "epd: BUSY livello raw all'avvio (prima di reset/init) = %d",
+             gpio_get_level(BOARD_EPD_BUSY));
+
     err = epd_spi_init();
     if (err != ESP_OK) {
         return err;
