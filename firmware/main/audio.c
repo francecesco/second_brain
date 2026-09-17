@@ -21,7 +21,9 @@
 #include "storage.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -36,7 +38,9 @@ static const char *TAG = "audio";
 
 #define AUDIO_I2C_CLK_HZ    100000
 #define AUDIO_MCLK_MULTIPLE 256   // MCLK = 256 * Fs (sufficiente per PCM 16-bit, vedi nota nell'esempio IDF)
-#define AUDIO_CHUNK_SAMPLES 1024  // campioni (int16) per blocco di lettura I2S
+#define AUDIO_CHUNK_SAMPLES 2048  // campioni (int16) per blocco di lettura I2S -> 4KB, allocati sull'heap
+                                  // (MAI come array locale: il task "main" ha uno stack piccolo, ~3.5KB,
+                                  // e un buffer di queste dimensioni in stack lo fa andare in overflow)
 
 static i2s_chan_handle_t s_rx_handle = NULL;
 static es8311_handle_t s_es8311 = NULL;
@@ -235,12 +239,25 @@ esp_err_t audio_record_wav(const char *relpath, int seconds)
     ESP_LOGI(TAG, "registrazione avviata: %s, %d s attesi, %lu byte PCM attesi",
              path, seconds, (unsigned long)data_bytes);
 
-    int16_t chunk[AUDIO_CHUNK_SAMPLES];
+    // Buffer di lettura I2S sull'HEAP (non un array locale): un chunk da
+    // AUDIO_CHUNK_SAMPLES campioni sullo stack del task "main" (~3.5KB)
+    // provoca uno stack overflow ("A stack overflow in task main has been
+    // detected"). Si legge/scrive a blocchi piccoli finche' non si raggiungono
+    // i byte richiesti per `seconds`.
+    int16_t *chunk = malloc(AUDIO_CHUNK_SAMPLES * sizeof(int16_t));
+    if (chunk == NULL) {
+        ESP_LOGE(TAG, "malloc buffer chunk fallita (%u byte)",
+                 (unsigned)(AUDIO_CHUNK_SAMPLES * sizeof(int16_t)));
+        fclose(f);
+        return ESP_ERR_NO_MEM;
+    }
+
     uint32_t bytes_written_total = 0;
+    int chunk_idx = 0;
     esp_err_t ret = ESP_OK;
 
     while (bytes_written_total < data_bytes) {
-        size_t to_read = sizeof(chunk);
+        size_t to_read = AUDIO_CHUNK_SAMPLES * sizeof(int16_t);
         if (data_bytes - bytes_written_total < to_read) {
             to_read = data_bytes - bytes_written_total;
         }
@@ -256,6 +273,23 @@ esp_err_t audio_record_wav(const char *relpath, int seconds)
             continue;
         }
 
+        // Istrumentazione livello audio: peak e RMS del chunk, per verificare
+        // la pipeline (e lo slot I2S scelto, LEFT) senza dover estrarre la SD.
+        size_t samples = bytes_read / sizeof(int16_t);
+        int peak = 0;
+        int64_t sum_sq = 0;
+        for (size_t s = 0; s < samples; s++) {
+            int v = chunk[s];
+            int av = (v < 0) ? -v : v;
+            if (av > peak) {
+                peak = av;
+            }
+            sum_sq += (int64_t)v * (int64_t)v;
+        }
+        int rms = (samples > 0) ? (int)sqrt((double)sum_sq / (double)samples) : 0;
+        ESP_LOGI(TAG, "rec chunk %d: peak=%d rms=%d", chunk_idx, peak, rms);
+        chunk_idx++;
+
         size_t written = fwrite(chunk, 1, bytes_read, f);
         if (written != bytes_read) {
             ESP_LOGE(TAG, "scrittura PCM incompleta su %s", path);
@@ -264,6 +298,8 @@ esp_err_t audio_record_wav(const char *relpath, int seconds)
         }
         bytes_written_total += (uint32_t)written;
     }
+
+    free(chunk);
 
     if (ret == ESP_OK && bytes_written_total != data_bytes) {
         // Patch header con la dimensione realmente scritta (se l'I2S ha reso meno byte del previsto).
