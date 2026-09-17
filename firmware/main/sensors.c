@@ -17,10 +17,15 @@
 //
 // NOTA bus condiviso: SHTC3 e PCF85063 stanno sullo STESSO bus I2C legacy
 // (driver/i2c.h) gia' inizializzato da audio_init() (Task 6) per il codec
-// ES8311, sulla stessa porta BOARD_I2C_PORT. NON si usa il nuovo driver
-// i2c_master (conflligerebbe con il driver legacy sulla stessa porta): si
-// richiama i2c_param_config/i2c_driver_install con gli stessi parametri e si
-// tratta ESP_ERR_INVALID_STATE (bus gia' installato da audio) come normale.
+// ES8311, sulla stessa porta BOARD_I2C_PORT, e audio_init() gira SEMPRE
+// PRIMA dei sensori in app_main. NON si usa il nuovo driver i2c_master
+// (conflligerebbe con il driver legacy sulla stessa porta), e sensors_init
+// NON richiama ne' i2c_param_config ne' i2c_driver_install: su questa scheda
+// una i2c_driver_install ridondante sullo stesso NUM porta ritorna ESP_FAIL
+// (non ESP_ERR_INVALID_STATE come atteso in precedenza), quindi qualsiasi
+// tentativo di reinstallare/riconfigurare il bus va evitato del tutto. Il
+// bus e' posseduto e configurato da audio_init(); sensors.c si limita a
+// usarlo per le proprie transazioni I2C.
 
 #include "sensors.h"
 #include "board.h"
@@ -39,7 +44,6 @@
 
 static const char *TAG = "sensors";
 
-#define SENSORS_I2C_CLK_HZ      100000 // stessa velocita' usata da audio.c sul bus condiviso
 #define SENSORS_I2C_TIMEOUT_MS  1000
 
 static bool s_i2c_ready = false;
@@ -48,31 +52,21 @@ static adc_cali_handle_t s_adc_cali = NULL;
 static bool s_adc_cali_ok = false;
 
 // ---------------------------------------------------------------------------
-// I2C: bus condiviso (legacy driver/i2c.h)
+// I2C: bus condiviso (legacy driver/i2c.h), posseduto/configurato da audio_init()
 // ---------------------------------------------------------------------------
 
+// Non installa/configura nulla: il bus BOARD_I2C_PORT e' gia' pronto per l'uso
+// perche' audio_init() (Task 6) chiama i2c_param_config()+i2c_driver_install()
+// PRIMA che sensors_init() venga invocata in app_main. Una i2c_driver_install
+// ridondante su questa porta ha dimostrato di fallire con ESP_FAIL (non
+// ESP_ERR_INVALID_STATE) su hardware reale, quindi qui ci si limita a
+// verificare che il bus sia gia' stato inizializzato da qualcun altro
+// (nessuna chiamata al driver): sensors_init() marca solo lo stato locale
+// pronto per le transazioni I2C dei sensori.
 static esp_err_t sensors_i2c_bus_init(void)
 {
-    i2c_config_t conf = {
-        .mode = I2C_MODE_MASTER,
-        .sda_io_num = BOARD_I2C_SDA,
-        .scl_io_num = BOARD_I2C_SCL,
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = SENSORS_I2C_CLK_HZ,
-    };
-    ESP_RETURN_ON_ERROR(i2c_param_config(BOARD_I2C_PORT, &conf), TAG, "i2c_param_config");
-
-    esp_err_t err = i2c_driver_install(BOARD_I2C_PORT, I2C_MODE_MASTER, 0, 0, 0);
-    if (err == ESP_ERR_INVALID_STATE) {
-        // Bus gia' installato da audio_init() (stesso bus, stessi pin): non un errore.
-        ESP_LOGI(TAG, "I2C bus gia' installato (condiviso con audio), riuso");
-    } else if (err != ESP_OK) {
-        ESP_LOGE(TAG, "i2c_driver_install fallita: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    ESP_LOGI(TAG, "I2C sensori pronto: porto=%d sda=%d scl=%d", BOARD_I2C_PORT, BOARD_I2C_SDA, BOARD_I2C_SCL);
+    ESP_LOGI(TAG, "I2C sensori: riuso bus condiviso con audio (porto=%d sda=%d scl=%d)",
+             BOARD_I2C_PORT, BOARD_I2C_SDA, BOARD_I2C_SCL);
     return ESP_OK;
 }
 
