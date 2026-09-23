@@ -21,6 +21,8 @@ static const char *TAG = "capture";
 #define CAPTURE_TASK_PRIO       (tskIDLE_PRIORITY + 5)  // sopra il main (1)
 #define CAPTURE_READ_TIMEOUT_MS 500
 #define CAPTURE_STOP_WAIT_MS    3000
+#define CAPTURE_FSYNC_EVERY     8      // blocchi (~1 s): aggiorna la dimensione nella directory FAT,
+                                       // cosi' un taglio di alimentazione perde al massimo 1 s
 
 typedef struct {
     FILE *f;
@@ -39,6 +41,7 @@ static void capture_task(void *arg)
 {
     capture_ctx_t *c = (capture_ctx_t *)arg;
     const uint32_t max_bytes = (uint32_t)(((uint64_t)WAV_BYTES_PER_SEC * SB_CAPTURE_MAX_MS) / 1000u);
+    uint32_t blocks = 0;
     int16_t *buf = malloc(CAPTURE_BLOCK_BYTES);
     if (!buf) {
         c->err = ESP_ERR_NO_MEM;
@@ -57,6 +60,7 @@ static void capture_task(void *arg)
                 break;
             }
             c->data_bytes += (uint32_t)got;
+            if (++blocks % CAPTURE_FSYNC_EVERY == 0) fsync(fileno(c->f));
         }
         free(buf);
     }
@@ -76,6 +80,7 @@ esp_err_t capture_start(const char *abs_path_part)
         ESP_LOGE(TAG, "fopen %s fallita", abs_path_part);
         return ESP_FAIL;
     }
+    setvbuf(s_ctx.f, NULL, _IONBF, 0); // scriviamo gia' a blocchi da 4 KB: niente buffer stdio intermedio
     uint8_t hdr[WAV_HEADER_SIZE];
     wav_header_build(hdr, 0);
     if (fwrite(hdr, 1, sizeof(hdr), s_ctx.f) != sizeof(hdr)) {

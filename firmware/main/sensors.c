@@ -38,6 +38,7 @@
 #include "esp_check.h"
 #include "driver/gpio.h"
 #include "driver/i2c.h"
+#include "board_i2c.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
@@ -65,9 +66,9 @@ static bool s_adc_cali_ok = false;
 // pronto per le transazioni I2C dei sensori.
 static esp_err_t sensors_i2c_bus_init(void)
 {
-    ESP_LOGI(TAG, "I2C sensori: riuso bus condiviso con audio (porto=%d sda=%d scl=%d)",
-             BOARD_I2C_PORT, BOARD_I2C_SDA, BOARD_I2C_SCL);
-    return ESP_OK;
+    // Bus condiviso con il codec audio: board_i2c_ensure() e' idempotente, chi arriva
+    // primo installa il driver (su questa scheda una seconda i2c_driver_install fallisce).
+    return board_i2c_ensure();
 }
 
 static esp_err_t i2c_write(uint8_t addr, const uint8_t *data, size_t len)
@@ -223,7 +224,12 @@ esp_err_t sensors_read_time(struct tm *out)
 
     // Lettura in un colpo solo a partire da SEC_REG (0x04): SEC, MIN, HR, DAY, WEEKDAY, MONTH, YEAR.
     uint8_t buf[7];
-    ESP_RETURN_ON_ERROR(i2c_write_read_reg(BOARD_PCF85063_ADDR, 0x04, buf, sizeof(buf)), TAG, "pcf85063 read");
+    esp_err_t err = i2c_write_read_reg(BOARD_PCF85063_ADDR, 0x04, buf, sizeof(buf));
+    if (err != ESP_OK) { // la prima transazione dopo l'init del bus a volte va in timeout: un retry
+        vTaskDelay(pdMS_TO_TICKS(20));
+        err = i2c_write_read_reg(BOARD_PCF85063_ADDR, 0x04, buf, sizeof(buf));
+    }
+    ESP_RETURN_ON_ERROR(err, TAG, "pcf85063 read");
 
     memset(out, 0, sizeof(*out));
     out->tm_sec  = bcd2dec(buf[0] & 0x7F); // bit7 = OS (oscillator stop), ignorato

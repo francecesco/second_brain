@@ -788,3 +788,13 @@ void display_text(const char *line1, const char *line2)
     draw_string(s_fb, 8, 92, line2);
     display_blit_1bit(s_fb, DISPLAY_W, DISPLAY_H);
 }
+
+void display_lines(const char *l1, const char *l2, const char *l3)
+{
+    if (!s_ready) return;
+    memset(s_fb, 0x00, sizeof(s_fb));
+    draw_string(s_fb, 8, 56, l1 ? l1 : "");
+    draw_string(s_fb, 8, 84, l2 ? l2 : "");
+    draw_string(s_fb, 8, 112, l3 ? l3 : "");
+    display_blit_1bit(s_fb, DISPLAY_W, DISPLAY_H);
+}

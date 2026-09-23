@@ -1,8 +1,18 @@
+// Flusso di un ciclo (spec Fase 1a §4): boot base -> modalita' -> [CAPTURE] -> SYNC ->
+// display stato -> deep sleep. In DEV resta sveglio con push/status server.
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <sys/time.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "nvs_flash.h"
+
+#include "config.h"
 #include "fw_version.h"
 #include "display.h"
 #include "power.h"
@@ -11,108 +21,198 @@
 #include "sensors.h"
 #include "wifi.h"
 #include "ota.h"
-#include "secrets.h"
-#include "config.h"
 #include "capture.h"
 #include "queue.h"
 #include "capture_name.h"
-#include <string.h>
+#include "secrets.h"
 
 static const char *TAG = "app";
+
+typedef struct {
+    int   battery_pct;      // -1 se non letta
+    float battery_v;
+    bool  sd_ok;
+    bool  wifi_ok;
+    int   sent, rejected, remaining;
+    bool  server_error;
+    char  capture_msg[32];  // "Salvato 0:07" | "Scartato" | "Max 10:00" | "SD assente" | ...
+} cycle_state_t;
+
+static void nvs_init_early(void)
+{
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        err = nvs_flash_init();
+    }
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) ESP_LOGE(TAG, "nvs init: %s", esp_err_to_name(err));
+}
+
+// Ora di sistema dall'RTC (UTC). TASK 8: spostato in timesync_load_rtc().
+static void system_time_from_rtc(void)
+{
+    struct tm t;
+    esp_err_t err = sensors_read_time(&t);
+    if (err != ESP_OK) { ESP_LOGW(TAG, "RTC non leggibile: %s", esp_err_to_name(err)); return; }
+    setenv("TZ", "UTC0", 1); tzset();
+    time_t epoch = mktime(&t);
+    struct timeval tv = { .tv_sec = epoch, .tv_usec = 0 };
+    settimeofday(&tv, NULL);
+    setenv("TZ", SB_TZ, 1); tzset();
+    ESP_LOGI(TAG, "ora di sistema da RTC: %04d-%02d-%02d %02d:%02d:%02dZ (valido=%d)",
+             t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec,
+             capture_name_rtc_valid(&t));
+}
+
+static void fmt_mmss(uint32_t ms, char *out, size_t n)
+{
+    uint32_t s = ms / 1000;
+    snprintf(out, n, "%lu:%02lu", (unsigned long)(s / 60), (unsigned long)(s % 60));
+}
+
+static void do_capture(cycle_state_t *st)
+{
+    if (st->battery_pct >= 0 && st->battery_pct < SB_BATTERY_MIN_RECORD_PCT) {
+        strlcpy(st->capture_msg, "Batteria scarica", sizeof(st->capture_msg));
+        return;
+    }
+    if (!st->sd_ok) { strlcpy(st->capture_msg, "SD assente", sizeof(st->capture_msg)); return; }
+    uint64_t free_b = 0;
+    if (storage_free_bytes(&free_b) == ESP_OK && free_b < SB_SD_MIN_FREE_BYTES) {
+        strlcpy(st->capture_msg, "SD piena", sizeof(st->capture_msg));
+        return;
+    }
+    if (audio_init() != ESP_OK) { strlcpy(st->capture_msg, "Errore audio", sizeof(st->capture_msg)); return; }
+
+    char part[QUEUE_PATH_MAX + 32], id[CAPTURE_NAME_MAX + 8];
+    if (queue_new_part_path(part, sizeof(part), id, sizeof(id)) != ESP_OK ||
+        capture_start(part) != ESP_OK) {
+        strlcpy(st->capture_msg, "Errore SD", sizeof(st->capture_msg));
+        return;
+    }
+    power_cycle_deadline_start(SB_CYCLE_DEADLINE_MS + SB_CAPTURE_MAX_MS); // §4: registrazione esclusa dai 5 min
+    display_text("* REC", id);   // ~2 s bloccanti: il task registratore intanto scrive
+
+    int released = 0;
+    while (released < 2 && capture_is_running()) {
+        vTaskDelay(pdMS_TO_TICKS(50));
+        released = power_pwr_pressed() ? 0 : released + 1;
+    }
+    capture_result_t r;
+    capture_stop(&r);
+    power_cycle_deadline_start(SB_CYCLE_DEADLINE_MS);
+
+    char mmss[16];
+    fmt_mmss(r.duration_ms, mmss, sizeof(mmss));
+    if (r.duration_ms < SB_CAPTURE_MIN_MS) {
+        queue_discard(part);
+        strlcpy(st->capture_msg, "Scartato", sizeof(st->capture_msg));
+    } else if (queue_commit(part) != ESP_OK) {
+        strlcpy(st->capture_msg, "Errore SD", sizeof(st->capture_msg));
+    } else if (r.hit_max) {
+        snprintf(st->capture_msg, sizeof(st->capture_msg), "Max %s", mmss);
+    } else {
+        snprintf(st->capture_msg, sizeof(st->capture_msg), "Salvato %s", mmss);
+    }
+    if (r.err != ESP_OK) ESP_LOGW(TAG, "cattura con errore: %s", esp_err_to_name(r.err));
+    ESP_LOGI(TAG, "cattura: %s (%s)", st->capture_msg, id);
+}
+
+static void do_sync(cycle_state_t *st)
+{
+    if (st->battery_pct >= 0 && st->battery_pct < SB_BATTERY_MIN_RECORD_PCT) {
+        ESP_LOGW(TAG, "batteria %d%%: niente Wi-Fi", st->battery_pct);
+        return;
+    }
+    if (wifi_connect(SB_WIFI_BUDGET_MS) != ESP_OK) { ESP_LOGW(TAG, "no wifi"); return; }
+    st->wifi_ok = true;
+
+    // TASK 8: timesync_run() qui (SNTP -> RTC se necessario).
+    // TASK 9: sync_run(SB_SYNC_WINDOW_MS, &result) qui; per ora la coda resta com'e'.
+    st->remaining = st->sd_ok ? queue_count(NULL) : 0;
+
+    if (st->battery_pct < 0 || st->battery_pct >= SB_BATTERY_MIN_OTA_PCT) {
+        esp_err_t r = ota_pull(OTA_MANIFEST_URL);   // non ritorna se aggiorna
+        ESP_LOGI(TAG, "ota_pull -> %s", esp_err_to_name(r));
+    }
+}
+
+static void show_status(const cycle_state_t *st)
+{
+    char l1[32], l2[32], l3[48];
+    time_t now = time(NULL); struct tm lt; struct tm utc;
+    gmtime_r(&now, &utc); localtime_r(&now, &lt);
+    if (capture_name_rtc_valid(&utc)) snprintf(l1, sizeof(l1), "%02d:%02d", lt.tm_hour, lt.tm_min);
+    else strlcpy(l1, "--:--", sizeof(l1));
+    if (st->battery_pct >= 0) snprintf(l2, sizeof(l2), "coda: %d  bat %d%%", st->remaining, st->battery_pct);
+    else snprintf(l2, sizeof(l2), "coda: %d", st->remaining);
+    if (st->capture_msg[0] && !st->wifi_ok) snprintf(l3, sizeof(l3), "%s / no wifi", st->capture_msg);
+    else if (!st->wifi_ok) strlcpy(l3, "no wifi", sizeof(l3));
+    else if (st->server_error) strlcpy(l3, "server ko", sizeof(l3));
+    else if (st->sent > 0) snprintf(l3, sizeof(l3), "%d inviate", st->sent);
+    else if (st->capture_msg[0]) strlcpy(l3, st->capture_msg, sizeof(l3));
+    else strlcpy(l3, "sync ok", sizeof(l3));
+    ESP_LOGI(TAG, "stato: [%s] [%s] [%s]", l1, l2, l3);
+    display_lines(l1, l2, l3);
+}
+
+static void dev_mode(void)
+{
+    power_cycle_deadline_cancel();
+    if (wifi_connect(SB_WIFI_BUDGET_MS * 2) != ESP_OK) {
+        display_text("DEV MODE", "no wifi");
+        ESP_LOGW(TAG, "DEV senza Wi-Fi");
+    } else {
+        char ip[16]; wifi_get_ip(ip, sizeof(ip));
+        if (ota_dev_server_start() == ESP_OK) {
+            // TASK 10: status_http_register() qui.
+            ESP_LOGI(TAG, "DEV OTA ready: curl --data-binary @build/secondbrain_fw.bin http://%s/ota", ip);
+        }
+        display_text("DEV MODE", ip);
+    }
+    while (true) {
+        ESP_LOGI(TAG, "alive (DEV mode, no sleep)");
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+}
 
 void app_main(void)
 {
     ESP_LOGI(TAG, "secondbrain fw v%s", fw_version());
+    setenv("TZ", SB_TZ, 1); tzset();
 
+    // --- boot base ---
     power_init();
     boot_mode_t mode = power_boot_mode();
     ESP_LOGI(TAG, "boot mode: %s", power_boot_mode_name(mode));
-
     ESP_ERROR_CHECK(display_init());
+    ota_mark_valid_if_pending();           // self-check: boot + display ok
+    power_cycle_deadline_start(SB_CYCLE_DEADLINE_MS);
+    nvs_init_early();
 
-    display_text("secondbrain", mode == BOOT_DEV ? "DEV MODE" : fw_version());
-
-    // Self-check superato (boot + display): se questa immagine e' appena
-    // arrivata via OTA, confermala ora, prima di periferiche pesanti e
-    // soprattutto prima del deep sleep (il wake passa dal bootloader, che
-    // farebbe rollback di un'immagine non confermata).
-    ota_mark_valid_if_pending();
-
-    ESP_ERROR_CHECK(storage_mount());
-    ESP_ERROR_CHECK(audio_init());
-    if (mode == BOOT_CAPTURE) {
-        ESP_ERROR_CHECK(queue_init());
-        char part[QUEUE_PATH_MAX + 32], id[CAPTURE_NAME_MAX + 8];
-        ESP_ERROR_CHECK(queue_new_part_path(part, sizeof(part), id, sizeof(id)));
-        ESP_ERROR_CHECK(capture_start(part));
-        display_text("REC", id);
-        int released = 0;
-        while (released < 2 && capture_is_running()) {   // rilascio su 2 campioni consecutivi
-            vTaskDelay(pdMS_TO_TICKS(50));
-            released = power_pwr_pressed() ? 0 : released + 1;
-        }
-        capture_result_t r;
-        capture_stop(&r);
-        if (r.duration_ms >= SB_CAPTURE_MIN_MS) queue_commit(part); else queue_discard(part);
-        uint64_t bytes = 0; int n = queue_count(&bytes);
-        ESP_LOGI(TAG, "hold-to-record: %lu ms; coda: %d file, %llu byte", (unsigned long)r.duration_ms, n, (unsigned long long)bytes);
+    if (mode == BOOT_DEV) {
+        display_text("secondbrain", "DEV MODE");
+        dev_mode();                        // non ritorna
     }
 
-    ESP_ERROR_CHECK(sensors_init());
-    float temp_c = 0, humidity = 0, bat_v = 0;
-    int bat_pct = 0;
-    if (sensors_read_climate(&temp_c, &humidity) == ESP_OK) {
-        ESP_LOGI(TAG, "climate: temp %.1fC hum %.0f%%", temp_c, humidity);
+    cycle_state_t st = { .battery_pct = -1, .remaining = 0 };
+    if (sensors_init() == ESP_OK) {
+        if (sensors_read_battery(&st.battery_v, &st.battery_pct) != ESP_OK) st.battery_pct = -1;
+        system_time_from_rtc();
     }
-    if (sensors_read_battery(&bat_v, &bat_pct) == ESP_OK) {
-        ESP_LOGI(TAG, "battery: %.2fV (%d%%)", bat_v, bat_pct);
-    }
-    struct tm now;
-    if (sensors_read_time(&now) == ESP_OK) {
-        ESP_LOGI(TAG, "rtc: %04d-%02d-%02d %02d:%02d:%02d",
-                 now.tm_year + 1900, now.tm_mon + 1, now.tm_mday,
-                 now.tm_hour, now.tm_min, now.tm_sec);
-    }
+    ESP_LOGI(TAG, "batteria: %.2fV (%d%%)", st.battery_v, st.battery_pct);
 
-    bool wifi_ok = false;
-    if (wifi_connect(15000) == ESP_OK) {
-        wifi_ok = true;
-        char ip[16];
-        wifi_get_ip(ip, sizeof(ip));
-        ESP_LOGI(TAG, "wifi ok, ip=%s", ip);
-        display_text("wifi ok", ip);
-    } else {
-        ESP_LOGW(TAG, "wifi failed");
-    }
+    st.sd_ok = (storage_mount() == ESP_OK) && (queue_init() == ESP_OK);
+    if (!st.sd_ok) ESP_LOGW(TAG, "SD non disponibile");
 
-    if (mode != BOOT_DEV && wifi_ok) {
-        ESP_LOGI(TAG, "checking OTA manifest...");
-        esp_err_t r = ota_pull(OTA_MANIFEST_URL);
-        ESP_LOGI(TAG, "ota_pull -> %s", esp_err_to_name(r));
-    }
+    if (mode == BOOT_CAPTURE) do_capture(&st);
+    // In SYNC_ONLY nessuna schermata intermedia: un solo refresh e-Paper a fine ciclo
+    // (ogni refresh completo "lampeggia" per ~2 s).
 
-    if (mode != BOOT_DEV) {
-        ESP_LOGI(TAG, "entering deep sleep; press PWR to wake");
-        display_text("secondbrain", "sleeping");
-        vTaskDelay(pdMS_TO_TICKS(500));
-        power_deep_sleep();
-        return; // mai raggiunto: power_deep_sleep() non ritorna.
-    }
+    do_sync(&st);
+    if (st.sd_ok) st.remaining = queue_count(NULL);
 
-    // DEV boot: resta sveglia (nessun deep sleep) per lasciare la console
-    // disponibile durante lo sviluppo/debug, e accetta firmware via
-    // POST /ota (OTA push) se il Wi-Fi e' su.
-    if (wifi_ok) {
-        char ip[16];
-        wifi_get_ip(ip, sizeof(ip));
-        ESP_ERROR_CHECK(ota_dev_server_start());
-        ESP_LOGI(TAG, "DEV OTA ready: curl --data-binary @build/secondbrain_fw.bin http://%s/ota", ip);
-        display_text("DEV MODE", ip);
-    } else {
-        ESP_LOGW(TAG, "DEV mode senza Wi-Fi: OTA push non disponibile");
-    }
-    while (true) {
-        ESP_LOGI(TAG, "alive (DEV mode, no sleep)");
-        vTaskDelay(pdMS_TO_TICKS(2000));
-    }
+    show_status(&st);
+    vTaskDelay(pdMS_TO_TICKS(300));
+    power_deep_sleep();
 }

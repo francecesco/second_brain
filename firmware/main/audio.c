@@ -29,12 +29,12 @@
 #include "esp_check.h"
 #include "driver/gpio.h"
 #include "driver/i2c.h"
+#include "board_i2c.h"
 #include "driver/i2s_std.h"
 #include "es8311.h"
 
 static const char *TAG = "audio";
 
-#define AUDIO_I2C_CLK_HZ    100000
 #define AUDIO_MCLK_MULTIPLE 256   // MCLK = 256 * Fs (sufficiente per PCM 16-bit, vedi nota nell'esempio IDF)
 
 static i2s_chan_handle_t s_rx_handle = NULL;
@@ -65,24 +65,7 @@ static esp_err_t audio_power_enable(void)
 
 static esp_err_t audio_i2c_init(void)
 {
-    i2c_config_t conf = {
-        .mode = I2C_MODE_MASTER,
-        .sda_io_num = BOARD_I2C_SDA,
-        .scl_io_num = BOARD_I2C_SCL,
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = AUDIO_I2C_CLK_HZ,
-    };
-    ESP_RETURN_ON_ERROR(i2c_param_config(BOARD_I2C_PORT, &conf), TAG, "i2c_param_config");
-
-    esp_err_t err = i2c_driver_install(BOARD_I2C_PORT, I2C_MODE_MASTER, 0, 0, 0);
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) { // ERR_INVALID_STATE = gia' installato altrove
-        ESP_LOGE(TAG, "i2c_driver_install fallita: %s", esp_err_to_name(err));
-        return err;
-    }
-
-    ESP_LOGI(TAG, "I2C pronto: porto=%d sda=%d scl=%d", BOARD_I2C_PORT, BOARD_I2C_SDA, BOARD_I2C_SCL);
-    return ESP_OK;
+    return board_i2c_ensure(); // bus condiviso con i sensori: chi arriva primo installa
 }
 
 static esp_err_t audio_codec_init(void)
