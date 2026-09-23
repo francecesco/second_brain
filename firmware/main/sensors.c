@@ -243,6 +243,26 @@ esp_err_t sensors_read_time(struct tm *out)
     return ESP_OK;
 }
 
+static uint8_t dec2bcd(int v) { return (uint8_t)(((v / 10) << 4) | (v % 10)); }
+
+esp_err_t sensors_set_time(const struct tm *utc)
+{
+    if (!s_i2c_ready) return ESP_ERR_INVALID_STATE;
+    if (!utc) return ESP_ERR_INVALID_ARG;
+    uint8_t buf[8];
+    buf[0] = 0x04; // SEC_REG: scrittura sequenziale SEC..YEAR
+    buf[1] = dec2bcd(utc->tm_sec) & 0x7F;      // bit7 OS (oscillator stop) = 0
+    buf[2] = dec2bcd(utc->tm_min);
+    buf[3] = dec2bcd(utc->tm_hour);
+    buf[4] = dec2bcd(utc->tm_mday);
+    buf[5] = (uint8_t)(utc->tm_wday & 0x07);
+    buf[6] = dec2bcd(utc->tm_mon + 1);
+    buf[7] = dec2bcd((utc->tm_year + 1900) % 100);
+    esp_err_t err = i2c_write(BOARD_PCF85063_ADDR, buf, sizeof(buf));
+    if (err != ESP_OK) ESP_LOGE(TAG, "pcf85063 write: %s", esp_err_to_name(err));
+    return err;
+}
+
 // ---------------------------------------------------------------------------
 // Batteria: tensione + percentuale
 // ---------------------------------------------------------------------------

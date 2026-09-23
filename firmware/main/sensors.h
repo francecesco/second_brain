@@ -18,3 +18,6 @@ esp_err_t sensors_read_time(struct tm *out);
 // Legge la tensione di batteria (volt, dopo il partitore BOARD_BAT_DIVIDER) e
 // una percentuale approssimativa di carica LiPo (3.3V=0%, 4.2V=100%, clamp).
 esp_err_t sensors_read_battery(float *volts, int *percent);
+
+// Scrive data/ora (UTC) nel PCF85063. Richiede sensors_init().
+esp_err_t sensors_set_time(const struct tm *utc);
