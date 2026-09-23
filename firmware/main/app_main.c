@@ -50,6 +50,16 @@ static void nvs_init_early(void)
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) ESP_LOGE(TAG, "nvs init: %s", esp_err_to_name(err));
 }
 
+// display_init + conferma anti-rollback (self-check: boot + display ok), una volta sola.
+static void ensure_display(void)
+{
+    static bool done = false;
+    if (done) return;
+    done = true;
+    ESP_ERROR_CHECK(display_init());
+    ota_mark_valid_if_pending();
+}
+
 static void fmt_mmss(uint32_t ms, char *out, size_t n)
 {
     uint32_t s = ms / 1000;
@@ -60,24 +70,28 @@ static void do_capture(cycle_state_t *st)
 {
     if (st->battery_pct >= 0 && st->battery_pct < SB_BATTERY_MIN_RECORD_PCT) {
         strlcpy(st->capture_msg, "Batteria scarica", sizeof(st->capture_msg));
+        ensure_display();
         return;
     }
-    if (!st->sd_ok) { strlcpy(st->capture_msg, "SD assente", sizeof(st->capture_msg)); return; }
+    if (!st->sd_ok) { strlcpy(st->capture_msg, "SD assente", sizeof(st->capture_msg)); ensure_display(); return; }
     uint64_t free_b = 0;
     if (storage_free_bytes(&free_b) == ESP_OK && free_b < SB_SD_MIN_FREE_BYTES) {
         strlcpy(st->capture_msg, "SD piena", sizeof(st->capture_msg));
+        ensure_display();
         return;
     }
-    if (audio_init() != ESP_OK) { strlcpy(st->capture_msg, "Errore audio", sizeof(st->capture_msg)); return; }
+    if (audio_init() != ESP_OK) { strlcpy(st->capture_msg, "Errore audio", sizeof(st->capture_msg)); ensure_display(); return; }
 
     char part[QUEUE_PATH_MAX + 32], id[CAPTURE_NAME_MAX + 8];
     if (queue_new_part_path(part, sizeof(part), id, sizeof(id)) != ESP_OK ||
         capture_start(part) != ESP_OK) {
         strlcpy(st->capture_msg, "Errore SD", sizeof(st->capture_msg));
+        ensure_display();
         return;
     }
     power_cycle_deadline_start(SB_CYCLE_DEADLINE_MS + SB_CAPTURE_MAX_MS); // §4: registrazione esclusa dai 5 min
-    display_text("* REC", id);   // ~2 s bloccanti: il task registratore intanto scrive
+    ensure_display();            // ~1.2 s: il task registratore intanto scrive
+    display_text("* REC", id);   // ~2 s bloccanti, idem
 
     int released = 0;
     while (released < 2 && capture_is_running()) {
@@ -175,10 +189,11 @@ void app_main(void)
     power_init();
     boot_mode_t mode = power_boot_mode();
     ESP_LOGI(TAG, "boot mode: %s", power_boot_mode_name(mode));
-    ESP_ERROR_CHECK(display_init());
-    ota_mark_valid_if_pending();           // self-check: boot + display ok
     power_cycle_deadline_start(SB_CYCLE_DEADLINE_MS);
     nvs_init_early();
+    // In CAPTURE il display (~1.2 s di init) viene acceso DOPO l'avvio della
+    // registrazione, per ridurre la latenza tra pressione e primo campione (§5.1).
+    if (mode != BOOT_CAPTURE) ensure_display();
 
     if (mode == BOOT_DEV) {
         display_text("secondbrain", "DEV MODE");

@@ -7,6 +7,7 @@ Uso:
 
 Riceve POST /captures con corpo WAV grezzo e metadati negli header X-Capture-*,
 verifica l'header RIFF/WAVE, salva in captures_inbox/<id>.wav e risponde JSON.
+Serve inoltre GET /firmware/* da ota_serve/firmware/ (manifest e .bin per l'OTA pull).
 Idempotenza: un id gia' ricevuto -> 409 {"status":"duplicate"}.
 --fail-with N forza la risposta N per tutte le POST (test di 400/409/500 lato device).
 """
@@ -14,6 +15,7 @@ import argparse, json, http.server, re, socketserver, struct
 from pathlib import Path
 
 INBOX = Path("captures_inbox")
+OTA_DIR = Path("ota_serve/firmware")   # popolata da tools/serve_firmware.py (o a mano)
 # L'id diventa un nome file: solo caratteri sicuri, niente separatori di percorso.
 ID_RE = re.compile(r"[A-Za-z0-9_\-]{1,64}")
 
@@ -57,6 +59,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
         secs = (len(body) - 44) / 32000
         print(f"  salvato {dst} ({secs:.1f} s)", flush=True)
         return self._json(201, {"id": cid, "status": "accepted", "seconds": round(secs, 1)})
+
+    def do_GET(self):
+        # Serve anche il manifest/binario OTA da ota_serve/firmware/, cosi' un solo server
+        # sulla :8000 fa da stand-in del backend per POST /captures e per l'OTA pull.
+        if not self.path.startswith("/firmware/") or "/.." in self.path:
+            return self._json(404, {"error": "not found"})
+        src = (OTA_DIR / self.path[len("/firmware/"):]).resolve()
+        if OTA_DIR.resolve() not in src.parents or not src.is_file():
+            return self._json(404, {"error": "not found"})
+        data = src.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json" if src.suffix == ".json" else "application/octet-stream")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
 
     def log_message(self, fmt, *args):  # log compatto
         print("%s - %s" % (self.address_string(), fmt % args), flush=True)
