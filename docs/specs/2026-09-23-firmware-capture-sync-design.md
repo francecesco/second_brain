@@ -1,7 +1,15 @@
 # Firmware Fase 1a — Cattura "record & forward" + sync — Design / Spec
 
 **Data:** 2026-09-23
-**Stato:** approvato in chat (design a sezioni), spec da eseguire tramite piano.
+**Stato:** implementato e **verificato su hardware il 2026-09-23** (branch `firmware-fase1a`,
+piano `docs/plans/2026-09-23-firmware-capture-sync.md`, tutti gli scenari di §11 passati).
+Deviazioni/aggiunte emerse in esecuzione: FAT con nomi lunghi (`CONFIG_FATFS_LFN_HEAP`);
+`board_i2c_ensure()` come unico punto di init del bus I2C (accende anche il ramo di
+alimentazione periferiche, senza cui l'RTC andava in timeout); `fsync` ogni ~1 s nel task
+registratore (senza, un taglio di alimentazione lasciava un `.part` da 0 byte); in CAPTURE
+l'init dell'e-Paper avviene dopo l'avvio della registrazione (latenza pressione→primo
+campione ≈ 1,9 s, non 1 s); `capture_server.py` serve anche `GET /firmware/*` per l'OTA.
+Gesto DEV: PWR, rilascio, poi USER entro 1 s (USER non va premuto nell'istante del wake).
 **Dipende da:** `docs/specs/2026-09-14-second-brain-design.md` (spec di progetto, §5),
 `docs/specs/2026-09-16-firmware-bringup-ota-design.md` (Fase 0, completata e verificata
 su hardware il 2026-09-23).
