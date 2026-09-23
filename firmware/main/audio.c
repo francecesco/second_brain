@@ -18,12 +18,10 @@
 
 #include "audio.h"
 #include "board.h"
-#include "storage.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -38,49 +36,10 @@ static const char *TAG = "audio";
 
 #define AUDIO_I2C_CLK_HZ    100000
 #define AUDIO_MCLK_MULTIPLE 256   // MCLK = 256 * Fs (sufficiente per PCM 16-bit, vedi nota nell'esempio IDF)
-#define AUDIO_CHUNK_SAMPLES 2048  // campioni (int16) per blocco di lettura I2S -> 4KB, allocati sull'heap
-                                  // (MAI come array locale: il task "main" ha uno stack piccolo, ~3.5KB,
-                                  // e un buffer di queste dimensioni in stack lo fa andare in overflow)
 
 static i2s_chan_handle_t s_rx_handle = NULL;
 static es8311_handle_t s_es8311 = NULL;
 static bool s_inited = false;
-
-// Header WAV canonico, 44 byte, PCM.
-typedef struct __attribute__((packed)) {
-    char     riff_id[4];
-    uint32_t riff_size;
-    char     wave_id[4];
-    char     fmt_id[4];
-    uint32_t fmt_size;
-    uint16_t audio_format;
-    uint16_t num_channels;
-    uint32_t sample_rate;
-    uint32_t byte_rate;
-    uint16_t block_align;
-    uint16_t bits_per_sample;
-    char     data_id[4];
-    uint32_t data_size;
-} wav_header_t;
-
-_Static_assert(sizeof(wav_header_t) == 44, "header WAV deve essere 44 byte");
-
-static void wav_header_fill(wav_header_t *h, uint32_t data_bytes)
-{
-    memcpy(h->riff_id, "RIFF", 4);
-    memcpy(h->wave_id, "WAVE", 4);
-    memcpy(h->fmt_id, "fmt ", 4);
-    memcpy(h->data_id, "data", 4);
-    h->fmt_size = 16;
-    h->audio_format = 1; // PCM
-    h->num_channels = 1;
-    h->sample_rate = AUDIO_SAMPLE_RATE;
-    h->bits_per_sample = 16;
-    h->block_align = (uint16_t)(h->num_channels * h->bits_per_sample / 8);
-    h->byte_rate = h->sample_rate * h->block_align;
-    h->data_size = data_bytes;
-    h->riff_size = 36 + data_bytes;
-}
 
 // Assicura BOARD_AUDIO_PWR (ramo alimentazione audio) e BOARD_AUDIO_PA_EN
 // (amplificatore speaker) in uno stato noto. Entrambi attivo-basso.
@@ -203,133 +162,10 @@ esp_err_t audio_init(void)
     return ESP_OK;
 }
 
-esp_err_t audio_record_wav(const char *relpath, int seconds)
+esp_err_t audio_read_block(int16_t *buf, size_t bytes, size_t *out_bytes, uint32_t timeout_ms)
 {
-    if (!s_inited) {
-        ESP_LOGE(TAG, "audio_record_wav: audio_init non chiamato");
-        return ESP_ERR_INVALID_STATE;
-    }
-    if (relpath == NULL || seconds <= 0) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    char path[300];
-    int n = snprintf(path, sizeof(path), "%s/%s", STORAGE_MOUNT, relpath);
-    if (n < 0 || (size_t)n >= sizeof(path)) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    const uint32_t byte_rate = AUDIO_SAMPLE_RATE * sizeof(int16_t); // mono, 16-bit
-    const uint32_t data_bytes = byte_rate * (uint32_t)seconds;
-
-    FILE *f = fopen(path, "wb");
-    if (f == NULL) {
-        ESP_LOGE(TAG, "impossibile aprire %s in scrittura", path);
-        return ESP_FAIL;
-    }
-
-    wav_header_t header;
-    wav_header_fill(&header, data_bytes);
-    if (fwrite(&header, 1, sizeof(header), f) != sizeof(header)) {
-        ESP_LOGE(TAG, "scrittura header WAV fallita su %s", path);
-        fclose(f);
-        return ESP_FAIL;
-    }
-
-    ESP_LOGI(TAG, "registrazione avviata: %s, %d s attesi, %lu byte PCM attesi",
-             path, seconds, (unsigned long)data_bytes);
-
-    // Buffer di lettura I2S sull'HEAP (non un array locale): un chunk da
-    // AUDIO_CHUNK_SAMPLES campioni sullo stack del task "main" (~3.5KB)
-    // provoca uno stack overflow ("A stack overflow in task main has been
-    // detected"). Si legge/scrive a blocchi piccoli finche' non si raggiungono
-    // i byte richiesti per `seconds`.
-    int16_t *chunk = malloc(AUDIO_CHUNK_SAMPLES * sizeof(int16_t));
-    if (chunk == NULL) {
-        ESP_LOGE(TAG, "malloc buffer chunk fallita (%u byte)",
-                 (unsigned)(AUDIO_CHUNK_SAMPLES * sizeof(int16_t)));
-        fclose(f);
-        return ESP_ERR_NO_MEM;
-    }
-
-    uint32_t bytes_written_total = 0;
-    esp_err_t ret = ESP_OK;
-
-    // Livello audio complessivo (picco massimo e RMS globale su tutta la
-    // registrazione), riassunto in una singola riga di log a fine funzione:
-    // la diagnostica per-chunk (usata per il bring-up hardware) e' stata
-    // rimossa ora che il mic/lo slot I2S sono verificati su hardware reale.
-    int overall_peak = 0;
-    int64_t overall_sum_sq = 0;
-    uint32_t overall_samples = 0;
-
-    while (bytes_written_total < data_bytes) {
-        size_t to_read = AUDIO_CHUNK_SAMPLES * sizeof(int16_t);
-        if (data_bytes - bytes_written_total < to_read) {
-            to_read = data_bytes - bytes_written_total;
-        }
-
-        size_t bytes_read = 0;
-        esp_err_t err = i2s_channel_read(s_rx_handle, chunk, to_read, &bytes_read, pdMS_TO_TICKS(1000));
-        if (err != ESP_OK) {
-            ESP_LOGE(TAG, "i2s_channel_read fallita: %s", esp_err_to_name(err));
-            ret = err;
-            break;
-        }
-        if (bytes_read == 0) {
-            continue;
-        }
-
-        size_t samples = bytes_read / sizeof(int16_t);
-        for (size_t s = 0; s < samples; s++) {
-            int v = chunk[s];
-            int av = (v < 0) ? -v : v;
-            if (av > overall_peak) {
-                overall_peak = av;
-            }
-            overall_sum_sq += (int64_t)v * (int64_t)v;
-        }
-        overall_samples += (uint32_t)samples;
-
-        size_t written = fwrite(chunk, 1, bytes_read, f);
-        if (written != bytes_read) {
-            ESP_LOGE(TAG, "scrittura PCM incompleta su %s", path);
-            ret = ESP_FAIL;
-            break;
-        }
-        bytes_written_total += (uint32_t)written;
-    }
-
-    free(chunk);
-
-    // Ripatcha SEMPRE l'header con i byte realmente scritti, anche in caso di
-    // errore/interruzione: cosi' anche una registrazione troncata lascia sulla
-    // SD un WAV valido (RIFF/data size coerenti con il PCM effettivamente
-    // presente) invece di dichiarare la durata nominale con meno dati reali.
-    wav_header_fill(&header, bytes_written_total);
-    if (fseek(f, 0, SEEK_SET) != 0) {
-        ESP_LOGE(TAG, "fseek su %s fallita: impossibile ripatchare l'header WAV", path);
-        if (ret == ESP_OK) {
-            ret = ESP_FAIL;
-        }
-    } else if (fwrite(&header, 1, sizeof(header), f) != sizeof(header)) {
-        ESP_LOGE(TAG, "riscrittura header WAV su %s fallita", path);
-        if (ret == ESP_OK) {
-            ret = ESP_FAIL;
-        }
-    }
-
-    fclose(f);
-
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "registrazione fallita dopo %lu byte su %s", (unsigned long)bytes_written_total, path);
-        return ret;
-    }
-
-    int overall_rms = (overall_samples > 0)
-                           ? (int)sqrt((double)overall_sum_sq / (double)overall_samples)
-                           : 0;
-    ESP_LOGI(TAG, "registrazione completata: %s (%lu byte PCM, peak max=%d, rms medio=%d)",
-             path, (unsigned long)bytes_written_total, overall_peak, overall_rms);
-    return ESP_OK;
+    if (!s_inited) return ESP_ERR_INVALID_STATE;
+    if (!buf || !out_bytes || bytes == 0) return ESP_ERR_INVALID_ARG;
+    *out_bytes = 0;
+    return i2s_channel_read(s_rx_handle, buf, bytes, out_bytes, pdMS_TO_TICKS(timeout_ms));
 }
