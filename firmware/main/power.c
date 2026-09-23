@@ -6,30 +6,21 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
+#include "esp_timer.h"
+#include "config.h"
 
 static const char *TAG = "power";
 
-// Trigger dev-mode al boot: BOARD_BTN_PWR (GPIO18), non BOARD_BTN_USER.
+// Tasti e modalita' di boot (spec Fase 1a §4.2).
 //
-// BOARD_BTN_USER e' collegato a GPIO0, che sulla ESP32-S3 e' anche il pin di
-// strapping BOOT: se la ROM lo trova basso durante il reset/power-on, il
-// chip entra in modalita' download seriale invece di avviare il nostro
-// firmware. Per questo il tasto USER non puo' essere tenuto premuto durante
-// il reset, e un rilevamento "dev mode" basato su di esso e' costretto a un
-// pattern fragile (finestra di polling DOPO il boot, sincronizzata a mano
-// con l'istante del reset) verificato su hardware reale come poco
-// affidabile in pratica.
+// BOARD_BTN_PWR (GPIO18) e' l'unico wake source dal deep sleep (RTC-capable, non
+// strapping): tenerlo premuto durante il reset e' sicuro. Se resta premuto per
+// tutti i primi 300 ms -> CAPTURE (registra finche' e' tenuto).
 //
-// BOARD_BTN_PWR (GPIO18) NON e' un pin di strapping: puo' essere tenuto
-// premuto per tutta la sequenza power-up/reset senza alcun rischio di
-// entrare in download mode. Possiamo quindi campionarlo una sola volta,
-// subito dopo il boot, con un semplice debounce: se risulta premuto in
-// tutti i campioni presi in una finestra breve (~300ms) -> dev mode.
-// Verificato su hardware (log diagnostico round 2): la pressione di PWR
-// porta BOARD_BTN_PWR stabilmente a livello basso.
-//
-// BOARD_BTN_USER resta disponibile per altri usi (capture, wake generico),
-// tramite power_button_pressed().
+// BOARD_BTN_USER e' GPIO0, pin di strapping BOOT: se la ROM lo trova basso al
+// reset/wake il chip entra in download mode. Quindi NON va premuto nell'istante
+// del wake, ma SUBITO DOPO: la finestra per il DEV mode e' 1 s dall'avvio
+// dell'app (gesto: premi PWR, rilascia, premi USER).
 #define POWER_PWR_DEBOUNCE_SAMPLES 6
 #define POWER_PWR_DEBOUNCE_STEP_MS 50   // ~300ms totali (6 x 50ms)
 
@@ -47,40 +38,86 @@ void power_init(void)
     ESP_ERROR_CHECK(gpio_config(&io));
 }
 
-bool power_button_pressed(void)
+bool power_user_pressed(void)
 {
     int lvl = gpio_get_level(BOARD_BTN_USER);
     return BOARD_BTN_ACTIVE_LOW ? (lvl == 0) : (lvl == 1);
 }
 
-static bool power_pwr_pressed(void)
+bool power_pwr_pressed(void)
 {
     int lvl = gpio_get_level(BOARD_BTN_PWR);
     return BOARD_BTN_ACTIVE_LOW ? (lvl == 0) : (lvl == 1);
 }
 
+#define POWER_MODE_USER_WINDOW_US (1000 * 1000)  // finestra DEV per USER: 1 s dal boot
+
 boot_mode_t power_boot_mode(void)
 {
-    int raw = gpio_get_level(BOARD_BTN_PWR);
-    ESP_LOGI(TAG, "boot-mode: BTN_PWR raw level at start = %d (pressed=%d)",
-             raw, power_pwr_pressed());
-
-    bool held = true;
+    // Fase 1: 6 campioni x 50 ms su entrambi i tasti.
+    bool pwr_held_all = true;
+    bool user_seen = false;
     for (int i = 0; i < POWER_PWR_DEBOUNCE_SAMPLES; i++) {
-        if (!power_pwr_pressed()) {
-            held = false;
-            break;
+        if (power_user_pressed()) user_seen = true;
+        if (!power_pwr_pressed()) pwr_held_all = false;
+        vTaskDelay(pdMS_TO_TICKS(POWER_PWR_DEBOUNCE_STEP_MS));
+    }
+    if (user_seen) {
+        ESP_LOGI(TAG, "boot-mode: USER premuto nei primi 300ms -> DEV");
+        return BOOT_DEV;
+    }
+    if (pwr_held_all) {
+        ESP_LOGI(TAG, "boot-mode: PWR tenuto su %d campioni -> CAPTURE", POWER_PWR_DEBOUNCE_SAMPLES);
+        return BOOT_CAPTURE;
+    }
+    // Fase 2: PWR rilasciato (pressione breve o reset): finestra fino a 1 s per USER.
+    while (esp_timer_get_time() < POWER_MODE_USER_WINDOW_US) {
+        if (power_user_pressed()) {
+            ESP_LOGI(TAG, "boot-mode: USER premuto entro 1s -> DEV");
+            return BOOT_DEV;
         }
         vTaskDelay(pdMS_TO_TICKS(POWER_PWR_DEBOUNCE_STEP_MS));
     }
+    ESP_LOGI(TAG, "boot-mode: nessun tasto tenuto -> SYNC_ONLY");
+    return BOOT_SYNC_ONLY;
+}
 
-    boot_mode_t mode = held ? BOOT_DEV : BOOT_NORMAL;
-    ESP_LOGI(TAG, "boot-mode: BTN_PWR %s su %d campioni (%dms) -> %s",
-             held ? "tenuto premuto" : "non tenuto premuto",
-             POWER_PWR_DEBOUNCE_SAMPLES,
-             POWER_PWR_DEBOUNCE_SAMPLES * POWER_PWR_DEBOUNCE_STEP_MS,
-             mode == BOOT_DEV ? "DEV" : "NORMAL");
-    return mode;
+const char *power_boot_mode_name(boot_mode_t m)
+{
+    switch (m) {
+    case BOOT_DEV:     return "DEV";
+    case BOOT_CAPTURE: return "CAPTURE";
+    default:           return "SYNC_ONLY";
+    }
+}
+
+// --- scadenza di ciclo ------------------------------------------------------
+static esp_timer_handle_t s_deadline = NULL;
+
+static void deadline_cb(void *arg)
+{
+    (void)arg;
+    ESP_LOGE(TAG, "scadenza di ciclo raggiunta: deep sleep forzato");
+    power_deep_sleep();
+}
+
+void power_cycle_deadline_start(uint32_t ms)
+{
+    if (s_deadline == NULL) {
+        const esp_timer_create_args_t args = { .callback = deadline_cb, .name = "cycle_deadline" };
+        if (esp_timer_create(&args, &s_deadline) != ESP_OK) {
+            ESP_LOGE(TAG, "esp_timer_create scadenza fallita");
+            return;
+        }
+    }
+    esp_timer_stop(s_deadline); // ok anche se non attivo
+    esp_timer_start_once(s_deadline, (uint64_t)ms * 1000ULL);
+    ESP_LOGI(TAG, "scadenza di ciclo: %lu ms", (unsigned long)ms);
+}
+
+void power_cycle_deadline_cancel(void)
+{
+    if (s_deadline) esp_timer_stop(s_deadline);
 }
 
 // Wake da deep sleep: usiamo BOARD_BTN_PWR (GPIO18), NON BOARD_BTN_USER (GPIO0).
