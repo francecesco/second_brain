@@ -1,5 +1,6 @@
 #pragma once
 #include "esp_err.h"
+#include "esp_http_server.h"
 
 // Scarica il manifest OTA da manifest_url; se la versione annunciata è più
 // nuova di fw_version(), scarica il .bin, verifica lo sha256 contro quello
@@ -23,3 +24,7 @@ esp_err_t ota_dev_server_start(void);
 // o si riavvia (anche per wake da deep sleep) senza aver confermato, il
 // bootloader la marca ABORTED e ripristina la partizione precedente.
 void ota_mark_valid_if_pending(void);
+
+// Registra un handler aggiuntivo sul server httpd avviato da ota_dev_server_start
+// (es. GET /status). ESP_ERR_INVALID_STATE se il server non e' attivo.
+esp_err_t ota_dev_server_register(const httpd_uri_t *uri);

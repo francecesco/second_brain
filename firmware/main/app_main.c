@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <sys/time.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -25,6 +24,9 @@
 #include "queue.h"
 #include "capture_name.h"
 #include "secrets.h"
+#include "timesync.h"
+#include "sync.h"
+#include "status_http.h"
 
 static const char *TAG = "app";
 
@@ -46,22 +48,6 @@ static void nvs_init_early(void)
         err = nvs_flash_init();
     }
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) ESP_LOGE(TAG, "nvs init: %s", esp_err_to_name(err));
-}
-
-// Ora di sistema dall'RTC (UTC). TASK 8: spostato in timesync_load_rtc().
-static void system_time_from_rtc(void)
-{
-    struct tm t;
-    esp_err_t err = sensors_read_time(&t);
-    if (err != ESP_OK) { ESP_LOGW(TAG, "RTC non leggibile: %s", esp_err_to_name(err)); return; }
-    setenv("TZ", "UTC0", 1); tzset();
-    time_t epoch = mktime(&t);
-    struct timeval tv = { .tv_sec = epoch, .tv_usec = 0 };
-    settimeofday(&tv, NULL);
-    setenv("TZ", SB_TZ, 1); tzset();
-    ESP_LOGI(TAG, "ora di sistema da RTC: %04d-%02d-%02d %02d:%02d:%02dZ (valido=%d)",
-             t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec,
-             capture_name_rtc_valid(&t));
 }
 
 static void fmt_mmss(uint32_t ms, char *out, size_t n)
@@ -127,9 +113,13 @@ static void do_sync(cycle_state_t *st)
     if (wifi_connect(SB_WIFI_BUDGET_MS) != ESP_OK) { ESP_LOGW(TAG, "no wifi"); return; }
     st->wifi_ok = true;
 
-    // TASK 8: timesync_run() qui (SNTP -> RTC se necessario).
-    // TASK 9: sync_run(SB_SYNC_WINDOW_MS, &result) qui; per ora la coda resta com'e'.
-    st->remaining = st->sd_ok ? queue_count(NULL) : 0;
+    timesync_run();
+
+    if (st->sd_ok) {
+        sync_result_t r;
+        sync_run(SB_SYNC_WINDOW_MS, &r);
+        st->sent = r.sent; st->rejected = r.rejected; st->remaining = r.remaining; st->server_error = r.server_error;
+    }
 
     if (st->battery_pct < 0 || st->battery_pct >= SB_BATTERY_MIN_OTA_PCT) {
         esp_err_t r = ota_pull(OTA_MANIFEST_URL);   // non ritorna se aggiorna
@@ -165,7 +155,7 @@ static void dev_mode(void)
     } else {
         char ip[16]; wifi_get_ip(ip, sizeof(ip));
         if (ota_dev_server_start() == ESP_OK) {
-            // TASK 10: status_http_register() qui.
+            status_http_register();
             ESP_LOGI(TAG, "DEV OTA ready: curl --data-binary @build/secondbrain_fw.bin http://%s/ota", ip);
         }
         display_text("DEV MODE", ip);
@@ -198,7 +188,7 @@ void app_main(void)
     cycle_state_t st = { .battery_pct = -1, .remaining = 0 };
     if (sensors_init() == ESP_OK) {
         if (sensors_read_battery(&st.battery_v, &st.battery_pct) != ESP_OK) st.battery_pct = -1;
-        system_time_from_rtc();
+        timesync_load_rtc();
     }
     ESP_LOGI(TAG, "batteria: %.2fV (%d%%)", st.battery_v, st.battery_pct);
 

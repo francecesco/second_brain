@@ -473,6 +473,14 @@ static esp_err_t ota_push_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static httpd_handle_t s_dev_server = NULL;
+
+esp_err_t ota_dev_server_register(const httpd_uri_t *uri)
+{
+    if (!s_dev_server) return ESP_ERR_INVALID_STATE;
+    return httpd_register_uri_handler(s_dev_server, uri);
+}
+
 esp_err_t ota_dev_server_start(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
@@ -481,8 +489,7 @@ esp_err_t ota_dev_server_start(void)
     config.stack_size = 8192;
     config.recv_wait_timeout = 10;
 
-    httpd_handle_t server = NULL;
-    esp_err_t err = httpd_start(&server, &config);
+    esp_err_t err = httpd_start(&s_dev_server, &config);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "httpd_start: %s", esp_err_to_name(err));
         return err;
@@ -492,10 +499,11 @@ esp_err_t ota_dev_server_start(void)
         .method = HTTP_POST,
         .handler = ota_push_handler,
     };
-    err = httpd_register_uri_handler(server, &ota_uri);
+    err = httpd_register_uri_handler(s_dev_server, &ota_uri);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "register /ota: %s", esp_err_to_name(err));
-        httpd_stop(server);
+        httpd_stop(s_dev_server);
+        s_dev_server = NULL;
         return err;
     }
     ESP_LOGI(TAG, "dev OTA server in ascolto su :%d (POST /ota)", config.server_port);
