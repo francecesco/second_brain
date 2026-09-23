@@ -54,6 +54,11 @@ void test_wav_header_parse_roundtrip(void);
 void test_wav_header_parse_rejects_garbage(void);
 void test_wav_bytes_to_ms(void);
 
+void test_capture_name_from_tm(void);
+void test_capture_name_unsynced(void);
+void test_capture_name_rtc_valid(void);
+void test_capture_name_with_suffix(void);
+
 void app_main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_semver_cmp);
@@ -69,5 +74,9 @@ void app_main(void) {
     RUN_TEST(test_wav_header_parse_roundtrip);
     RUN_TEST(test_wav_header_parse_rejects_garbage);
     RUN_TEST(test_wav_bytes_to_ms);
+    RUN_TEST(test_capture_name_from_tm);
+    RUN_TEST(test_capture_name_unsynced);
+    RUN_TEST(test_capture_name_rtc_valid);
+    RUN_TEST(test_capture_name_with_suffix);
     UNITY_END();
 }
