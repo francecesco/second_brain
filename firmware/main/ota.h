@@ -15,3 +15,11 @@ esp_err_t ota_pull(const char *manifest_url);
 // risposto 200). Nessun confronto di versione: in dev si flasha quel che
 // arriva. Uso: curl --data-binary @build/secondbrain_fw.bin http://<ip>/ota
 esp_err_t ota_dev_server_start(void);
+
+// Da chiamare presto nel boot, appena il "boot base" e' ok (display su) e
+// comunque PRIMA di qualunque deep sleep: se l'app in esecuzione e' appena
+// stata installata via OTA (stato ESP_OTA_IMG_PENDING_VERIFY) la conferma
+// con esp_ota_mark_app_valid_cancel_rollback(). Se invece l'app va in crash
+// o si riavvia (anche per wake da deep sleep) senza aver confermato, il
+// bootloader la marca ABORTED e ripristina la partizione precedente.
+void ota_mark_valid_if_pending(void);

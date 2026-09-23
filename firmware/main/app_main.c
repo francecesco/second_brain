@@ -28,6 +28,12 @@ void app_main(void)
 
     display_text("secondbrain", mode == BOOT_DEV ? "DEV MODE" : fw_version());
 
+    // Self-check superato (boot + display): se questa immagine e' appena
+    // arrivata via OTA, confermala ora, prima di periferiche pesanti e
+    // soprattutto prima del deep sleep (il wake passa dal bootloader, che
+    // farebbe rollback di un'immagine non confermata).
+    ota_mark_valid_if_pending();
+
     ESP_ERROR_CHECK(storage_mount());
     const char *msg = "hello-sd";
     ESP_ERROR_CHECK(storage_write("bringup.txt", (const uint8_t *)msg, strlen(msg)));

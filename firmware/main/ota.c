@@ -501,3 +501,50 @@ esp_err_t ota_dev_server_start(void)
     ESP_LOGI(TAG, "dev OTA server in ascolto su :%d (POST /ota)", config.server_port);
     return ESP_OK;
 }
+
+// ---------------------------------------------------------------------------
+// Rollback: conferma dell'immagine dopo il self-check
+// ---------------------------------------------------------------------------
+
+static const char *ota_state_name(esp_ota_img_states_t st)
+{
+    switch (st) {
+    case ESP_OTA_IMG_NEW:            return "NEW";
+    case ESP_OTA_IMG_PENDING_VERIFY: return "PENDING_VERIFY";
+    case ESP_OTA_IMG_VALID:          return "VALID";
+    case ESP_OTA_IMG_INVALID:        return "INVALID";
+    case ESP_OTA_IMG_ABORTED:        return "ABORTED";
+    case ESP_OTA_IMG_UNDEFINED:      return "UNDEFINED";
+    default:                         return "?";
+    }
+}
+
+void ota_mark_valid_if_pending(void)
+{
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    if (!running) {
+        ESP_LOGW(TAG, "partizione in esecuzione sconosciuta, niente confirm");
+        return;
+    }
+    esp_ota_img_states_t st = ESP_OTA_IMG_UNDEFINED;
+    esp_err_t err = esp_ota_get_state_partition(running, &st);
+    if (err != ESP_OK) {
+        // Tipico per immagini flashate via USB (otadata iniziale): non c'e'
+        // nulla da confermare.
+        ESP_LOGI(TAG, "stato OTA di '%s' non disponibile (%s), niente confirm",
+                 running->label, esp_err_to_name(err));
+        return;
+    }
+    ESP_LOGI(TAG, "in esecuzione da '%s', stato OTA %s", running->label, ota_state_name(st));
+    if (st != ESP_OTA_IMG_PENDING_VERIFY) {
+        return;
+    }
+    // Self-check minimo: siamo arrivati fin qui con il boot base completo
+    // (power + display inizializzati). Conferma l'immagine.
+    err = esp_ota_mark_app_valid_cancel_rollback();
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "immagine v%s confermata: rollback annullato", fw_version());
+    } else {
+        ESP_LOGE(TAG, "esp_ota_mark_app_valid_cancel_rollback: %s", esp_err_to_name(err));
+    }
+}
