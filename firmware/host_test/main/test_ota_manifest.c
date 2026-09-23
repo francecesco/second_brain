@@ -59,6 +59,11 @@ void test_capture_name_unsynced(void);
 void test_capture_name_rtc_valid(void);
 void test_capture_name_with_suffix(void);
 
+void test_queue_part_decide(void);
+void test_sync_decide(void);
+void test_timesync_needed(void);
+void test_timesync_tm_to_epoch_utc(void);
+
 void app_main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_semver_cmp);
@@ -78,5 +83,9 @@ void app_main(void) {
     RUN_TEST(test_capture_name_unsynced);
     RUN_TEST(test_capture_name_rtc_valid);
     RUN_TEST(test_capture_name_with_suffix);
+    RUN_TEST(test_queue_part_decide);
+    RUN_TEST(test_sync_decide);
+    RUN_TEST(test_timesync_needed);
+    RUN_TEST(test_timesync_tm_to_epoch_utc);
     UNITY_END();
 }
