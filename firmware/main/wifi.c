@@ -1,5 +1,6 @@
 #include "wifi.h"
 #include "secrets.h"
+#include "wifi_bssid.h"
 
 #include <string.h>
 
@@ -88,6 +89,20 @@ esp_err_t wifi_connect(int timeout_ms)
     strlcpy((char *)wifi_config.sta.ssid, WIFI_SSID, sizeof(wifi_config.sta.ssid));
     strlcpy((char *)wifi_config.sta.password, WIFI_PASSWORD, sizeof(wifi_config.sta.password));
     wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+#ifdef WIFI_BSSID
+    // BSSID forzato (opzionale, da secrets.h): sulla rete di sviluppo ci
+    // sono piu' access point con lo stesso SSID e uno di questi non inoltra
+    // le connessioni TCP da/verso i suoi client (OTA pull e push falliscono
+    // con timeout). Con bssid_set il driver si associa SOLO a quell'AP: se
+    // non e' raggiungibile la connessione fallisce invece di ripiegare
+    // sull'altro.
+    if (wifi_parse_bssid(WIFI_BSSID, wifi_config.sta.bssid)) {
+        wifi_config.sta.bssid_set = true;
+        ESP_LOGI(TAG, "BSSID forzato: %s", WIFI_BSSID);
+    } else {
+        ESP_LOGE(TAG, "WIFI_BSSID '%s' non valido in secrets.h, ignorato", WIFI_BSSID);
+    }
+#endif
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));

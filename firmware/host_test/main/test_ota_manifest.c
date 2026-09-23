@@ -45,6 +45,10 @@ void test_should_update(void) {
     TEST_ASSERT_FALSE(ota_should_update("0.3.0", &m)); // piu' vecchio nel manifest
 }
 
+void test_bssid_parse_valid(void);
+void test_bssid_parse_uppercase_and_dash(void);
+void test_bssid_parse_rejects_garbage(void);
+
 void app_main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_semver_cmp);
@@ -53,5 +57,8 @@ void app_main(void) {
     RUN_TEST(test_parse_oversized_field_returns_false);
     RUN_TEST(test_parse_missing_field_returns_false);
     RUN_TEST(test_should_update);
+    RUN_TEST(test_bssid_parse_valid);
+    RUN_TEST(test_bssid_parse_uppercase_and_dash);
+    RUN_TEST(test_bssid_parse_rejects_garbage);
     UNITY_END();
 }
