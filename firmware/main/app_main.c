@@ -83,7 +83,17 @@ void app_main(void)
     }
 
     // DEV boot: resta sveglia (nessun deep sleep) per lasciare la console
-    // disponibile durante lo sviluppo/debug.
+    // disponibile durante lo sviluppo/debug, e accetta firmware via
+    // POST /ota (OTA push) se il Wi-Fi e' su.
+    if (wifi_ok) {
+        char ip[16];
+        wifi_get_ip(ip, sizeof(ip));
+        ESP_ERROR_CHECK(ota_dev_server_start());
+        ESP_LOGI(TAG, "DEV OTA ready: curl --data-binary @build/secondbrain_fw.bin http://%s/ota", ip);
+        display_text("DEV MODE", ip);
+    } else {
+        ESP_LOGW(TAG, "DEV mode senza Wi-Fi: OTA push non disponibile");
+    }
     while (true) {
         ESP_LOGI(TAG, "alive (DEV mode, no sleep)");
         vTaskDelay(pdMS_TO_TICKS(2000));

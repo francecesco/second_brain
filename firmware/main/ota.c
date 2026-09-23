@@ -8,7 +8,12 @@
 #include <inttypes.h>
 
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_http_client.h"
+#include "esp_http_server.h"
+#include "esp_timer.h"
+#include "esp_app_desc.h"
 #include "esp_ota_ops.h"
 #include "mbedtls/sha256.h"
 
@@ -343,4 +348,156 @@ esp_err_t ota_pull(const char *manifest_url)
     // chiama esp_restart() e non ritorna mai.
     free(m);
     return r;
+}
+
+// ---------------------------------------------------------------------------
+// OTA push (dev mode): POST /ota
+// ---------------------------------------------------------------------------
+
+// Chunk di ricezione del body; stesso ordine di grandezza del download pull.
+#define OTA_PUSH_CHUNK 4096
+// Attesa prima del riavvio, per lasciare uscire la risposta HTTP sulla socket.
+#define OTA_PUSH_RESTART_DELAY_US (1000 * 1000)
+
+static void ota_push_restart_cb(void *arg)
+{
+    (void)arg;
+    ESP_LOGI(TAG, "riavvio dopo OTA push...");
+    esp_restart();
+}
+
+// Abort dell'handle OTA + risposta di errore al client; ritorna sempre
+// ESP_FAIL cosi' l'handler puo' fare `return ota_push_fail(...)`.
+static esp_err_t ota_push_fail(httpd_req_t *req, esp_ota_handle_t handle, const char *msg)
+{
+    ESP_LOGE(TAG, "OTA push fallita: %s", msg);
+    if (handle) {
+        esp_ota_abort(handle);
+    }
+    httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, msg);
+    return ESP_FAIL;
+}
+
+static esp_err_t ota_push_handler(httpd_req_t *req)
+{
+    if (req->content_len <= 0) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "body vuoto: serve il .bin come corpo della POST");
+        return ESP_FAIL;
+    }
+
+    const esp_partition_t *update_partition = esp_ota_get_next_update_partition(NULL);
+    if (!update_partition) {
+        return ota_push_fail(req, 0, "nessuna partizione OTA inattiva");
+    }
+    if (req->content_len > update_partition->size) {
+        return ota_push_fail(req, 0, "binario piu' grande della partizione OTA");
+    }
+    ESP_LOGI(TAG, "OTA push: %d byte -> partizione '%s' @0x%08" PRIx32,
+             (int)req->content_len, update_partition->label, update_partition->address);
+
+    esp_ota_handle_t ota_handle = 0;
+    esp_err_t err = esp_ota_begin(update_partition, req->content_len, &ota_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_ota_begin: %s", esp_err_to_name(err));
+        return ota_push_fail(req, 0, "esp_ota_begin fallita");
+    }
+
+    uint8_t *buf = malloc(OTA_PUSH_CHUNK);
+    if (!buf) {
+        return ota_push_fail(req, ota_handle, "malloc buffer fallita");
+    }
+
+    size_t remaining = req->content_len;
+    size_t received = 0;
+    while (remaining > 0) {
+        int r = httpd_req_recv(req, (char *)buf, remaining < OTA_PUSH_CHUNK ? remaining : OTA_PUSH_CHUNK);
+        if (r == HTTPD_SOCK_ERR_TIMEOUT) {
+            continue; // recv timeout transitorio: riprova
+        }
+        if (r <= 0) {
+            free(buf);
+            ESP_LOGE(TAG, "httpd_req_recv=%d a byte %u/%u", r, (unsigned)received, (unsigned)req->content_len);
+            return ota_push_fail(req, ota_handle, "connessione interrotta durante il body");
+        }
+        err = esp_ota_write(ota_handle, buf, r);
+        if (err != ESP_OK) {
+            free(buf);
+            ESP_LOGE(TAG, "esp_ota_write: %s", esp_err_to_name(err));
+            return ota_push_fail(req, ota_handle, "esp_ota_write fallita");
+        }
+        received += (size_t)r;
+        remaining -= (size_t)r;
+    }
+    free(buf);
+
+    // esp_ota_end valida l'immagine (magic, segmenti, checksum/sha dell'app).
+    err = esp_ota_end(ota_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_ota_end: %s", esp_err_to_name(err));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "immagine non valida (esp_ota_end)");
+        return ESP_FAIL;
+    }
+    err = esp_ota_set_boot_partition(update_partition);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "esp_ota_set_boot_partition: %s", esp_err_to_name(err));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "set_boot_partition fallita");
+        return ESP_FAIL;
+    }
+
+    esp_app_desc_t desc;
+    const char *new_version = "?";
+    if (esp_ota_get_partition_description(update_partition, &desc) == ESP_OK) {
+        new_version = desc.version;
+    }
+    ESP_LOGI(TAG, "OTA push applicata: %u byte, nuova versione v%s (da v%s)",
+             (unsigned)received, new_version, fw_version());
+
+    char resp[96];
+    snprintf(resp, sizeof(resp), "OK %u byte, boot -> %s v%s, riavvio\n",
+             (unsigned)received, update_partition->label, new_version);
+    httpd_resp_set_type(req, "text/plain");
+    httpd_resp_sendstr(req, resp);
+
+    const esp_timer_create_args_t targs = {
+        .callback = ota_push_restart_cb,
+        .name = "ota_push_restart",
+    };
+    esp_timer_handle_t t = NULL;
+    if (esp_timer_create(&targs, &t) == ESP_OK) {
+        esp_timer_start_once(t, OTA_PUSH_RESTART_DELAY_US);
+    } else {
+        // Fallback: riavvia direttamente (la risposta e' gia' stata inviata).
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        esp_restart();
+    }
+    return ESP_OK;
+}
+
+esp_err_t ota_dev_server_start(void)
+{
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    // Il default (4KB) e' stretto per esp_ota_write/esp_ota_end (validazione
+    // immagine) dentro il task httpd.
+    config.stack_size = 8192;
+    config.recv_wait_timeout = 10;
+
+    httpd_handle_t server = NULL;
+    esp_err_t err = httpd_start(&server, &config);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "httpd_start: %s", esp_err_to_name(err));
+        return err;
+    }
+    const httpd_uri_t ota_uri = {
+        .uri = "/ota",
+        .method = HTTP_POST,
+        .handler = ota_push_handler,
+    };
+    err = httpd_register_uri_handler(server, &ota_uri);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "register /ota: %s", esp_err_to_name(err));
+        httpd_stop(server);
+        return err;
+    }
+    ESP_LOGI(TAG, "dev OTA server in ascolto su :%d (POST /ota)", config.server_port);
+    return ESP_OK;
 }
