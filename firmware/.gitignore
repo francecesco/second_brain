@@ -4,3 +4,4 @@ sdkconfig.old
 main/secrets.h
 managed_components/
 dependencies.lock
+ota_serve/
