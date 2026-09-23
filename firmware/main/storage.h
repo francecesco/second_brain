@@ -1,10 +1,11 @@
 #pragma once
-#include "esp_err.h"
-#include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
+#include "esp_err.h"
 
 #define STORAGE_MOUNT "/sdcard"
 
-esp_err_t storage_mount(void);
-esp_err_t storage_write(const char *relpath, const uint8_t *data, size_t len);
-esp_err_t storage_read(const char *relpath, uint8_t *buf, size_t buflen, size_t *out_len);
+esp_err_t storage_mount(void);                       // idempotente
+bool      storage_mounted(void);
+esp_err_t storage_free_bytes(uint64_t *out_free);    // spazio libero sul volume
+esp_err_t storage_mkdir_p(const char *relpath);      // crea STORAGE_MOUNT/relpath (un livello alla volta)

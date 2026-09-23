@@ -3,6 +3,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <errno.h>
 
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
@@ -61,67 +63,36 @@ esp_err_t storage_mount(void)
     return ESP_OK;
 }
 
-esp_err_t storage_write(const char *relpath, const uint8_t *data, size_t len)
+bool storage_mounted(void) { return s_card != NULL; }
+
+esp_err_t storage_free_bytes(uint64_t *out_free)
 {
-    if (s_card == NULL) {
-        ESP_LOGE(TAG, "storage_write: SD non montata");
-        return ESP_ERR_INVALID_STATE;
-    }
-    if (relpath == NULL || (data == NULL && len > 0)) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    char path[300];
-    int n = snprintf(path, sizeof(path), "%s/%s", STORAGE_MOUNT, relpath);
-    if (n < 0 || (size_t)n >= sizeof(path)) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    FILE *f = fopen(path, "wb");
-    if (f == NULL) {
-        ESP_LOGE(TAG, "impossibile aprire %s in scrittura", path);
-        return ESP_FAIL;
-    }
-
-    size_t written = fwrite(data, 1, len, f);
-    fclose(f);
-
-    if (written != len) {
-        ESP_LOGE(TAG, "scrittura incompleta su %s: %u/%u byte", path,
-                  (unsigned)written, (unsigned)len);
-        return ESP_FAIL;
-    }
-
-    ESP_LOGI(TAG, "scritti %u byte su %s", (unsigned)written, path);
+    if (!s_card) return ESP_ERR_INVALID_STATE;
+    if (!out_free) return ESP_ERR_INVALID_ARG;
+    uint64_t total = 0, free_b = 0;
+    esp_err_t err = esp_vfs_fat_info(STORAGE_MOUNT, &total, &free_b);
+    if (err != ESP_OK) return err;
+    *out_free = free_b;
     return ESP_OK;
 }
 
-esp_err_t storage_read(const char *relpath, uint8_t *buf, size_t buflen, size_t *out_len)
+esp_err_t storage_mkdir_p(const char *relpath)
 {
-    if (s_card == NULL) {
-        ESP_LOGE(TAG, "storage_read: SD non montata");
-        return ESP_ERR_INVALID_STATE;
-    }
-    if (relpath == NULL || buf == NULL || out_len == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    char path[300];
+    if (!s_card) return ESP_ERR_INVALID_STATE;
+    char path[160];
     int n = snprintf(path, sizeof(path), "%s/%s", STORAGE_MOUNT, relpath);
-    if (n < 0 || (size_t)n >= sizeof(path)) {
-        return ESP_ERR_INVALID_ARG;
+    if (n < 0 || (size_t)n >= sizeof(path)) return ESP_ERR_INVALID_ARG;
+    // crea ogni livello dopo il mount point
+    for (char *p = path + strlen(STORAGE_MOUNT) + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            if (mkdir(path, 0775) != 0 && errno != EEXIST) return ESP_FAIL;
+            *p = '/';
+        }
     }
-
-    FILE *f = fopen(path, "rb");
-    if (f == NULL) {
-        ESP_LOGE(TAG, "impossibile aprire %s in lettura", path);
-        return ESP_ERR_NOT_FOUND;
+    if (mkdir(path, 0775) != 0 && errno != EEXIST) {
+        ESP_LOGE(TAG, "mkdir %s fallita: errno %d", path, errno);
+        return ESP_FAIL;
     }
-
-    size_t r = fread(buf, 1, buflen, f);
-    fclose(f);
-
-    *out_len = r;
-    ESP_LOGI(TAG, "letti %u byte da %s", (unsigned)r, path);
     return ESP_OK;
 }
