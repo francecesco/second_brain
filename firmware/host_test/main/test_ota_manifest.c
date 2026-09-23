@@ -49,6 +49,11 @@ void test_bssid_parse_valid(void);
 void test_bssid_parse_uppercase_and_dash(void);
 void test_bssid_parse_rejects_garbage(void);
 
+void test_wav_header_build_layout(void);
+void test_wav_header_parse_roundtrip(void);
+void test_wav_header_parse_rejects_garbage(void);
+void test_wav_bytes_to_ms(void);
+
 void app_main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_semver_cmp);
@@ -60,5 +65,9 @@ void app_main(void) {
     RUN_TEST(test_bssid_parse_valid);
     RUN_TEST(test_bssid_parse_uppercase_and_dash);
     RUN_TEST(test_bssid_parse_rejects_garbage);
+    RUN_TEST(test_wav_header_build_layout);
+    RUN_TEST(test_wav_header_parse_roundtrip);
+    RUN_TEST(test_wav_header_parse_rejects_garbage);
+    RUN_TEST(test_wav_bytes_to_ms);
     UNITY_END();
 }

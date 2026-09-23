@@ -7,3 +7,6 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 # Il default (~3.5KB) va in stack overflow nel task "main" durante l'OTA:
 # la catena esp_http_client + esp-tls + mbedtls (Task 11) usa molto stack.
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
+# Nomi file lunghi (cap_20260923_191530.wav > 8.3): LFN su heap.
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=64
