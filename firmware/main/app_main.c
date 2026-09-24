@@ -143,39 +143,62 @@ static void do_sync(cycle_state_t *st)
     }
 }
 
-static void show_status(const cycle_state_t *st)
+// Riga 1: ora locale a sinistra e versione firmware a destra (24 colonne da 8 px).
+static void fmt_time_and_version(char *out, size_t n)
 {
-    char l1[32], l2[32], l3[48];
+    char clock[8] = "--:--";
     time_t now = time(NULL); struct tm lt; struct tm utc;
     gmtime_r(&now, &utc); localtime_r(&now, &lt);
-    if (capture_name_rtc_valid(&utc)) snprintf(l1, sizeof(l1), "%02d:%02d", lt.tm_hour, lt.tm_min);
-    else strlcpy(l1, "--:--", sizeof(l1));
-    if (st->battery_pct >= 0) snprintf(l2, sizeof(l2), "coda: %d  bat %d%%", st->remaining, st->battery_pct);
-    else snprintf(l2, sizeof(l2), "coda: %d", st->remaining);
-    if (st->capture_msg[0] && !st->wifi_ok) snprintf(l3, sizeof(l3), "%s / no wifi", st->capture_msg);
-    else if (!st->wifi_ok) strlcpy(l3, "no wifi", sizeof(l3));
-    else if (st->server_error) strlcpy(l3, "server ko", sizeof(l3));
-    else if (st->sent > 0) snprintf(l3, sizeof(l3), "%d inviate", st->sent);
-    else if (st->capture_msg[0]) strlcpy(l3, st->capture_msg, sizeof(l3));
-    else strlcpy(l3, "sync ok", sizeof(l3));
-    ESP_LOGI(TAG, "stato: [%s] [%s] [%s]", l1, l2, l3);
-    display_lines(l1, l2, l3);
+    if (capture_name_rtc_valid(&utc)) snprintf(clock, sizeof(clock), "%02d:%02d", lt.tm_hour, lt.tm_min);
+    char ver[16];
+    snprintf(ver, sizeof(ver), "v%s", fw_version());
+    int pad = 24 - (int)strlen(clock) - (int)strlen(ver);
+    if (pad < 1) pad = 1;
+    snprintf(out, n, "%s%*s%s", clock, pad, "", ver);
+}
+
+static void fmt_wifi_line(bool wifi_ok, char *out, size_t n)
+{
+    if (wifi_ok && wifi_current_ssid()) snprintf(out, n, "wifi: %.18s", wifi_current_ssid());
+    else strlcpy(out, "wifi: assente", n);
+}
+
+static void show_status(const cycle_state_t *st)
+{
+    char l1[32], l2[32], l3[32], l4[48];
+    fmt_time_and_version(l1, sizeof(l1));
+    fmt_wifi_line(st->wifi_ok, l2, sizeof(l2));
+    if (st->battery_pct >= 0) snprintf(l3, sizeof(l3), "coda: %d  bat %d%%", st->remaining, st->battery_pct);
+    else snprintf(l3, sizeof(l3), "coda: %d", st->remaining);
+    if (st->capture_msg[0] && !st->wifi_ok) snprintf(l4, sizeof(l4), "%s / no sync", st->capture_msg);
+    else if (!st->wifi_ok) strlcpy(l4, "no sync", sizeof(l4));
+    else if (st->server_error) strlcpy(l4, "server ko", sizeof(l4));
+    else if (st->sent > 0) snprintf(l4, sizeof(l4), "%d inviate", st->sent);
+    else if (st->capture_msg[0]) strlcpy(l4, st->capture_msg, sizeof(l4));
+    else strlcpy(l4, "sync ok", sizeof(l4));
+    ESP_LOGI(TAG, "stato: [%s] [%s] [%s] [%s]", l1, l2, l3, l4);
+    const char *const lines[4] = { l1, l2, l3, l4 };
+    display_lines_n(lines, 4);
 }
 
 static void dev_mode(void)
 {
     power_cycle_deadline_cancel();
-    if (wifi_connect(SB_WIFI_BUDGET_MS * 2) != ESP_OK) {
-        display_text("DEV MODE", "no wifi");
+    char ver[16], wl[32], ip[16] = "no wifi";
+    snprintf(ver, sizeof(ver), "v%s", fw_version());
+    bool ok = wifi_connect(SB_WIFI_BUDGET_MS) == ESP_OK;
+    if (!ok) {
         ESP_LOGW(TAG, "DEV senza Wi-Fi");
     } else {
-        char ip[16]; wifi_get_ip(ip, sizeof(ip));
+        wifi_get_ip(ip, sizeof(ip));
         if (ota_dev_server_start() == ESP_OK) {
             status_http_register();
             ESP_LOGI(TAG, "DEV OTA ready: curl --data-binary @build/secondbrain_fw.bin http://%s/ota", ip);
         }
-        display_text("DEV MODE", ip);
     }
+    fmt_wifi_line(ok, wl, sizeof(wl));
+    const char *const lines[4] = { "DEV MODE", ip, wl, ver };
+    display_lines_n(lines, 4);
     while (true) {
         ESP_LOGI(TAG, "alive (DEV mode, no sleep)");
         vTaskDelay(pdMS_TO_TICKS(5000));

@@ -789,12 +789,22 @@ void display_text(const char *line1, const char *line2)
     display_blit_1bit(s_fb, DISPLAY_W, DISPLAY_H);
 }
 
-void display_lines(const char *l1, const char *l2, const char *l3)
+void display_lines_n(const char *const lines[], int n)
 {
     if (!s_ready) return;
+    if (n > DISPLAY_MAX_LINES) n = DISPLAY_MAX_LINES;
     memset(s_fb, 0x00, sizeof(s_fb));
-    draw_string(s_fb, 8, 56, l1 ? l1 : "");
-    draw_string(s_fb, 8, 84, l2 ? l2 : "");
-    draw_string(s_fb, 8, 112, l3 ? l3 : "");
+    // Blocco di testo centrato verticalmente: passo 28 px (font 12 px + aria).
+    const int step = 28;
+    int y = (DISPLAY_H - (n - 1) * step - FONT_H) / 2;
+    for (int i = 0; i < n; i++, y += step) {
+        draw_string(s_fb, 8, y, lines[i] ? lines[i] : "");
+    }
     display_blit_1bit(s_fb, DISPLAY_W, DISPLAY_H);
+}
+
+void display_lines(const char *l1, const char *l2, const char *l3)
+{
+    const char *const lines[3] = { l1, l2, l3 };
+    display_lines_n(lines, 3);
 }
