@@ -20,10 +20,11 @@ Le decisioni di progetto sono in `docs/specs/`, i piani di lavoro in `docs/plans
 |---|---|
 | MCU | ESP32-S3-PICO-1-N8R8 (8 MB flash, 8 MB PSRAM), USB-Serial/JTAG nativa |
 | Display | e-Paper 1.54" 200×200 B/N, controller SSD1681, su SPI2 |
-| Audio | codec ES8311 (I2C + I2S), microfono analogico, 16 kHz mono 16 bit |
+| Audio | codec ES8311 (I2C + I2S), microfono analogico, 16 kHz mono 16 bit; altoparlante su header MX1.25, amplificatore su GPIO46 (attivo alto) |
 | Storage | microSD via SDMMC 1-bit, FAT32 con nomi lunghi |
 | Sensori | SHTC3 (temperatura/umidità), RTC PCF85063, tensione batteria (ADC) |
 | Tasti | **PWR** (GPIO18, unico wake source) e **USER** (GPIO0, pin di strapping) |
+| Batteria | LiPo 3,7 V su connettore **MX1.25 2 pin** (attenzione a polarità e tipo di connettore), ricarica a bordo via USB |
 
 La pin-map completa è in `firmware/main/board.h`. La scheda è la variante **B/N V2**
 (`github.com/waveshareteam/ESP32-S3-ePaper-1.54`), non la "1.54G" a 4 colori.
@@ -34,9 +35,9 @@ Il device dorme in deep sleep e mostra l'ultimo stato. Tutto parte dal tasto **P
 
 | Gesto | Cosa succede |
 |---|---|
-| **PWR breve** (rilascio entro ~300 ms) | **SYNC**: Wi-Fi, ora via NTP se serve, upload della coda, controllo OTA, schermata di stato, sleep. Circa 10–15 s. |
-| **PWR tenuto** (oltre 300 ms) | **REGISTRA** finché lo tieni ("* REC" + nome file). Al rilascio salva e fa il SYNC. Il primo secondo circa va perso per l'avvio. |
-| PWR tenuto ma rilasciato tra 300 ms e 1 s | Registrazione **scartata** ("Scartato"). |
+| **PWR breve** (rilascio entro ~150 ms) | **SYNC**: Wi-Fi, ora via NTP se serve, upload della coda, controllo OTA, schermata di stato, sleep. Circa 10–15 s. |
+| **PWR tenuto** (oltre 150 ms) | **REGISTRA** finché lo tieni. Un **beep** dopo ~1,7 s dalla pressione dice "parla ora"; poi compare "* REC" con il nome del file. Al rilascio la registrazione si ferma entro ~0,2 s, un **beep più lungo** conferma il salvataggio, compare "Salvato m:ss" e parte il SYNC. |
+| PWR tenuto ma registrazione sotto 1 s | Registrazione **scartata** ("Scartato"), nessun beep finale. |
 | PWR tenuto oltre 10 minuti | La registrazione si ferma da sola ("Max 10:00") e viene salvata. |
 | **PWR, rilascio, poi USER entro 1 s** | **DEV MODE**: Wi-Fi, server `POST /ota` e `GET /status`, niente registrazione, resta sveglio. |
 | **PWR mentre è in DEV MODE** | Riavvia in modalità normale (esegue un SYNC e dorme). |
@@ -141,7 +142,7 @@ essere in DEV MODE. In alternativa, senza cavo, dal Mac sulla stessa rete:
 
 ```bash
 curl --data-binary @build/secondbrain_fw.bin http://<ip-device>/ota    # push (device in DEV MODE)
-curl http://<ip-device>/status                                          # JSON: versione, batteria, ora, coda
+curl http://<ip-device>/status                                          # JSON: versione, batteria, ora, coda, tempi dell'ultimo ciclo
 ```
 
 La versione è in `firmware/version.txt` (in git resta `0.1.0`; per i test OTA si bumpa

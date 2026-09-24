@@ -72,16 +72,23 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Trappola OTA: se in `ota_serve/firmware/manifest.json` resta una versione più alta di
   quella flashata, il device si aggiorna a quel binario al primo ciclo. Dopo un flash via
   USB, rigenerare o rimuovere il manifest.
+- Audio: l'amplificatore dell'altoparlante (GPIO46) è **attivo alto** e impiega centinaia
+  di ms a svegliarsi; il canale I2S TX va aperto solo per il beep (il full-duplex spostava
+  il microfono sullo slot sbagliato) con `auto_clear` (altrimenti in underrun ripete
+  l'ultimo blocco: beep in loop udibile in tutto l'ufficio, 2026-09-24). Buffer DMA del
+  microfono da ~1 s, SD a 20 MHz: con meno si perdono campioni.
+- Diagnostica senza seriale: `GET /status` → `last_cycle` con i tempi dell'ultimo ciclo
+  reale (ms dall'avvio dell'app), picco audio, byte e tempo di upload.
 - Il refresh completo dell'e-Paper "lampeggia" in nero per ~2 s: è il pannello, non un
   bug. Il refresh parziale non è implementato.
 - Per riavviare un device fermo in DEV MODE: pressione di PWR (dal firmware 0.4.0), oppure
   push di un firmware, oppure `esptool ... --after hard_reset chip_id` con il cavo dati.
 
-## Stato al 2026-09-24
+## Stato al 2026-09-24 sera
 
-- Branch `firmware-fase1a`, non ancora mergiato in `master` (che contiene la Fase 0).
-- Device: firmware 0.4.0 (build di test del codice corrente) con la 0.1.0 equivalente
-  in git; coda vuota; conosce la rete di casa e quella dell'ufficio.
+- Tutto su `master`, remote `origin` = `github.com/francecesco/second_brain` (pubblico).
+- Device: firmware 0.5.8 (build di test del codice corrente; `version.txt` in git resta
+  0.1.0); coda vuota; conosce la rete di casa e quella dell'ufficio.
 - `backend/` vuoto: prossima fase.
 
 ## Storico
@@ -125,6 +132,14 @@ con upload e OTA pull dal Mac in ufficio. Display di stato a quattro righe (ora 
 versione, rete, coda + batteria, esito). PWR in DEV MODE riavvia in NORMAL.
 README e questo file.
 
+**2026-09-24 pomeriggio — Risposta dei tasti, beep, audio, SD.** Misurati sul device:
+beep "parla ora" a ~1,7 s dalla pressione, stop entro ~0,2 s dal rilascio (rilevato dal
+task registratore), beep di fine e "Salvato" subito invece che a fine sync (~10 s prima).
+Trovato e risolto un difetto serio: le registrazioni perdevano fino al 23 % dell'audio
+(buffer DMA da 90 ms + SD a 400 kHz); ora 18,625 s su 18,627. SD a 20 MHz: upload da ~35
+a ~210 KB/s. Scelto un solo beep finale lungo (uno dei due corti non si sentiva).
+Batteria: serve connettore MX1.25 2 pin, controllando la polarità.
+
 ## Idee future e cose rimandate
 
 - **Fase 1b — backend** `secondbrain`: implementare il contratto `POST /captures` di
@@ -135,14 +150,12 @@ README e questo file.
   progetto parlava di multipart).
 - **Fase 2 — display glanceable**: `GET /digest.bmp` 200×200 1-bit renderizzato dal
   server, cache su SD, mostrato al posto della schermata di stato.
-- **Beep** di inizio/fine registrazione dall'altoparlante (ES8311 ha il DAC, PA_EN su
-  GPIO46): feedback per l'uso al buio o in tasca.
 - **Refresh parziale e-Paper**: contatore che scorre durante la registrazione, meno
   lampeggi.
-- **Upload più veloce**: oggi ~40 KB/s con chunk da 4 KB (il push arriva a ~140 KB/s).
-- **Latenza di avvio**: ancora ~1,9 s tra pressione e primo campione (bootloader 0,4 s,
-  boot mode 0,3 s, init SD/audio). Idee: ridurre il campionamento dei tasti, spostare la
-  lettura batteria dopo la registrazione.
+- **Batteria**: misurare consumo in deep sleep e per ciclo, autonomia, attendibilità della
+  percentuale, soglie 10/30 %. Con la batteria l'RTC non si azzera più.
+- **Latenza di avvio**: beep a ~1,7 s dalla pressione. Il resto è bootloader (~0,4 s) e
+  init; sotto il secondo solo con light sleep, da valutare dopo le misure di consumo.
 - **Timer periodico di sync** senza cattura (oggi il wake è solo da tasto).
 - **HTTPS** verso il backend reale; provisioning Wi-Fi senza ricompilare (NVS/BLE).
 - **Doppia pressione di PWR** come trigger DEV alternativo a USER, se il gesto con GPIO0
