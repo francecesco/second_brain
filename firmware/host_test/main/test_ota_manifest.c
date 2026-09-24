@@ -64,6 +64,11 @@ void test_sync_decide(void);
 void test_timesync_needed(void);
 void test_timesync_tm_to_epoch_utc(void);
 
+void test_wifi_select_none_visible(void);
+void test_wifi_select_picks_office(void);
+void test_wifi_select_home_requires_pinned_bssid(void);
+void test_wifi_select_strongest_wins(void);
+
 void app_main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_semver_cmp);
@@ -87,5 +92,9 @@ void app_main(void) {
     RUN_TEST(test_sync_decide);
     RUN_TEST(test_timesync_needed);
     RUN_TEST(test_timesync_tm_to_epoch_utc);
+    RUN_TEST(test_wifi_select_none_visible);
+    RUN_TEST(test_wifi_select_picks_office);
+    RUN_TEST(test_wifi_select_home_requires_pinned_bssid);
+    RUN_TEST(test_wifi_select_strongest_wins);
     UNITY_END();
 }

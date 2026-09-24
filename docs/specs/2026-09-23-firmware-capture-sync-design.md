@@ -195,7 +195,7 @@ guarda solo il codice di stato:
 
 ### 6.3 Budget
 
-- Wi-Fi: `wifi_connect(8000)`. Fallito → `no wifi`, si salta tutto il resto del SYNC.
+- Wi-Fi (aggiornato 2026-09-24): scansione attiva (~2.5 s) e scelta tra le reti di `WIFI_NETWORKS` di quella presente con il segnale migliore (BSSID forzato se indicato); se nessuna è in vista si esce subito (`ESP_ERR_NOT_FOUND`). Poi `wifi_connect` con budget **12 s** per la sola connessione (su AP affollati 8 s non bastavano). Fallito → `no wifi`, si salta tutto il resto del SYNC. Ogni rete ha il proprio base URL del server: da lì derivano `POST /captures` e `GET /firmware/manifest.json`.
 - HTTP: `timeout_ms = 15000` di **inattività** socket (un file da 19 MB può richiedere
   oltre un minuto a 140 KB/s).
 - Finestra di sync: **3 min** dall'inizio dell'upload; alla scadenza non si iniziano
@@ -269,10 +269,14 @@ flusso normale (solo in `power_init`/`display_init`, dove senza non si va avanti
 
 ## 10. Config & segreti
 
-`main/secrets.h` (gitignored) aggiunge:
+`main/secrets.h` (gitignored) contiene la lista delle reti note (aggiornato 2026-09-24,
+sostituisce `WIFI_SSID`/`WIFI_PASSWORD`/`WIFI_BSSID`/`OTA_MANIFEST_URL`/`SECONDBRAIN_BASE_URL`):
 
 ```c
-#define SECONDBRAIN_BASE_URL "http://192.168.1.28:8000"   // server di test / backend
+#define WIFI_NETWORKS { \
+    { "ssid-casa",    "password", "54:78:f0:bd:65:eb", "http://192.168.1.28:8000" },  /* BSSID forzato */ \
+    { "ssid-ufficio", "password", NULL,                "http://192.168.0.157:8000" }, \
+}
 ```
 
 `secrets.h.example` aggiornato. `WIFI_BSSID` resta opzionale. Nuovo `main/config.h`

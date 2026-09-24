@@ -5,7 +5,7 @@
 #include "config.h"
 #include "fw_version.h"
 #include "sensors.h"
-#include "secrets.h"
+#include "wifi.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,6 +13,8 @@
 #include <sys/stat.h>
 
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_http_client.h"
 #include "esp_mac.h"
 #include "esp_timer.h"
@@ -35,8 +37,10 @@ static int upload_one(const char *name, const char *device_id, const char *bat_p
     strlcpy(id, name, sizeof(id));
     char *dot = strstr(id, ".wav"); if (dot) *dot = '\0';
 
+    const char *base = wifi_server_base_url();
+    if (!base) { fclose(f); return 0; }
     char url[192];
-    snprintf(url, sizeof(url), "%s/captures", SECONDBRAIN_BASE_URL);
+    snprintf(url, sizeof(url), "%s/captures", base);
     esp_http_client_config_t cfg = { .url = url, .method = HTTP_METHOD_POST, .timeout_ms = SB_HTTP_IDLE_TIMEOUT_MS };
     esp_http_client_handle_t c = esp_http_client_init(&cfg);
     if (!c) { fclose(f); return 0; }
@@ -100,6 +104,10 @@ esp_err_t sync_run(uint32_t window_ms, sync_result_t *out)
     for (int i = 0; i < n; i++) {
         if ((esp_timer_get_time() - t0) / 1000 > (int64_t)window_ms) { ESP_LOGW(TAG, "finestra di sync esaurita"); break; }
         int status = upload_one(names[i], device_id, bat_pct, bat_v);
+        if (status <= 0) { // errore di rete (es. abort subito dopo l'associazione): un retry
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            status = upload_one(names[i], device_id, bat_pct, bat_v);
+        }
         switch (sync_decide(status)) {
         case SYNC_ACTION_DELETE: queue_delete(names[i]); out->sent++; break;
         case SYNC_ACTION_REJECT: queue_reject(names[i]); out->rejected++; ESP_LOGW(TAG, "%s rifiutato (HTTP %d)", names[i], status); break;

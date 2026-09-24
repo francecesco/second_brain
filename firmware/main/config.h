@@ -15,7 +15,7 @@
 #define SB_BATTERY_MIN_OTA_PCT     30   // sotto: niente OTA pull
 
 // Rete e sync (§6.3)
-#define SB_WIFI_BUDGET_MS          8000
+#define SB_WIFI_BUDGET_MS          12000  // dopo la scansione; su AP affollati 8 s non bastano
 #define SB_HTTP_IDLE_TIMEOUT_MS    15000  // inattivita' socket, non totale
 #define SB_SYNC_WINDOW_MS          (3 * 60 * 1000)
 

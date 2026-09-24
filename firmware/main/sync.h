@@ -2,7 +2,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "esp_err.h"
-// Upload della coda verso POST {SECONDBRAIN_BASE_URL}/captures (spec §6.2-6.3).
+// Upload della coda verso POST <server della rete corrente>/captures (spec §6.2-6.3).
 typedef struct {
     int  sent;          // file accettati (200/201/409) e cancellati
     int  rejected;      // file spostati in rejected/ (altri 4xx)

@@ -23,7 +23,6 @@
 #include "capture.h"
 #include "queue.h"
 #include "capture_name.h"
-#include "secrets.h"
 #include "timesync.h"
 #include "sync.h"
 #include "status_http.h"
@@ -126,6 +125,7 @@ static void do_sync(cycle_state_t *st)
     }
     if (wifi_connect(SB_WIFI_BUDGET_MS) != ESP_OK) { ESP_LOGW(TAG, "no wifi"); return; }
     st->wifi_ok = true;
+    ESP_LOGI(TAG, "rete: %s, server: %s", wifi_current_ssid(), wifi_server_base_url());
 
     timesync_run();
 
@@ -136,7 +136,9 @@ static void do_sync(cycle_state_t *st)
     }
 
     if (st->battery_pct < 0 || st->battery_pct >= SB_BATTERY_MIN_OTA_PCT) {
-        esp_err_t r = ota_pull(OTA_MANIFEST_URL);   // non ritorna se aggiorna
+        char manifest_url[192];
+        snprintf(manifest_url, sizeof(manifest_url), "%s/firmware/manifest.json", wifi_server_base_url());
+        esp_err_t r = ota_pull(manifest_url);   // non ritorna se aggiorna
         ESP_LOGI(TAG, "ota_pull -> %s", esp_err_to_name(r));
     }
 }

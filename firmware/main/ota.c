@@ -66,6 +66,12 @@ static esp_err_t http_get_to_buffer(const char *url, char **out_buf, int *out_le
 
     esp_err_t err = esp_http_client_open(client, 0);
     if (err != ESP_OK) {
+        // Subito dopo l'associazione Wi-Fi la prima connessione a volte abortisce: un retry.
+        ESP_LOGW(TAG, "http open failed: %s, riprovo tra 1 s", esp_err_to_name(err));
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        err = esp_http_client_open(client, 0);
+    }
+    if (err != ESP_OK) {
         ESP_LOGE(TAG, "http open failed: %s", esp_err_to_name(err));
         esp_http_client_cleanup(client);
         return err;
