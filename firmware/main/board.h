@@ -48,7 +48,10 @@
 #define BOARD_I2S_WS         /* GPIO */ 38
 #define BOARD_I2S_DOUT       /* GPIO */ 45
 #define BOARD_I2S_DIN        /* GPIO */ 16
-#define BOARD_AUDIO_PA_EN    /* GPIO */ 46    // enable amplificatore/codec, attivo basso (0=ON, 1=OFF)
+#define BOARD_AUDIO_PA_EN    /* GPIO */ 46    // enable amplificatore altoparlante. ATTIVO ALTO (1=ON, 0=OFF):
+                                               // verificato il 2026-09-24 (con 1 il beep in loop era udibile, con 0 silenzio)
+#define BOARD_AUDIO_PA_ON    1
+#define BOARD_AUDIO_PA_OFF   0
 #define BOARD_AUDIO_PWR      /* GPIO */ 42    // enable ramo alimentazione audio (board_power_bsp), attivo basso
 
 // microSD — la scheda usa il periferico SDMMC a 1 linea (CLK/CMD/D0), NON SPI.

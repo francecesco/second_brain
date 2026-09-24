@@ -10,3 +10,6 @@ CONFIG_ESP_MAIN_TASK_STACK_SIZE=10240
 # Nomi file lunghi (cap_20260923_191530.wav > 8.3): LFN su heap.
 CONFIG_FATFS_LFN_HEAP=y
 CONFIG_FATFS_MAX_LFN=64
+# Log del bootloader al minimo: a 115200 baud i log INFO costano ~100 ms a ogni boot.
+# (il bootloader non si aggiorna via OTA: vale dal prossimo flash USB)
+CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y

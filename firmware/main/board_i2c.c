@@ -24,7 +24,7 @@ esp_err_t board_i2c_ensure(void)
     };
     gpio_config(&io);
     gpio_set_level(BOARD_AUDIO_PWR, 0);   // ON
-    gpio_set_level(BOARD_AUDIO_PA_EN, 1); // amplificatore OFF
+    gpio_set_level(BOARD_AUDIO_PA_EN, BOARD_AUDIO_PA_OFF); // amplificatore OFF
     vTaskDelay(pdMS_TO_TICKS(10));
     i2c_config_t conf = {
         .mode = I2C_MODE_MASTER,

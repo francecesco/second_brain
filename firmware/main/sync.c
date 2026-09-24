@@ -18,9 +18,10 @@
 #include "esp_http_client.h"
 #include "esp_mac.h"
 #include "esp_timer.h"
+#include "diag.h"
 
 static const char *TAG = "sync";
-#define SYNC_CHUNK     4096
+#define SYNC_CHUNK     16384
 #define SYNC_MAX_FILES 64
 
 // Ritorna il codice HTTP (>0) oppure <=0 su errore di rete/timeout.
@@ -103,7 +104,14 @@ esp_err_t sync_run(uint32_t window_ms, sync_result_t *out)
     int64_t t0 = esp_timer_get_time();
     for (int i = 0; i < n; i++) {
         if ((esp_timer_get_time() - t0) / 1000 > (int64_t)window_ms) { ESP_LOGW(TAG, "finestra di sync esaurita"); break; }
+        int64_t tu = esp_timer_get_time();
         int status = upload_one(names[i], device_id, bat_pct, bat_v);
+        if (status > 0) {
+            char abs[QUEUE_PATH_MAX + 32]; struct stat st;
+            queue_abs_path(names[i], abs, sizeof(abs));
+            if (stat(abs, &st) == 0) diag_get()->upload_bytes += (uint32_t)st.st_size;
+            diag_get()->upload_ms += (uint32_t)((esp_timer_get_time() - tu) / 1000);
+        }
         if (status <= 0) { // errore di rete (es. abort subito dopo l'associazione): un retry
             vTaskDelay(pdMS_TO_TICKS(1000));
             status = upload_one(names[i], device_id, bat_pct, bat_v);
@@ -116,6 +124,8 @@ esp_err_t sync_run(uint32_t window_ms, sync_result_t *out)
     }
     free(names);
     out->remaining = queue_count(NULL);
-    ESP_LOGI(TAG, "sync: inviate=%d rifiutate=%d restano=%d server_error=%d", out->sent, out->rejected, out->remaining, out->server_error);
+    ESP_LOGI(TAG, "sync: inviate=%d rifiutate=%d restano=%d server_error=%d (%lu byte in %lu ms)",
+             out->sent, out->rejected, out->remaining, out->server_error,
+             (unsigned long)diag_get()->upload_bytes, (unsigned long)diag_get()->upload_ms);
     return out->server_error ? ESP_FAIL : ESP_OK;
 }

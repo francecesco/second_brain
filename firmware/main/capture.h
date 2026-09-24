@@ -13,6 +13,7 @@ typedef struct {
     uint32_t  duration_ms;  // = wav_bytes_to_ms(data_bytes)
     bool      hit_max;      // fermata dal limite SB_CAPTURE_MAX_MS
     esp_err_t err;          // ESP_OK oppure primo errore I2S/SD incontrato
+    int       peak;         // picco assoluto dei campioni (0..32767): diagnostica livello microfono
 } capture_result_t;
 
 esp_err_t capture_start(const char *abs_path_part);  // richiede audio_init() e SD montata

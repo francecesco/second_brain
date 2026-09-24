@@ -162,6 +162,9 @@ esp_err_t wifi_connect(int timeout_ms)
 
     esp_err_t result;
     if (bits & WIFI_CONNECTED_BIT) {
+        // Il device dorme tra un ciclo e l'altro: da sveglio niente modem sleep, che
+        // aggiungeva 200-600 ms di latenza a ogni pacchetto (upload a ~40 KB/s).
+        esp_wifi_set_ps(WIFI_PS_NONE);
         ESP_LOGI(TAG, "connected, ip=%s", s_ip_str);
         result = ESP_OK;
     } else {

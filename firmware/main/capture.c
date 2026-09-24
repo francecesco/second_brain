@@ -2,6 +2,7 @@
 #include "audio.h"
 #include "wav.h"
 #include "config.h"
+#include "power.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,16 +22,18 @@ static const char *TAG = "capture";
 #define CAPTURE_TASK_PRIO       (tskIDLE_PRIORITY + 5)  // sopra il main (1)
 #define CAPTURE_READ_TIMEOUT_MS 500
 #define CAPTURE_STOP_WAIT_MS    3000
-#define CAPTURE_FSYNC_EVERY     8      // blocchi (~1 s): aggiorna la dimensione nella directory FAT,
+#define CAPTURE_FSYNC_EVERY     16     // blocchi (~1 s): aggiorna la dimensione nella directory FAT,
                                        // cosi' un taglio di alimentazione perde al massimo 1 s
 
 typedef struct {
     FILE *f;
     volatile bool stop_req;
+    volatile bool released;   // PWR rilasciato (2 campioni consecutivi): il task si e' fermato da solo
     volatile bool running;
     volatile bool hit_max;
     volatile esp_err_t err;
     volatile uint32_t data_bytes;
+    volatile int peak;
     int64_t start_us;
     SemaphoreHandle_t done;
 } capture_ctx_t;
@@ -46,7 +49,12 @@ static void capture_task(void *arg)
     if (!buf) {
         c->err = ESP_ERR_NO_MEM;
     } else {
+        int not_pressed = 0;
         while (!c->stop_req) {
+            // Rilascio di PWR controllato QUI, ogni blocco (128 ms): il main puo' essere
+            // bloccato nel refresh dell'e-Paper per secondi, la registrazione no.
+            not_pressed = power_pwr_pressed() ? 0 : not_pressed + 1;
+            if (not_pressed >= 2) { c->released = true; break; }
             if (c->data_bytes >= max_bytes) { c->hit_max = true; break; }
             size_t want = CAPTURE_BLOCK_BYTES;
             if (max_bytes - c->data_bytes < want) want = max_bytes - c->data_bytes;
@@ -54,6 +62,11 @@ static void capture_task(void *arg)
             esp_err_t e = audio_read_block(buf, want, &got, CAPTURE_READ_TIMEOUT_MS);
             if (e != ESP_OK && e != ESP_ERR_TIMEOUT) { c->err = e; break; }
             if (got == 0) continue;
+            // Livello (picco) per la diagnostica: un microfono "morto" si vede subito nel log.
+            for (size_t k = 0; k < got / sizeof(int16_t); k++) {
+                int v = buf[k] < 0 ? -buf[k] : buf[k];
+                if (v > c->peak) c->peak = v;
+            }
             if (fwrite(buf, 1, got, c->f) != got) {
                 ESP_LOGE(TAG, "fwrite fallita a %lu byte", (unsigned long)c->data_bytes);
                 c->err = ESP_FAIL;
@@ -133,8 +146,10 @@ esp_err_t capture_stop(capture_result_t *out)
     out->duration_ms = wav_bytes_to_ms(s_ctx.data_bytes);
     out->hit_max = s_ctx.hit_max;
     out->err = err;
-    ESP_LOGI(TAG, "registrazione fermata: %lu byte, %lu ms, max=%d, err=%s",
-             (unsigned long)out->data_bytes, (unsigned long)out->duration_ms, out->hit_max, esp_err_to_name(err));
+    out->peak = s_ctx.peak;
+    ESP_LOGI(TAG, "registrazione fermata: %lu byte, %lu ms audio su %lu ms reali, picco=%d, rilascio=%d, max=%d, err=%s",
+             (unsigned long)out->data_bytes, (unsigned long)out->duration_ms, (unsigned long)capture_elapsed_ms(),
+             out->peak, s_ctx.released, out->hit_max, esp_err_to_name(err));
     return err;
 }
 
@@ -142,6 +157,6 @@ bool capture_is_running(void) { return s_ctx.running; }
 
 uint32_t capture_elapsed_ms(void)
 {
-    if (!s_ctx.f) return 0;
+    if (!s_ctx.start_us) return 0;
     return (uint32_t)((esp_timer_get_time() - s_ctx.start_us) / 1000);
 }

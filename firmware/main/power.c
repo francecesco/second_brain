@@ -21,8 +21,9 @@ static const char *TAG = "power";
 // reset/wake il chip entra in download mode. Quindi NON va premuto nell'istante
 // del wake, ma SUBITO DOPO: la finestra per il DEV mode e' 1 s dall'avvio
 // dell'app (gesto: premi PWR, rilascia, premi USER).
-#define POWER_PWR_DEBOUNCE_SAMPLES 6
-#define POWER_PWR_DEBOUNCE_STEP_MS 50   // ~300ms totali (6 x 50ms)
+#define POWER_PWR_DEBOUNCE_SAMPLES 3
+#define POWER_PWR_DEBOUNCE_STEP_MS 50   // ~150ms totali (3 x 50ms): basta per il debounce, e ogni ms
+                                        // qui ritarda la registrazione
 
 void power_init(void)
 {
@@ -63,7 +64,7 @@ boot_mode_t power_boot_mode(void)
         vTaskDelay(pdMS_TO_TICKS(POWER_PWR_DEBOUNCE_STEP_MS));
     }
     if (user_seen) {
-        ESP_LOGI(TAG, "boot-mode: USER premuto nei primi 300ms -> DEV");
+        ESP_LOGI(TAG, "boot-mode: USER premuto nei primi %d ms -> DEV", POWER_PWR_DEBOUNCE_SAMPLES * POWER_PWR_DEBOUNCE_STEP_MS);
         return BOOT_DEV;
     }
     if (pwr_held_all) {

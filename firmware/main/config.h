@@ -10,6 +10,11 @@
 #define SB_CAPTURE_MIN_MS          1000               // sotto: scartata
 #define SB_SD_MIN_FREE_BYTES       (25ULL * 1024 * 1024)
 
+// Beep di feedback (altoparlante esterno): frequenza e durate
+#define SB_BEEP_FREQ_HZ            1000
+#define SB_BEEP_START_MS           120   // uno, all'avvio della registrazione (prima del primo campione)
+#define SB_BEEP_STOP_MS            200   // uno, piu' lungo, dopo il salvataggio
+
 // Batteria (§3)
 #define SB_BATTERY_MIN_RECORD_PCT  10   // sotto: niente registrazione, niente Wi-Fi
 #define SB_BATTERY_MIN_OTA_PCT     30   // sotto: niente OTA pull

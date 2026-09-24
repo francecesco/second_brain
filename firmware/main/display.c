@@ -792,6 +792,7 @@ void display_text(const char *line1, const char *line2)
 void display_lines_n(const char *const lines[], int n)
 {
     if (!s_ready) return;
+    display_wait_idle();
     if (n > DISPLAY_MAX_LINES) n = DISPLAY_MAX_LINES;
     memset(s_fb, 0x00, sizeof(s_fb));
     // Blocco di testo centrato verticalmente: passo 28 px (font 12 px + aria).
@@ -807,4 +808,36 @@ void display_lines(const char *l1, const char *l2, const char *l3)
 {
     const char *const lines[3] = { l1, l2, l3 };
     display_lines_n(lines, 3);
+}
+
+// --- refresh asincrono ---------------------------------------------------------
+#include "freertos/semphr.h"
+static SemaphoreHandle_t s_idle = NULL;
+static char s_async_l1[32], s_async_l2[32];
+
+static void display_async_task(void *arg)
+{
+    (void)arg;
+    display_text(s_async_l1, s_async_l2);
+    xSemaphoreGive(s_idle);
+    vTaskDelete(NULL);
+}
+
+void display_wait_idle(void)
+{
+    if (!s_idle) return;
+    xSemaphoreTake(s_idle, pdMS_TO_TICKS(6000));
+    xSemaphoreGive(s_idle);
+}
+
+void display_text_async(const char *line1, const char *line2)
+{
+    if (!s_idle) { s_idle = xSemaphoreCreateBinary(); if (s_idle) xSemaphoreGive(s_idle); }
+    if (!s_idle || xSemaphoreTake(s_idle, pdMS_TO_TICKS(6000)) != pdTRUE) { display_text(line1, line2); return; }
+    strlcpy(s_async_l1, line1 ? line1 : "", sizeof(s_async_l1));
+    strlcpy(s_async_l2, line2 ? line2 : "", sizeof(s_async_l2));
+    if (xTaskCreate(display_async_task, "epd_async", 4096, NULL, tskIDLE_PRIORITY + 2, NULL) != pdPASS) {
+        display_text(s_async_l1, s_async_l2);
+        xSemaphoreGive(s_idle);
+    }
 }

@@ -5,6 +5,7 @@
 #include "sensors.h"
 #include "timesync.h"
 #include "fw_version.h"
+#include "diag.h"
 
 #include <stdlib.h>
 #include <time.h>
@@ -43,6 +44,20 @@ static esp_err_t status_get(httpd_req_t *req)
         cJSON_AddBoolToObject(root, "sd", false);
     }
     cJSON_AddNumberToObject(root, "queue_bytes", (double)bytes);
+
+    const diag_t *d = diag_get();
+    cJSON *lc = cJSON_AddObjectToObject(root, "last_cycle");
+    cJSON_AddNumberToObject(lc, "seq", d->seq);
+    cJSON_AddStringToObject(lc, "mode", d->mode);
+    cJSON_AddNumberToObject(lc, "t_capture_start_ms", d->t_capture_start);
+    cJSON_AddNumberToObject(lc, "t_rec_shown_ms", d->t_rec_shown);
+    cJSON_AddNumberToObject(lc, "t_wifi_connected_ms", d->t_wifi_connected);
+    cJSON_AddNumberToObject(lc, "t_cycle_end_ms", d->t_cycle_end);
+    cJSON_AddNumberToObject(lc, "capture_ms", d->capture_ms);
+    cJSON_AddNumberToObject(lc, "peak", d->peak);
+    cJSON_AddNumberToObject(lc, "upload_bytes", d->upload_bytes);
+    cJSON_AddNumberToObject(lc, "upload_ms", d->upload_ms);
+    if (d->upload_ms > 0) cJSON_AddNumberToObject(lc, "upload_kbps", (double)d->upload_bytes / d->upload_ms);
 
     char *txt = cJSON_PrintUnformatted(root);
     httpd_resp_set_type(req, "application/json");

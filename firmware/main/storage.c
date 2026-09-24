@@ -33,7 +33,10 @@ esp_err_t storage_mount(void)
     };
 
     sdmmc_host_t host = SDMMC_HOST_DEFAULT();
-    host.max_freq_khz = SDMMC_FREQ_PROBING;
+    // 20 MHz (SDMMC_FREQ_DEFAULT): a 400 kHz (frequenza di sonda, usata in bring-up) il bus
+    // 1-bit arriva a ~50 KB/s, e le scritture lente facevano perdere audio e rallentavano
+    // l'upload. Se la scheda non regge, si riprova a 400 kHz.
+    host.max_freq_khz = SDMMC_FREQ_DEFAULT;
 
     sdmmc_slot_config_t slot_config = SDMMC_SLOT_CONFIG_DEFAULT();
     slot_config.width = 1;
@@ -43,6 +46,12 @@ esp_err_t storage_mount(void)
 
     esp_err_t err = esp_vfs_fat_sdmmc_mount(STORAGE_MOUNT, &host, &slot_config,
                                              &mount_config, &s_card);
+    if (err != ESP_OK && err != ESP_FAIL) {
+        ESP_LOGW(TAG, "mount a %d kHz fallito (%s): riprovo a %d kHz",
+                 host.max_freq_khz, esp_err_to_name(err), SDMMC_FREQ_PROBING);
+        host.max_freq_khz = SDMMC_FREQ_PROBING;
+        err = esp_vfs_fat_sdmmc_mount(STORAGE_MOUNT, &host, &slot_config, &mount_config, &s_card);
+    }
     if (err != ESP_OK) {
         if (err == ESP_FAIL) {
             ESP_LOGE(TAG, "mount FAT fallito (scheda non formattata o non presente)");
@@ -59,6 +68,7 @@ esp_err_t storage_mount(void)
              s_card->cid.name,
              ((uint64_t)s_card->csd.capacity) * s_card->csd.sector_size / (1024ULL * 1024ULL),
              (s_card->real_freq_khz >= 1000) ? "high" : "default");
+    ESP_LOGI(TAG, "SD clock: %d kHz", s_card->real_freq_khz);
 
     return ESP_OK;
 }
