@@ -9,6 +9,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "nvs_flash.h"
 
 #include "config.h"
@@ -199,9 +200,18 @@ static void dev_mode(void)
     fmt_wifi_line(ok, wl, sizeof(wl));
     const char *const lines[4] = { "DEV MODE", ip, wl, ver };
     display_lines_n(lines, 4);
+    // Resta sveglio. Una pressione di PWR (2 campioni consecutivi a 100 ms) riavvia
+    // in NORMAL: e' l'unico modo di uscire dal DEV mode senza togliere alimentazione.
+    int pressed = 0, ticks = 0;
     while (true) {
-        ESP_LOGI(TAG, "alive (DEV mode, no sleep)");
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        vTaskDelay(pdMS_TO_TICKS(100));
+        pressed = power_pwr_pressed() ? pressed + 1 : 0;
+        if (pressed >= 2) {
+            ESP_LOGI(TAG, "PWR premuto in DEV mode: riavvio in NORMAL");
+            display_text("DEV MODE", "riavvio...");
+            esp_restart();
+        }
+        if (++ticks % 50 == 0) ESP_LOGI(TAG, "alive (DEV mode, no sleep)");
     }
 }
 
