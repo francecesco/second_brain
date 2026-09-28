@@ -43,3 +43,27 @@ def make_capture(**over) -> Capture:
     )
     fields.update(over)
     return Capture(**fields)
+
+
+LAN_CLIENT = ("192.168.1.50", 50000)
+INTERNET_CLIENT = ("203.0.113.7", 50000)
+
+
+def capture_headers(token: str | None = None, capture_id: str = "cap_20260923_191530",
+                    ts: str | None = "2026-09-23T19:15:30Z", device: str = DEV,
+                    extra: dict | None = None) -> dict:
+    headers = {
+        "Content-Type": "audio/wav", "X-Capture-Id": capture_id, "X-Device-Id": device,
+        "X-Firmware-Version": "0.6.2", "X-Battery-Voltage": "4.15", "X-Power-Source": "usb",
+    }
+    if ts is not None:
+        headers["X-Capture-Ts"] = ts
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    headers.update(extra or {})
+    return headers
+
+
+def upload(client, wav: bytes | None = None, **kw):
+    body = make_wav() if wav is None else wav
+    return client.post("/captures", content=body, headers=capture_headers(**kw))
