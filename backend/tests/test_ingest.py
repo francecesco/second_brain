@@ -182,6 +182,22 @@ def test_failed_commit_removes_archived_files(client, db, settings, token, monke
     assert files(settings) == [f"{BASE}.json", f"{BASE}.wav"]
 
 
+def test_ambiguous_commit_failure_keeps_files(client, db, settings, token, monkeypatch):
+    def commit_then_lose_connection(session):
+        session.commit()  # il salvataggio va a buon fine sul serio...
+        raise OperationalError("COMMIT", {}, Exception("connessione persa dopo il commit"))
+
+    monkeypatch.setattr(ingest, "_commit", commit_then_lose_connection)
+    r = upload(client, token=token)
+    assert r.status_code == 503  # ...ma il server non lo sa, e non deve buttare via i file
+    assert files(settings) == [f"{BASE}.json", f"{BASE}.wav"]
+    [cap] = captures(db)
+    monkeypatch.undo()
+    retry = upload(client, token=token)
+    assert retry.status_code == 409
+    assert retry.json()["id"] == str(cap.id)
+
+
 def test_disk_full_returns_507(client, settings, token, monkeypatch):
     def full(*args, **kwargs):
         raise OSError(errno.ENOSPC, "No space left on device")
@@ -189,6 +205,17 @@ def test_disk_full_returns_507(client, settings, token, monkeypatch):
     monkeypatch.setattr(Archive, "commit_capture", full)
     assert upload(client, token=token).status_code == 507
     assert incoming(settings) == []
+
+
+def test_sidecar_write_failure_leaves_no_orphans(client, settings, token, monkeypatch):
+    """ENOSPC nel rename del sidecar (non nell'intera commit_capture): né il sidecar
+    orfano nella cartella del giorno né il temporaneo in .incoming devono restare."""
+    def full(*args, **kwargs):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr("secondbrain.archive.os.replace", full)
+    assert upload(client, token=token).status_code == 507
+    assert files(settings) == [] and incoming(settings) == []
 
 
 def test_incoming_is_cleaned_at_startup(make_client, settings):
@@ -202,7 +229,8 @@ def test_incoming_is_cleaned_at_startup(make_client, settings):
 def test_device_hostname_only_serves_device_paths(make_client, settings, token):
     c = make_client(replace(settings, device_hostname="ingest.example.org"))
     assert c.get("/healthz").status_code == 200
-    for host in ["ingest.example.org", "ingest.example.org:443", "INGEST.example.org"]:
+    for host in ["ingest.example.org", "ingest.example.org:443", "INGEST.example.org",
+                 "ingest.example.org."]:
         assert c.get("/healthz", headers={"Host": host}).status_code == 404
     r = c.post("/captures", content=make_wav(),
                headers=capture_headers(token=token, extra={"Host": "ingest.example.org"}))

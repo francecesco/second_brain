@@ -101,24 +101,54 @@ def _store(state, device_id: str, capture_id: str, ts_header: str | None, meta: 
         day = naming.local_day(recorded_at, tz)
         dir_rel = naming.day_dir(day)
         base = archive.reserve_base(dir_rel, naming.base_name(recorded_at, tz, device_id))
+        rel = f"{dir_rel}/{base}.wav"
         capture = Capture(
             id=uuid.uuid4(), device_id=device_id, capture_id=capture_id,
             recorded_at=recorded_at, date_estimated=estimated, received_at=now, day=day,
-            rel_path=f"{dir_rel}/{base}.wav", title=None, duration_s=info.duration_s,
+            rel_path=rel, title=None, duration_s=info.duration_s,
             size_bytes=size, sha256=sha, firmware_version=meta.firmware_version,
             battery_pct=meta.battery_pct, battery_v=meta.battery_v,
             power_source=meta.power_source, trashed_at=None,
         )
-        rel = archive.commit_capture(tmp, dir_rel, base, capture_to_sidecar(capture))
+        try:
+            archive.commit_capture(tmp, dir_rel, base, capture_to_sidecar(capture))
+        except Exception:
+            # Il DB non ha ancora la riga: qualunque file scritto (anche solo il sidecar,
+            # se è il rename del WAV a fallire) va tolto, o il device ritenterebbe creando
+            # un doppione.
+            archive.delete(rel)
+            raise
         s.add(capture)
         try:
             _commit(s)
         except Exception:
-            # Senza riga il device ritenterà: i file non devono restare, o nascerebbe un doppione.
-            archive.delete(rel)
+            # A differenza del caso sopra qui non si sa se il COMMIT sia arrivato al database
+            # prima di fallire (es. connessione persa subito dopo): cancellare comunque
+            # rischierebbe di perdere una registrazione già salvata (spec §6, "niente perso").
+            _cleanup_after_commit_failure(state, capture.id, archive, rel)
             raise
     log.info("archiviata %s (%s, %d byte)", rel, capture_id, size)
     return 201, {"id": str(capture.id), "path": rel, "status": "accepted"}
+
+
+def _cleanup_after_commit_failure(state, capture_id: uuid.UUID, archive: Archive, rel: str) -> None:
+    """Cancella i file solo se una sessione nuova conferma che la riga non c'è.
+
+    Se anche questo controllo fallisce (es. database ancora irraggiungibile) si tengono i
+    file: `rescan` li riconcilia più tardi; nel caso peggiore un ritentativo del device crea
+    un `_2` invece di far perdere la registrazione.
+    """
+    try:
+        with state.sessionmaker() as check:
+            exists = check.get(Capture, capture_id) is not None
+    except Exception:
+        log.exception("impossibile verificare se %s è stata salvata dopo l'errore di commit: "
+                      "i file restano", capture_id)
+        return
+    if exists:
+        log.warning("%s salvata nonostante l'errore di commit: i file restano", capture_id)
+    else:
+        archive.delete(rel)
 
 
 def _error(status: int, detail: str) -> JSONResponse:

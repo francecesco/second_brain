@@ -8,9 +8,12 @@ import ipaddress
 
 from starlette.requests import Request
 
-# RFC 1918: le uniche reti "private" in senso stretto (non le altre riservate di
-# ipaddress.is_private, che includono anche i blocchi di documentazione RFC 5737 come
-# 203.0.113.0/24, usati apposta nei test per simulare un client da Internet).
+# Solo le reti RFC 1918, non l'is_private di ipaddress per intero: quest'ultimo include
+# anche blocchi riservati/di documentazione (RFC 5737, es. 203.0.113.0/24) che non sono
+# la LAN di casa, e considerarli tali allargherebbe la rete che può caricare senza token.
+# Le ULA IPv6 (fc00::/7) sono deliberatamente escluse: senza un device reale che le usi
+# non c'è modo di distinguerle da un indirizzo pubblico rinumerato, e il device parla solo
+# IPv4; le si aggiungerà se e quando servirà davvero.
 _PRIVATE_NETWORKS = tuple(ipaddress.ip_network(net) for net in (
     "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
 ))
@@ -21,7 +24,9 @@ def _host_header(request: Request) -> str:
 
 
 def public_host(request: Request) -> str:
-    return _host_header(request).split(":")[0].lower()
+    # Un Host con un punto finale (`esempio.org.`, FQDN assoluto secondo RFC 952/1123)
+    # è lo stesso host: senza rstrip aggirerebbe silenziosamente il guard su DEVICE_HOSTNAME.
+    return _host_header(request).split(":")[0].rstrip(".").lower()
 
 
 def public_scheme(request: Request) -> str:

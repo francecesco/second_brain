@@ -91,12 +91,16 @@ class Archive:
         target = self.abs(rel_wav).with_suffix(SIDECAR_SUFFIX)
         self.ensure()
         tmp = self.incoming_dir / f"{uuid.uuid4().hex}.json.tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
-            f.write("\n")
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, target)
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
+                f.write("\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, target)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
 
     def read_sidecar(self, rel_wav: str) -> dict:
         with open(self.abs(rel_wav).with_suffix(SIDECAR_SUFFIX), encoding="utf-8") as f:

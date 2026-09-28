@@ -102,6 +102,16 @@ def test_write_sidecar_overwrites_without_leftovers(archive):
     assert list(archive.incoming_dir.iterdir()) == []
 
 
+def test_write_sidecar_cleans_up_its_tmp_on_failure(archive, monkeypatch):
+    def boom(*args, **kwargs):
+        raise OSError("disco pieno")
+
+    monkeypatch.setattr("secondbrain.archive.os.replace", boom)
+    with pytest.raises(OSError):
+        archive.write_sidecar(f"{DAY}/x.wav", {"v": 1})
+    assert list(archive.incoming_dir.iterdir()) == []
+
+
 def test_iter_sidecars_and_orphan_wavs(archive):
     for rel in [f"{DAY}/a.wav", f"{DAY}/a.json", f"{DAY}/a.summary.json",
                 ".trash/2026/09/27/b.wav", ".trash/2026/09/27/b.json",
