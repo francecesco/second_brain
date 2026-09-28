@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 DEFAULT_MAX_UPLOAD_BYTES = 32 * 1024 * 1024
 MIN_MAX_UPLOAD_BYTES = 1024
 DEFAULT_TRASH_RETENTION_DAYS = 30
+MIN_TRASH_RETENTION_DAYS = 1
 
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off", ""}
@@ -72,7 +73,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         max_upload_bytes=_int(env, "MAX_UPLOAD_BYTES", DEFAULT_MAX_UPLOAD_BYTES,
                               MIN_MAX_UPLOAD_BYTES),
         trash_retention_days=_int(env, "TRASH_RETENTION_DAYS",
-                                  DEFAULT_TRASH_RETENTION_DAYS, 1),
+                                  DEFAULT_TRASH_RETENTION_DAYS, MIN_TRASH_RETENTION_DAYS),
         allow_unauthenticated_lan=_bool(env, "ALLOW_UNAUTHENTICATED_LAN", False),
         device_hostname=env.get("DEVICE_HOSTNAME", "").strip().lower() or None,
     )
