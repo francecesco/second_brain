@@ -7,7 +7,7 @@ from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from . import ingest
+from . import ingest, ota
 from .archive import Archive
 from .catalog import make_engine, make_sessionmaker
 from .clock import utcnow
@@ -49,6 +49,7 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
             return await call_next(request)
 
     app.include_router(ingest.router)
+    app.include_router(ota.router)
 
     @app.get("/healthz")
     def healthz() -> dict:

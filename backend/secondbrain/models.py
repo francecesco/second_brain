@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (BigInteger, Boolean, Date, DateTime, Double, ForeignKey, Index,
-                        Integer, String, Uuid)
+                        Integer, String, UniqueConstraint, Uuid)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -51,3 +51,16 @@ class Capture(Base):
     battery_v: Mapped[float | None] = mapped_column(Double)
     power_source: Mapped[str | None] = mapped_column(String(16))
     trashed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class FirmwareRelease(Base):
+    __tablename__ = "firmware_releases"
+    __table_args__ = (UniqueConstraint("type", "version", name="uq_firmware_type_version"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    type: Mapped[str] = mapped_column(String(32))
+    version: Mapped[str] = mapped_column(String(32))
+    file: Mapped[str] = mapped_column(String(128))
+    sha256: Mapped[str] = mapped_column(String(64))
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    current: Mapped[bool] = mapped_column(Boolean)

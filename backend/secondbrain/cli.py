@@ -7,10 +7,11 @@ import argparse
 import sys
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from . import catalog, devices
+from . import catalog, devices, ota
 from .archive import Archive
 from .clock import utcnow
 from .config import ConfigError, Settings, load_settings
@@ -96,7 +97,52 @@ def _add_rescan_command(sub) -> None:
         .set_defaults(func=_rescan)
 
 
-COMMAND_GROUPS: tuple[Callable, ...] = (_add_device_commands, _add_rescan_command)
+def _firmware_publish(args: argparse.Namespace) -> None:
+    with open_session() as (s, settings):
+        try:
+            release = ota.publish(s, settings.firmware_dir, Path(args.file), args.type,
+                                  args.version, utcnow())
+        except ota.OtaError as exc:
+            raise CliError(str(exc)) from None
+        s.commit()
+    print(f"Pubblicata {release.type} {release.version} (sha256 {release.sha256}).")
+
+
+def _firmware_rollback(args: argparse.Namespace) -> None:
+    with open_session() as (s, _):
+        try:
+            release = ota.rollback(s, args.type)
+        except ota.OtaError as exc:
+            raise CliError(str(exc)) from None
+        s.commit()
+    print(f"Release corrente per {release.type}: {release.version}.")
+
+
+def _firmware_list(args: argparse.Namespace) -> None:
+    with open_session() as (s, _):
+        for r in ota.list_releases(s):
+            mark = "*" if r.current else " "
+            print(f"{mark} {r.type} {r.version}  {r.published_at.isoformat(timespec='seconds')}"
+                  f"  {r.sha256[:12]}")
+
+
+def _add_firmware_commands(sub) -> None:
+    group = sub.add_parser("firmware", help="release firmware per l'OTA")
+    actions = group.add_subparsers(dest="action", required=True)
+    pub = actions.add_parser("publish", help="pubblica un binario come release corrente")
+    pub.add_argument("file")
+    pub.add_argument("--version", required=True, help="X.Y.Z, come version.txt del firmware")
+    pub.add_argument("--type", default=DEFAULT_DEVICE_TYPE)
+    pub.set_defaults(func=_firmware_publish)
+    back = actions.add_parser("rollback", help="torna alla release precedente")
+    back.add_argument("--type", default=DEFAULT_DEVICE_TYPE)
+    back.set_defaults(func=_firmware_rollback)
+    actions.add_parser("list", help="elenca le release (* = corrente)") \
+        .set_defaults(func=_firmware_list)
+
+
+COMMAND_GROUPS: tuple[Callable, ...] = (_add_device_commands, _add_rescan_command,
+                                        _add_firmware_commands)
 
 
 def build_parser() -> argparse.ArgumentParser:
