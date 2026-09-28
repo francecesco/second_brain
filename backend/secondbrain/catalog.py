@@ -30,3 +30,7 @@ def find_captures(s: Session, device_id: str, capture_id: str) -> list[Capture]:
             .where(Capture.device_id == device_id, Capture.capture_id == capture_id)
             .order_by(Capture.received_at, Capture.rel_path))
     return list(s.scalars(stmt))
+
+
+def list_devices(s: Session) -> list[Device]:
+    return list(s.scalars(select(Device).order_by(Device.name, Device.id)))
