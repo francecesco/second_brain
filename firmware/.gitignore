@@ -6,3 +6,4 @@ managed_components/
 dependencies.lock
 ota_serve/
 captures_inbox/
+captures_inbox_old/

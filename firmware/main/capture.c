@@ -18,6 +18,7 @@
 static const char *TAG = "capture";
 
 #define CAPTURE_BLOCK_BYTES     4096   // 128 ms a 32000 B/s
+#define CAPTURE_SKIP_BYTES      512    // 16 ms scartati all'avvio
 #define CAPTURE_TASK_STACK      4096
 #define CAPTURE_TASK_PRIO       (tskIDLE_PRIORITY + 5)  // sopra il main (1)
 #define CAPTURE_READ_TIMEOUT_MS 500
@@ -49,6 +50,10 @@ static void capture_task(void *arg)
     if (!buf) {
         c->err = ESP_ERR_NO_MEM;
     } else {
+        // Scarta i primi ~16 ms dopo l'apertura del canale: il primo campione puo' essere
+        // un valore spurio (clic a fondo scala, visto il 2026-09-28).
+        size_t skipped = 0;
+        audio_read_block(buf, CAPTURE_SKIP_BYTES, &skipped, CAPTURE_READ_TIMEOUT_MS);
         int not_pressed = 0;
         while (!c->stop_req) {
             // Rilascio di PWR controllato QUI, ogni blocco (128 ms): il main puo' essere
