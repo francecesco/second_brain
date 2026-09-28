@@ -9,8 +9,9 @@ Il progetto ha due parti:
 
 - `firmware/` — firmware ESP-IDF per la scheda **Waveshare ESP32-S3 e-Paper 1.54"** (B/N,
   200×200). Stato: **funzionante e verificato su hardware** (Fase 0 e Fase 1a complete).
-- `backend/` — servizio `secondbrain` (FastAPI + SQLite/FTS5 + faster-whisper). Stato:
-  **da fare** (Fase 1b), il contratto HTTP è già fissato dal firmware.
+- `backend/` — servizio `secondbrain` (FastAPI + archivio Postgres: ricezione,
+  archiviazione su disco, UI finder, OTA). Stato: **Fase 1b in corso**; trascrizione e
+  AI arriveranno dopo. Vedi `backend/README.md`.
 
 Le decisioni di progetto sono in `docs/specs/`, i piani di lavoro in `docs/plans/`.
 
@@ -192,7 +193,7 @@ docs/specs/     decisioni di design (progetto, Fase 0 bring-up+OTA, Fase 1a catt
 docs/plans/     piani di implementazione a task, con i comandi di verifica
 firmware/       ESP-IDF: main/ (un modulo per responsabilità), host_test/ (unity su linux),
                 tools/ (server di test), partitions.csv, sdkconfig.defaults
-backend/        (vuoto) servizio secondbrain, Fase 1b
+backend/        servizio secondbrain (archivio delle registrazioni, UI, OTA): vedi backend/README.md
 ```
 
 Moduli principali in `firmware/main/`: `app_main.c` (flusso del ciclo), `power.c`

@@ -1,0 +1,48 @@
+# Avvio: cp .env.example .env (e completarlo), poi docker compose up -d --build
+# Con il tunnel Cloudflare: docker compose --profile tunnel up -d --build
+name: secondbrain
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: secondbrain
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?imposta POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: secondbrain
+    volumes:
+      - ${DATA_DIR:-./data}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U secondbrain"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://secondbrain:${POSTGRES_PASSWORD}@postgres:5432/secondbrain
+      ARCHIVE_DIR: /data/archive
+      FIRMWARE_DIR: /data/firmware
+      TZ_ARCHIVE: ${TZ_ARCHIVE:-Europe/Rome}
+      TRASH_RETENTION_DAYS: ${TRASH_RETENTION_DAYS:-30}
+      ALLOW_UNAUTHENTICATED_LAN: ${ALLOW_UNAUTHENTICATED_LAN:-false}
+      DEVICE_HOSTNAME: ${DEVICE_HOSTNAME:-}
+    volumes:
+      - ${DATA_DIR:-./data}/archive:/data/archive
+      - ${DATA_DIR:-./data}/firmware:/data/firmware
+    ports:
+      - "${APP_PORT:-8000}:8000"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - app
