@@ -111,8 +111,15 @@ Risposte: `201` accettata (`{"id", "path", "status": "accepted"}`), `409` duplic
 (stesso `device_id` + `X-Capture-Id` + sha256), `400` header non validi, `401` token
 assente o non valido, `403` `X-Device-Id` diverso dal dispositivo del token, `411`
 `Content-Length` mancante, `413` oltre `MAX_UPLOAD_BYTES`, `422` WAV non valido, `5xx`
-errori del server (disco pieno `507`, DB non raggiungibile `503`): in questi casi il
-device tiene il file e ritenta al ciclo successivo.
+errori del server (disco pieno `507`, DB non raggiungibile `503`).
+
+Cosa fa il device con ciascun esito: `201`/`409` → cancella la sua copia (accettata o già
+presente, in entrambi i casi non serve più); qualunque altro `4xx` → il firmware attuale
+sposta il file in `rejected/` (non ritenta, il problema non si risolve da solo);
+`5xx`/timeout → tiene il file e ritenta al ciclo successivo. Per questo, finché il
+firmware non manda il token, `ALLOW_UNAUTHENTICATED_LAN` va tenuto `true`: con `false` le
+richieste del device (senza token) prendono `401`, che è un `4xx`, e il firmware
+sposterebbe l'intera coda in `rejected/`.
 
 `GET /firmware/manifest.json` (alias di `GET /firmware/epaper154/manifest.json`) e
 `GET /firmware/<tipo>/<file>.bin` servono l'OTA pull con lo stesso schema
@@ -123,6 +130,15 @@ client ha un IP privato o di loopback e la richiesta non porta l'header
 `Cf-Connecting-Ip` (che Cloudflare aggiunge sempre alle richieste che passano dal
 tunnel): dalla LAN di casa senza token quindi funziona, dal tunnel il token resta
 sempre obbligatorio.
+
+Attenzione: questa regola si fida dell'IP reale del client, e ci arriva solo se Docker
+pubblica la porta su IPv4 (`docker-compose.yml` usa `0.0.0.0:${APP_PORT}:8000` apposta).
+Su Docker Desktop (Mac, Windows) il traffico passa comunque dalla VM interna e l'app vede
+sempre l'IP del gateway del bridge Docker (un `172.x` privato): lì
+`ALLOW_UNAUTHENTICATED_LAN=true` significa "chiunque raggiunga la porta", non solo la LAN.
+Su Linux con la pubblicazione IPv4 l'IP del client resta quello vero. Dopo un deploy,
+verificare nel log dell'app che una richiesta del device mostri il suo IP `192.168.x.x` e
+non un `172.x`.
 
 ## Accesso da fuori con Cloudflare Tunnel
 

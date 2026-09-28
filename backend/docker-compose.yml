@@ -31,11 +31,15 @@ services:
       TRASH_RETENTION_DAYS: ${TRASH_RETENTION_DAYS:-30}
       ALLOW_UNAUTHENTICATED_LAN: ${ALLOW_UNAUTHENTICATED_LAN:-false}
       DEVICE_HOSTNAME: ${DEVICE_HOSTNAME:-}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-33554432}
     volumes:
       - ${DATA_DIR:-./data}/archive:/data/archive
       - ${DATA_DIR:-./data}/firmware:/data/firmware
     ports:
-      - "${APP_PORT:-8000}:8000"
+      # Solo IPv4: pubblicare anche su IPv6 farebbe passare quelle connessioni dal
+      # docker-proxy, che le presenta all'app con l'IP del gateway del bridge (172.x,
+      # privato) invece di quello reale del client, allargando la regola LAN-senza-token.
+      - "0.0.0.0:${APP_PORT:-8000}:8000"
 
   cloudflared:
     image: cloudflare/cloudflared:latest
