@@ -5,7 +5,8 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from . import ingest, ota
 from .archive import Archive
@@ -13,6 +14,9 @@ from .catalog import make_engine, make_sessionmaker
 from .clock import utcnow
 from .config import Settings, load_settings
 from .httputil import public_host
+from .web import login as web_login
+from .web.auth import CsrfError, NotAuthenticated
+from .web.templating import STATIC_DIR
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +54,19 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
 
     app.include_router(ingest.router)
     app.include_router(ota.router)
+
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    app.include_router(web_login.router)
+
+    @app.exception_handler(NotAuthenticated)
+    async def login_required(request: Request, exc: NotAuthenticated) -> Response:
+        if request.headers.get("hx-request"):
+            return Response(status_code=401, headers={"HX-Redirect": "/login"})
+        return RedirectResponse("/login", status_code=303)
+
+    @app.exception_handler(CsrfError)
+    async def csrf_failed(request: Request, exc: CsrfError) -> Response:
+        return PlainTextResponse("token CSRF mancante o non valido", status_code=403)
 
     @app.get("/healthz")
     def healthz() -> dict:

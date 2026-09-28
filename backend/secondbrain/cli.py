@@ -4,6 +4,7 @@ Ogni gruppo di comandi è una funzione `_add_*_commands(subparsers)` elencata in
 COMMAND_GROUPS; ogni azione riceve gli argomenti e solleva CliError in caso di errore.
 """
 import argparse
+import getpass
 import sys
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
@@ -17,6 +18,7 @@ from .clock import utcnow
 from .config import ConfigError, Settings, load_settings
 from .naming import DEFAULT_DEVICE_TYPE
 from .rescan import rescan
+from .web.auth import BadPassword, set_password
 
 
 class CliError(Exception):
@@ -141,8 +143,30 @@ def _add_firmware_commands(sub) -> None:
         .set_defaults(func=_firmware_list)
 
 
+def _set_password(args: argparse.Namespace) -> None:
+    if args.stdin:
+        password = sys.stdin.readline().rstrip("\n")
+    else:
+        password = getpass.getpass("Nuova password: ")
+        if getpass.getpass("Ripeti la password: ") != password:
+            raise CliError("le due password non coincidono")
+    with open_session() as (s, _):
+        try:
+            set_password(s, password, utcnow())
+        except BadPassword as exc:
+            raise CliError(str(exc)) from None
+        s.commit()
+    print("Password impostata; le sessioni aperte sono state chiuse.")
+
+
+def _add_password_command(sub) -> None:
+    cmd = sub.add_parser("set-password", help="imposta la password dell'interfaccia web")
+    cmd.add_argument("--stdin", action="store_true", help="legge la password da stdin")
+    cmd.set_defaults(func=_set_password)
+
+
 COMMAND_GROUPS: tuple[Callable, ...] = (_add_device_commands, _add_rescan_command,
-                                        _add_firmware_commands)
+                                        _add_firmware_commands, _add_password_command)
 
 
 def build_parser() -> argparse.ArgumentParser:

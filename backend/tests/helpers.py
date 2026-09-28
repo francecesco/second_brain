@@ -13,6 +13,7 @@ TEST_DB = os.environ.get(
 NOW = datetime(2026, 9, 28, 12, 0, tzinfo=UTC)
 DEV = "70041dd8263c"
 DEV2 = "aabbccddeeff"
+PASSWORD = "una-password-lunga"
 
 
 def make_wav(seconds: float = 1.0, rate: int = 16000, fill: bytes = b"\x01\x00",

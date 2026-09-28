@@ -64,3 +64,30 @@ class FirmwareRelease(Base):
     sha256: Mapped[str] = mapped_column(String(64))
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     current: Mapped[bool] = mapped_column(Boolean)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class WebSession(Base):
+    __tablename__ = "web_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    csrf_token: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LoginAttempt(Base):
+    __tablename__ = "login_attempts"
+    __table_args__ = (Index("ix_login_attempts_at", "at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ok: Mapped[bool] = mapped_column(Boolean)
+    ip: Mapped[str | None] = mapped_column(String(64))

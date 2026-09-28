@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Accesso · Second Brain{% endblock %}
+{% block body %}
+<main class="login">
+  <h1>Second Brain</h1>
+  <form method="post" action="/login">
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" autofocus required>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    <button type="submit">Entra</button>
+  </form>
+</main>
+{% endblock %}
