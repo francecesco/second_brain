@@ -6,7 +6,7 @@
 
 **Architecture:** I file su disco sono la verità (`archive/AAAA/MM/GG/<base>.wav` + `<base>.json`), Postgres è un catalogo ricostruibile con `secondbrain rescan`. Logica decisionale in moduli puri testati senza I/O (`naming`, `wav`, `sidecar`); `archive` fa solo filesystem; `catalog` solo query; `ingest`, `ota`, `library` e `web` coordinano. UI renderizzata dal server con Jinja + htmx, nessun build frontend.
 
-**Tech Stack:** Python 3.12, uv, FastAPI (≥ 0.115.6) su Starlette (≥ 0.40, per `Range` in `FileResponse`), SQLAlchemy 2 + psycopg 3, Alembic, Jinja2, htmx 2 (file statico), argon2-cffi, pytest + httpx; Postgres 16; Docker compose; cloudflared.
+**Tech Stack:** Python 3.12, uv, FastAPI (≥ 0.115.6) su Starlette (≥ 0.46: `Range` in `FileResponse` e indirizzo del client configurabile nel `TestClient`), SQLAlchemy 2 + psycopg 3, Alembic, Jinja2, htmx 2 (file statico), argon2-cffi, pytest + httpx; Postgres 16; Docker compose; cloudflared.
 
 **Spec:** `docs/specs/2026-09-28-backend-archivio-design.md` (leggerla prima: i §x citati sotto sono i suoi).
 
@@ -92,7 +92,7 @@ description = "Archivio delle registrazioni di Second Brain"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115.6,<1",
-  "starlette>=0.40",
+  "starlette>=0.46",
   "uvicorn[standard]>=0.30",
   "sqlalchemy>=2.0.30,<3",
   "psycopg[binary]>=3.2,<4",
@@ -2021,7 +2021,7 @@ fuori scala diventa nullo invece di far rifiutare la cattura."
 
 **Interfaces:**
 - Consumes: tutto quanto sopra (`naming`, `wav`, `sidecar`, `archive.Archive`, `catalog`, `devices`).
-- Produces: `create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> FastAPI` con `app.state.settings`, `.clock`, `.archive` (`Archive`), `.engine`, `.sessionmaker`; `create_app_from_env() -> FastAPI` (per uvicorn `--factory`); route `POST /captures` e `GET /healthz`; `app.DEVICE_PATHS`; `httputil.public_host(request) -> str`, `public_scheme(request) -> str`, `public_base_url(request) -> str`; `ingest._commit(session)` (punto di iniezione per i test). Fixture: `clock` (`FakeClock` con attributo `now` modificabile), `settings`, `make_client(settings) -> TestClient`, `client` (token obbligatorio), `lan_client` (`allow_unauthenticated_lan=True`), `token` (registra `DEV` e ne restituisce il token). Helper: `capture_headers(token=None, capture_id=..., ts=..., device=DEV, extra=None) -> dict`, `upload(client, wav=None, **kw) -> Response`.
+- Produces: `create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> FastAPI` con `app.state.settings`, `.clock`, `.archive` (`Archive`), `.engine`, `.sessionmaker`; `create_app_from_env() -> FastAPI` (per uvicorn `--factory`); route `POST /captures` e `GET /healthz`; `app.DEVICE_PATHS`; `httputil.public_host(request) -> str`, `public_scheme(request) -> str`, `public_base_url(request) -> str`, `is_lan_request(request) -> bool` (spec §5: IP privato/loopback e nessun `Cf-Connecting-Ip`); `ingest._commit(session)` (punto di iniezione per i test). Fixture: `clock` (`FakeClock` con attributo `now` modificabile), `settings`, `make_client(settings, client_addr=LAN_CLIENT) -> TestClient` (il `TestClient` si presenta con l'indirizzo dato; di default un IP della LAN), `client` (token obbligatorio), `lan_client` (`allow_unauthenticated_lan=True`), `token` (registra `DEV` e ne restituisce il token). Helper: `capture_headers(token=None, capture_id=..., ts=..., device=DEV, extra=None) -> dict`, `upload(client, wav=None, **kw) -> Response`.
 
 - [ ] **Step 1: Fixture e helper**
 
@@ -2036,7 +2036,7 @@ from fastapi.testclient import TestClient
 from secondbrain.app import create_app
 from secondbrain.config import Settings
 from secondbrain.devices import create_device
-from tests.helpers import DEV, NOW
+from tests.helpers import DEV, LAN_CLIENT, NOW
 
 
 class FakeClock:
@@ -2062,8 +2062,8 @@ def settings(tmp_path):
 def make_client(db, clock):
     opened = []
 
-    def factory(settings):
-        client = TestClient(create_app(settings, clock=clock))
+    def factory(settings, client_addr=LAN_CLIENT):
+        client = TestClient(create_app(settings, clock=clock), client=client_addr)
         client.__enter__()  # esegue il lifespan
         opened.append(client)
         return client
@@ -2093,6 +2093,10 @@ def token(db):
 Aggiungere in fondo a `backend/tests/helpers.py`:
 
 ```python
+LAN_CLIENT = ("192.168.1.50", 50000)
+INTERNET_CLIENT = ("203.0.113.7", 50000)
+
+
 def capture_headers(token: str | None = None, capture_id: str = "cap_20260923_191530",
                     ts: str | None = "2026-09-23T19:15:30Z", device: str = DEV,
                     extra: dict | None = None) -> dict:
@@ -2130,7 +2134,10 @@ from sqlalchemy.exc import OperationalError
 from secondbrain import ingest
 from secondbrain.archive import Archive
 from secondbrain.models import Capture, Device
-from tests.helpers import DEV, DEV2, NOW, capture_headers, make_wav, upload
+from starlette.requests import Request
+
+from secondbrain.httputil import is_lan_request
+from tests.helpers import DEV, DEV2, INTERNET_CLIENT, NOW, capture_headers, make_wav, upload
 
 BASE = "211530_70041dd8263c"
 
@@ -2230,6 +2237,36 @@ def test_lan_mode_registers_unknown_device(lan_client, db):
     assert db.get(Device, DEV) is not None
 
 
+def test_lan_mode_refuses_internet_clients(make_client, settings):
+    c = make_client(replace(settings, allow_unauthenticated_lan=True), client_addr=INTERNET_CLIENT)
+    assert upload(c).status_code == 401
+
+
+def test_lan_mode_refuses_requests_through_the_tunnel(lan_client):
+    r = upload(lan_client, extra={"Cf-Connecting-Ip": "203.0.113.7"})
+    assert r.status_code == 401
+
+
+def _request(client, headers=()):
+    return Request({"type": "http", "client": client,
+                    "headers": [(k.encode(), v.encode()) for k, v in headers]})
+
+
+@pytest.mark.parametrize("client,headers,expected", [
+    (("192.168.1.5", 1), (), True),
+    (("10.0.0.2", 1), (), True),
+    (("172.18.0.3", 1), (), True),          # rete interna di Docker
+    (("127.0.0.1", 1), (), True),
+    (("::ffff:192.168.1.5", 1), (), True),
+    (("203.0.113.7", 1), (), False),
+    (("192.168.1.5", 1), (("cf-connecting-ip", "203.0.113.7"),), False),
+    (("testclient", 1), (), False),
+    (None, (), False),
+])
+def test_is_lan_request(client, headers, expected):
+    assert is_lan_request(_request(client, headers)) is expected
+
+
 def test_invalid_capture_id(client, token):
     assert upload(client, token=token, capture_id="../../x").status_code == 400
 
@@ -2310,6 +2347,8 @@ Si usa solo l'header Host (cloudflared lo imposta all'hostname pubblico); X-Forw
 lo può falsificare chiunque e non viene letto. X-Forwarded-Proto serve per sapere se
 dietro il tunnel la richiesta era HTTPS.
 """
+import ipaddress
+
 from starlette.requests import Request
 
 
@@ -2330,6 +2369,24 @@ def public_scheme(request: Request) -> str:
 
 def public_base_url(request: Request) -> str:
     return f"{public_scheme(request)}://{_host_header(request)}"
+
+
+def is_lan_request(request: Request) -> bool:
+    """Richiesta dalla rete locale: IP privato o loopback e non passata dal tunnel.
+
+    Cloudflare aggiunge sempre Cf-Connecting-Ip (sovrascrivendo quello del client), e
+    le richieste del tunnel arrivano da cloudflared, che ha anch'esso un IP privato:
+    è l'header, non l'IP, a distinguerle.
+    """
+    if "cf-connecting-ip" in request.headers or request.client is None:
+        return False
+    try:
+        ip = ipaddress.ip_address(request.client.host)
+    except ValueError:
+        return False
+    if ip.version == 6 and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return ip.is_private or ip.is_loopback
 ```
 
 - [ ] **Step 4: `ingest`**
@@ -2357,6 +2414,7 @@ from starlette.requests import ClientDisconnect
 from . import catalog, naming
 from .archive import Archive
 from .devices import AuthError, DeviceMeta, authenticate, bearer_token, record_seen
+from .httputil import is_lan_request
 from .models import Capture
 from .sidecar import capture_to_sidecar
 from .wav import HEADER_PROBE_BYTES, WavError, parse_wav_header
@@ -2410,9 +2468,9 @@ async def _receive(request: Request, archive: Archive, maximum: int) -> tuple[Pa
 
 
 def _authenticate(state, token: str | None, device_id: str, meta: DeviceMeta,
-                  now: datetime) -> None:
+                  now: datetime, allow_unauth: bool) -> None:
     with state.sessionmaker() as s:
-        device = authenticate(s, token, device_id, state.settings.allow_unauthenticated_lan, now)
+        device = authenticate(s, token, device_id, allow_unauth, now)
         record_seen(device, meta, now)
         s.commit()
 
@@ -2472,7 +2530,9 @@ async def post_capture(request: Request) -> JSONResponse:
         now = state.clock()
         device_id = headers.get("x-device-id", "")
         meta = DeviceMeta.from_headers(headers)
-        await run_in_threadpool(_authenticate, state, bearer_token(headers), device_id, meta, now)
+        allow_unauth = state.settings.allow_unauthenticated_lan and is_lan_request(request)
+        await run_in_threadpool(_authenticate, state, bearer_token(headers), device_id, meta,
+                                now, allow_unauth)
         capture_id = headers.get("x-capture-id", "")
         if not naming.is_valid_capture_id(capture_id):
             raise Reject(400, "X-Capture-Id mancante o non valido")
@@ -3031,6 +3091,8 @@ def test_firmware_requires_token(client):
 
 def test_firmware_open_in_lan_mode(lan_client):
     assert lan_client.get("/firmware/manifest.json").status_code == 404  # nessuna release
+    tunnel = {"Cf-Connecting-Ip": "203.0.113.7"}
+    assert lan_client.get("/firmware/manifest.json", headers=tunnel).status_code == 401
 
 
 def test_cli_publish_list_rollback(monkeypatch, db, settings, fw_file, capsys):
@@ -3072,7 +3134,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from .devices import AuthError, authenticate_any, bearer_token
-from .httputil import public_base_url
+from .httputil import is_lan_request, public_base_url
 from .models import FirmwareRelease
 from .naming import DEFAULT_DEVICE_TYPE, is_valid_device_type
 
@@ -3151,7 +3213,7 @@ def require_device(request: Request) -> None:
     with state.sessionmaker() as s:
         try:
             authenticate_any(s, bearer_token(request.headers),
-                             state.settings.allow_unauthenticated_lan)
+                             state.settings.allow_unauthenticated_lan and is_lan_request(request))
         except AuthError as exc:
             raise HTTPException(exc.status, exc.detail) from None
 
@@ -5169,7 +5231,8 @@ DATA_DIR=./data
 APP_PORT=8000
 TZ_ARCHIVE=Europe/Rome
 TRASH_RETENTION_DAYS=30
-# Solo sviluppo: accetta upload e OTA senza token (firmware attuale). Mai in produzione.
+# Accetta upload e OTA senza token solo dalla LAN (IP privato, non dal tunnel): serve al
+# firmware attuale, che non manda token. Dal tunnel il token resta sempre obbligatorio.
 ALLOW_UNAUTHENTICATED_LAN=false
 # Hostname pubblico dei dispositivi nel tunnel (es. ingest.esempio.it); vuoto se non c'è tunnel
 DEVICE_HOSTNAME=
@@ -5196,7 +5259,7 @@ data
 2. **Installazione** — `cp .env.example .env`, generare la password (`openssl rand -base64 24`), `docker compose up -d --build`, `docker compose exec app secondbrain set-password`, `docker compose exec app secondbrain device add <mac> --name <nome>` (salvare il token), aprire `http://<host>:8000`. L'immagine si costruisce sulla macchina di destinazione (`--build`): la base `python:3.12-slim` è multi-architettura, quindi lo stesso compose va su amd64 (ZimaBoard, NAS UGREEN) e arm64 senza registry.
 3. **Struttura dei dati** — albero di `DATA_DIR` (`archive/` con `.incoming/` e `.trash/`, `firmware/<tipo>/`, `postgres/`), nome base `HHMMSS_<device>[_k]`, sidecar `.json`, file derivati con lo stesso nome base.
 4. **Comandi** — tabella: `device add|token|list`, `set-password`, `rescan`, `firmware publish|rollback|list`, `trash purge`, tutti come `docker compose exec app secondbrain …`. Per pubblicare un firmware: `docker compose cp ../firmware/build/secondbrain_fw.bin app:/tmp/fw.bin` e `docker compose exec app secondbrain firmware publish /tmp/fw.bin --version X.Y.Z`.
-5. **Contratto dei dispositivi** — `POST /captures` (header, codici 201/409/4xx/5xx come in spec §6), `GET /firmware/manifest.json`, `Authorization: Bearer`, `ALLOW_UNAUTHENTICATED_LAN` solo in sviluppo.
+5. **Contratto dei dispositivi** — `POST /captures` (header, codici 201/409/4xx/5xx come in spec §6), `GET /firmware/manifest.json`, `Authorization: Bearer`; `ALLOW_UNAUTHENTICATED_LAN=true` accetta dispositivi senza token solo dalla LAN (IP privato e nessun `Cf-Connecting-Ip`), dal tunnel mai.
 6. **Accesso da fuori con Cloudflare Tunnel** — creare il tunnel in Zero Trust → Networks → Tunnels (tipo cloudflared), copiare il token in `TUNNEL_TOKEN`; due public hostname verso `http://app:8000` (uno per la UI, uno per i dispositivi, quest'ultimo in `DEVICE_HOSTNAME`); `docker compose --profile tunnel up -d`; Bot Fight Mode può bloccare i dispositivi (vedi Task 14).
 7. **Backup e ripristino** — archivio: snapshot del NAS o `rsync -a DATA_DIR/archive/ <destinazione>`; database: `docker compose exec -T postgres pg_dump -U secondbrain secondbrain > secondbrain.sql` (serve per dispositivi, token e release; le registrazioni si ricostruiscono dal disco). Ripristino su una macchina nuova: copiare `archive/` e `firmware/`, `docker compose up -d`, `psql` del dump oppure, senza dump, `secondbrain rescan` e registrare di nuovo dispositivi e release.
 8. **Sviluppo** — `uv sync`, `docker compose -f docker-compose.test.yml up -d`, `uv run pytest -q`.
@@ -5272,7 +5335,7 @@ rsync -a --delete --exclude .venv --exclude data --exclude .env backend/ <utente
 ssh <utente>@<zimaboard>
 cd ~/secondbrain && cp .env.example .env
 ```
-In `.env`: `POSTGRES_PASSWORD` generata con `openssl rand -base64 24`, `DATA_DIR` sul disco dati, `ALLOW_UNAUTHENTICATED_LAN=false`, `DEVICE_HOSTNAME=ingest.<dominio>`.
+In `.env`: `POSTGRES_PASSWORD` generata con `openssl rand -base64 24`, `DATA_DIR` sul disco dati, `ALLOW_UNAUTHENTICATED_LAN=true` (il firmware attuale non manda token; dal tunnel resta obbligatorio), `DEVICE_HOSTNAME=ingest.<dominio>`.
 
 - [ ] **Step 3: Tunnel Cloudflare**
 
@@ -5301,18 +5364,18 @@ Con `TOKEN` = token del device e `WAV` = un file dell'archivio del Mac:
 8. Riavvio della ZimaBoard (`sudo reboot`): al ritorno servizi attivi senza intervento, UI e tunnel raggiungibili.
 9. Backup: il `pg_dump` del README produce un file non vuoto; cestinare ed eliminare la registrazione di prova dalla UI.
 
-Il device resta sul Mac di sviluppo (o in coda) finché il firmware non supporta HTTPS e token: in produzione `ALLOW_UNAUTHENTICATED_LAN` è spento.
+10. Device vero sulla ZimaBoard dalla LAN di casa: in `firmware/main/secrets.h` (solo locale) base URL della rete di casa e `OTA_MANIFEST_URL` verso `http://<ip-zimaboard>:8000`; build e flash (DEV mode con il cavo dati, oppure push `POST /ota`). Una registrazione con PWR → compare nella UI da telefono via tunnel, il dispositivo in "Dispositivi" risulta visto adesso. Il Mac di sviluppo non serve più come server; `tools/capture_server.py` resta nel repo per i test del firmware.
 
 - [ ] **Step 5: Documentazione e commit di chiusura**
 
 - Spec, riga "Stato": "implementato e verificato il <data> (branch `backend-fase1b`, piano `docs/plans/2026-09-28-backend-archivio.md`); in produzione sulla ZimaBoard dietro tunnel Cloudflare", più le deviazioni emerse (per esempio Bot Fight Mode).
-- `CLAUDE.md`: aggiornare "Stato" (backend in produzione, device ancora verso il Mac), "Storico" (voce della giornata con ciò che è emerso), "Prossima sessione" (spec firmware "HTTPS + token", §11 della spec del backend: prima il trattamento di 401/403/429 come errori temporanei), regole (prefisso di commit `backend:`, comando dei test backend).
+- `CLAUDE.md`: aggiornare "Stato" (backend in produzione, device in LAN verso la ZimaBoard senza token), "Storico" (voce della giornata con ciò che è emerso), "Prossima sessione" (spec firmware "HTTPS + token", §11 della spec del backend: prima il trattamento di 401/403/429 come errori temporanei), regole (prefisso di commit `backend:`, comando dei test backend).
 - `backend/README.md`: eventuali note sul tunnel emerse.
 
 ```bash
 git add docs/specs/2026-09-28-backend-archivio-design.md CLAUDE.md backend/README.md
 git commit -m "docs: backend Fase 1b verificato in produzione sulla ZimaBoard
 
-<esito dei punti di verifica del Task 14 e deviazioni emerse>. Il device passera' al
-server di produzione con la spec firmware HTTPS + token."
+<esito dei punti di verifica del Task 14 e deviazioni emerse>. Il device carica gia'
+sulla ZimaBoard dalla LAN; da fuori casa servira' la spec firmware HTTPS + token."
 ```

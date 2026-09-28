@@ -92,8 +92,14 @@ di sessione: le sessioni sono righe in DB con id casuali.
 
 **Autenticazione per percorso:**
 - `/captures` e `/firmware/*`: token del dispositivo, `Authorization: Bearer <token>`,
-  salvato in DB come hash. Con `ALLOW_UNAUTHENTICATED_LAN=true` (solo sviluppo) una
-  richiesta senza token è accettata e il dispositivo si registra da `X-Device-Id`.
+  salvato in DB come hash. Con `ALLOW_UNAUTHENTICATED_LAN=true` una richiesta senza
+  token è accettata **solo se arriva dalla LAN**: IP del client privato o di loopback
+  (IPv4 mappati in IPv6 compresi) **e** nessun header `Cf-Connecting-Ip`, che
+  Cloudflare aggiunge sempre (sovrascrivendo quello del client) alle richieste passate
+  dal tunnel. Il dispositivo sconosciuto si registra da `X-Device-Id`. Dal tunnel il
+  token resta obbligatorio anche con l'opzione attiva. Serve finché il firmware non
+  manda il token (§11): si può tenere acceso anche in produzione, al prezzo di
+  accettare upload da chiunque sia sulla rete di casa; spento di default.
 - Tutto il resto: sessione di login della UI.
 - Se `DEVICE_HOSTNAME` è impostato, su quell'hostname (header `Host`, che `cloudflared`
   imposta all'hostname pubblico) rispondono solo `POST /captures` e `/firmware/*`.
@@ -214,9 +220,10 @@ Migrazioni con Alembic.
   `capture_server.py`: registrazioni reali in archivio, `409` sui ritentativi, OTA pull
   di una build di test pubblicata dalla CLI, navigazione e ascolto dalla UI.
 - **Verifica sulla ZimaBoard:** stesso compose, profilo `tunnel`, due hostname (UI e
-  dispositivi), login da telefono su rete mobile, token obbligatorio. L'upload dal
-  tunnel si verifica con `curl` e un WAV vero finché il firmware non supporta HTTPS e
-  token (§11).
+  dispositivi), login da telefono su rete mobile. `ALLOW_UNAUTHENTICATED_LAN=true`: il
+  device vero carica sulla ZimaBoard dalla LAN di casa senza token; dal tunnel senza
+  token → `401`, con token (via `curl` e un WAV vero, finché il firmware non supporta
+  HTTPS e token, §11) → `201`.
 - **Backup:** documentato nel README (snapshot o rsync di `archive/`, `pg_dump`), non
   automatizzato.
 
@@ -228,6 +235,8 @@ Migrazioni con Alembic.
   ogni 4xx sposta il file in `rejected/`: con i token un errore di configurazione
   manderebbe in `rejected/` l'intera coda. Va fatto prima di attivare i token.
 - Con un URL pubblico unico, il server per rete in `WIFI_NETWORKS` diventa opzionale.
+- Quando tutti i dispositivi mandano il token, `ALLOW_UNAUTHENTICATED_LAN` torna a
+  `false` sulla ZimaBoard.
 - Hostname dei dispositivi dedicato nel tunnel, con Bot Fight Mode/WAF disattivati;
   opzionale un service token di Cloudflare Access (header `CF-Access-Client-Id` e
   `CF-Access-Client-Secret`) come seconda barriera.
