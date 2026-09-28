@@ -69,6 +69,12 @@ void test_wifi_select_picks_office(void);
 void test_wifi_select_home_requires_pinned_bssid(void);
 void test_wifi_select_strongest_wins(void);
 
+void test_battery_pct_from_mv(void);
+void test_battery_source_usb_host(void);
+void test_battery_source_charger_voltage(void);
+void test_battery_source_no_battery(void);
+void test_battery_source_rising_means_charging(void);
+
 void app_main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_semver_cmp);
@@ -96,5 +102,10 @@ void app_main(void) {
     RUN_TEST(test_wifi_select_picks_office);
     RUN_TEST(test_wifi_select_home_requires_pinned_bssid);
     RUN_TEST(test_wifi_select_strongest_wins);
+    RUN_TEST(test_battery_pct_from_mv);
+    RUN_TEST(test_battery_source_usb_host);
+    RUN_TEST(test_battery_source_charger_voltage);
+    RUN_TEST(test_battery_source_no_battery);
+    RUN_TEST(test_battery_source_rising_means_charging);
     UNITY_END();
 }

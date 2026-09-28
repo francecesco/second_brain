@@ -34,7 +34,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `wifi_select.c`, `ota_manifest.c`, `wifi_bssid.c`) con test unity sull'host in
   `host_test/`. Prima il test che fallisce, poi l'implementazione. Test host:
   `cd firmware/host_test && idf.py build && timeout 10 ./build/host_test.elf`
-  (l'eseguibile non termina da solo). Al 2026-09-24 sono 25 e devono restare verdi.
+  (l'eseguibile non termina da solo). Al 2026-09-28 sono 30 e devono restare verdi.
 - Build senza warning (`-Werror` su format-truncation è attivo).
 - Ogni task del piano finisce con una verifica sull'hardware (log seriale o esito visibile)
   prima del commit; se la verifica scopre un bug, il fix va nello stesso commit o nel
@@ -77,6 +77,15 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   il microfono sullo slot sbagliato) con `auto_clear` (altrimenti in underrun ripete
   l'ultimo blocco: beep in loop udibile in tutto l'ufficio, 2026-09-24). Buffer DMA del
   microfono da ~1 s, SD a 20 MHz: con meno si perdono campioni.
+- **GPIO17 è il mantenimento dell'alimentazione da batteria** (BAT_Control nello schema
+  Waveshare, `04_Hardware/Schematics` del loro repo), non l'abilitazione del partitore
+  come credevamo in Fase 0: a batteria il tasto PWR accende la scheda solo finché è
+  premuto e il firmware deve alzare GPIO17 subito e tenerlo (hold) anche in deep sleep.
+  Portarlo a 0 spegne fisicamente. Con la USB non si nota. Il partitore di BAT_ADC è
+  sempre collegato.
+- La scheda **non ha un segnale di presenza USB**. Senza batteria il nodo VBAT legge valori
+  casuali (2,9–4,18 V) per gli impulsi del caricabatterie; `battery_policy.c` deduce la
+  sorgente da tensione minima, dispersione dei campioni, trend e link dati USB.
 - Diagnostica senza seriale: `GET /status` → `last_cycle` con i tempi dell'ultimo ciclo
   reale (ms dall'avvio dell'app), picco audio, byte e tempo di upload.
 - Il refresh completo dell'e-Paper "lampeggia" in nero per ~2 s: è il pannello, non un
@@ -84,10 +93,10 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Per riavviare un device fermo in DEV MODE: pressione di PWR (dal firmware 0.4.0), oppure
   push di un firmware, oppure `esptool ... --after hard_reset chip_id` con il cavo dati.
 
-## Stato al 2026-09-24 sera
+## Stato al 2026-09-28
 
 - Tutto su `master`, remote `origin` = `github.com/francecesco/second_brain` (pubblico).
-- Device: firmware 0.5.8 (build di test del codice corrente; `version.txt` in git resta
+- Device: firmware 0.6.2 (build di test del codice corrente; `version.txt` in git resta
   0.1.0); coda vuota; conosce la rete di casa e quella dell'ufficio.
 - `backend/` vuoto: prossima fase.
 
@@ -140,6 +149,15 @@ Trovato e risolto un difetto serio: le registrazioni perdevano fino al 23 % dell
 a ~210 KB/s. Scelto un solo beep finale lungo (uno dei due corti non si sentiva).
 Batteria: serve connettore MX1.25 2 pin, controllando la polarità.
 
+**2026-09-28 — Collaudo completo e basi della batteria.** Collaudo hardware completo
+superato (OTA pull/push, catture fino a 55 s senza perdite, scarto, taglio di corrente,
+SD assente, server spento, DEV + uscita con PWR); tolto un clic sul primo campione.
+Dallo schema elettrico: GPIO17 è il mantenimento dell'alimentazione da batteria (il
+firmware lo abbassava: a batteria il device si sarebbe spento al rilascio di PWR),
+corretto con hold in deep sleep. Riconoscimento USB/batteria per stima (nessun segnale
+hardware), percentuale da curva LiPo tipica, soglie solo a batteria, display "USB" o
+"bat NN%", header `X-Power-Source`. Da tarare con la batteria reale.
+
 ## Idee future e cose rimandate
 
 - **Fase 1b — backend** `secondbrain`: implementare il contratto `POST /captures` di
@@ -152,8 +170,11 @@ Batteria: serve connettore MX1.25 2 pin, controllando la polarità.
   server, cache su SD, mostrato al posto della schermata di stato.
 - **Refresh parziale e-Paper**: contatore che scorre durante la registrazione, meno
   lampeggi.
-- **Batteria**: misurare consumo in deep sleep e per ciclo, autonomia, attendibilità della
-  percentuale, soglie 10/30 %. Con la batteria l'RTC non si azzera più.
+- **Batteria** (in arrivo): verificare per prima cosa che il device resti acceso al
+  rilascio di PWR e dopo il deep sleep (mantenimento GPIO17); poi consumo in deep sleep e
+  per ciclo, autonomia, curva di scarica reale da sostituire in `battery_policy.c`, soglie
+  di riconoscimento USB e 10/30 %. Con la batteria l'RTC non si azzera più.
+- **Spegnimento vero** (GPIO17 a 0) come alternativa al deep sleep per lunghi periodi.
 - **Latenza di avvio**: beep a ~1,7 s dalla pressione. Il resto è bootloader (~0,4 s) e
   init; sotto il secondo solo con light sleep, da valutare dopo le misure di consumo.
 - **Timer periodico di sync** senza cattura (oggi il wake è solo da tasto).

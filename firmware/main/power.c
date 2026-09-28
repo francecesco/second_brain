@@ -27,6 +27,20 @@ static const char *TAG = "power";
 
 void power_init(void)
 {
+    // PRIMA di tutto: mantieni l'alimentazione da batteria (vedi BOARD_BAT_LATCH).
+    // Dopo un wake da deep sleep il pin e' ancora in hold dal ciclo precedente.
+    gpio_hold_dis(BOARD_BAT_LATCH);
+    gpio_config_t latch = {
+        .pin_bit_mask = 1ULL << BOARD_BAT_LATCH,
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    gpio_set_level(BOARD_BAT_LATCH, 1);
+    gpio_config(&latch);
+    gpio_set_level(BOARD_BAT_LATCH, 1);
+
     // BOARD_BTN_USER e BOARD_BTN_PWR configurati insieme, stessa polarita'
     // attivo-basso (pull-up interno).
     gpio_config_t io = {
@@ -140,6 +154,12 @@ void power_deep_sleep(void)
     // Tasto attivo-basso -> wake quando il livello scende (EXT1, ANY_LOW).
     ESP_ERROR_CHECK(esp_sleep_enable_ext1_wakeup(1ULL << BOARD_BTN_PWR,
                                                   ESP_EXT1_WAKEUP_ANY_LOW));
+
+    // Il mantenimento batteria deve restare alto anche durante il sonno, altrimenti a
+    // batteria il deep sleep diventerebbe uno spegnimento fisico.
+    gpio_set_level(BOARD_BAT_LATCH, 1);
+    gpio_hold_en(BOARD_BAT_LATCH);
+    gpio_deep_sleep_hold_en();
 
     ESP_LOGI(TAG, "entering deep sleep; press PWR to wake");
     esp_deep_sleep_start();

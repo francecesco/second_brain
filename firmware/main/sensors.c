@@ -87,21 +87,13 @@ static esp_err_t i2c_write_read_reg(uint8_t addr, uint8_t reg, uint8_t *data, si
 }
 
 // ---------------------------------------------------------------------------
-// Batteria: GPIO enable partitore + ADC oneshot
+// Batteria: ADC oneshot su BAT_ADC (partitore 2:1 su VBAT)
 // ---------------------------------------------------------------------------
 
 static esp_err_t sensors_battery_init(void)
 {
-    gpio_config_t io = {
-        .pin_bit_mask = (1ULL << BOARD_BAT_ADC_EN),
-        .mode = GPIO_MODE_OUTPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    ESP_RETURN_ON_ERROR(gpio_config(&io), TAG, "gpio_config bat_en");
-    gpio_set_level(BOARD_BAT_ADC_EN, 0); // OFF finche' non serve leggere (risparmio energetico)
-
+    // Il partitore di BAT_ADC e' sempre collegato. GPIO17 NON va toccato qui: e' il
+    // mantenimento dell'alimentazione da batteria (BOARD_BAT_LATCH, gestito da power.c).
     adc_oneshot_unit_init_cfg_t init_cfg = {
         .unit_id = ADC_UNIT_1,
     };
@@ -126,8 +118,7 @@ static esp_err_t sensors_battery_init(void)
                  esp_err_to_name(cali_err));
     }
 
-    ESP_LOGI(TAG, "ADC batteria pronto: canale %d, enable partitore GPIO%d",
-             BOARD_BAT_ADC_CHAN, BOARD_BAT_ADC_EN);
+    ESP_LOGI(TAG, "ADC batteria pronto: canale %d", BOARD_BAT_ADC_CHAN);
     return ESP_OK;
 }
 
@@ -137,11 +128,16 @@ static esp_err_t sensors_battery_init(void)
 
 esp_err_t sensors_init(void)
 {
+    // Idempotente: GET /status la richiama a ogni richiesta, e una seconda
+    // adc_oneshot_new_unit sullo stesso ADC fallirebbe.
+    static bool s_done = false;
+    if (s_done) return ESP_OK;
     ESP_RETURN_ON_ERROR(sensors_i2c_bus_init(), TAG, "i2c init");
     s_i2c_ready = true;
 
     ESP_RETURN_ON_ERROR(sensors_battery_init(), TAG, "battery init");
 
+    s_done = true;
     ESP_LOGI(TAG, "sensors_init completato");
     return ESP_OK;
 }
@@ -276,8 +272,6 @@ esp_err_t sensors_read_battery(float *volts, int *percent)
         return ESP_ERR_INVALID_STATE;
     }
 
-    gpio_set_level(BOARD_BAT_ADC_EN, 1); // ON: abilita il partitore prima di leggere
-    vTaskDelay(pdMS_TO_TICKS(5));        // assestamento partitore
 
     int raw = 0;
     esp_err_t err = adc_oneshot_read(s_adc_handle, BOARD_BAT_ADC_CHAN, &raw);
@@ -291,8 +285,6 @@ esp_err_t sensors_read_battery(float *volts, int *percent)
             mv = (int)(((float)raw / 4095.0f) * 3300.0f);
         }
     }
-
-    gpio_set_level(BOARD_BAT_ADC_EN, 0); // OFF: risparmio energetico
 
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "lettura ADC batteria fallita: %s", esp_err_to_name(err));

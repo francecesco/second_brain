@@ -24,7 +24,7 @@ Le decisioni di progetto sono in `docs/specs/`, i piani di lavoro in `docs/plans
 | Storage | microSD via SDMMC 1-bit, FAT32 con nomi lunghi |
 | Sensori | SHTC3 (temperatura/umidità), RTC PCF85063, tensione batteria (ADC) |
 | Tasti | **PWR** (GPIO18, unico wake source) e **USER** (GPIO0, pin di strapping) |
-| Batteria | LiPo 3,7 V su connettore **MX1.25 2 pin** (attenzione a polarità e tipo di connettore), ricarica a bordo via USB |
+| Batteria | LiPo 3,7 V su connettore **MX1.25 2 pin** (attenzione a polarità e tipo di connettore), caricabatterie ETA6098 a bordo. GPIO17 mantiene l'alimentazione da batteria (va tenuto alto, anche in deep sleep) |
 
 La pin-map completa è in `firmware/main/board.h`. La scheda è la variante **B/N V2**
 (`github.com/waveshareteam/ESP32-S3-ePaper-1.54`), non la "1.54G" a 4 colori.
@@ -53,12 +53,15 @@ Schermata di stato a fine ciclo (font 7×12, 24 colonne):
 ```
 10:13          v0.3.0      ora locale e versione firmware
 wifi: Advenias             rete a cui si è collegato, oppure "wifi: assente"
-coda: 0  bat 96%           catture in attesa di upload e batteria
+coda: 0  USB               catture in attesa e alimentazione: "USB" oppure "bat 78%"
 sync ok                    esito: "N inviate", "server ko", "Salvato 0:07 / no sync", ...
 ```
 
 Se la SD manca o è piena il device lo dice ("SD assente", "SD piena") e non registra.
-Sotto il 10 % di batteria non registra e non accende il Wi-Fi; sotto il 30 % non fa OTA.
+Sotto il 10 % di batteria non registra e non accende il Wi-Fi; sotto il 30 % non fa OTA
+(solo a batteria). La scheda non segnala la presenza della USB: il firmware la deduce da
+tensione, stabilità delle letture e collegamento dati USB, vedi `battery_policy.c`. Limite
+noto: una batteria appena carica appare come "USB" finché non scende sotto 4,10 V.
 Se un ciclo si blocca per più di 5 minuti, il device si forza in deep sleep.
 
 ## Come funziona il firmware
@@ -96,6 +99,7 @@ X-Device-Id: 70041dd8263c                 (MAC)
 X-Firmware-Version: 0.3.0
 X-Battery-Pct: 95
 X-Battery-Voltage: 4.15
+X-Power-Source: battery                   (oppure usb; X-Battery-Pct solo a batteria)
 <byte del WAV>
 ```
 

@@ -4,7 +4,7 @@
 #include "wav.h"
 #include "config.h"
 #include "fw_version.h"
-#include "sensors.h"
+#include "battery.h"
 #include "wifi.h"
 
 #include <stdio.h>
@@ -25,7 +25,7 @@ static const char *TAG = "sync";
 #define SYNC_MAX_FILES 64
 
 // Ritorna il codice HTTP (>0) oppure <=0 su errore di rete/timeout.
-static int upload_one(const char *name, const char *device_id, const char *bat_pct, const char *bat_v)
+static int upload_one(const char *name, const char *device_id, const char *bat_pct, const char *bat_v, const char *src)
 {
     char abs[QUEUE_PATH_MAX + 32];
     queue_abs_path(name, abs, sizeof(abs));
@@ -58,6 +58,7 @@ static int upload_one(const char *name, const char *device_id, const char *bat_p
     esp_http_client_set_header(c, "X-Firmware-Version", fw_version());
     if (bat_pct[0]) esp_http_client_set_header(c, "X-Battery-Pct", bat_pct);
     if (bat_v[0])   esp_http_client_set_header(c, "X-Battery-Voltage", bat_v);
+    if (src[0])     esp_http_client_set_header(c, "X-Power-Source", src);
 
     int status = 0;
     uint8_t *buf = NULL;
@@ -97,15 +98,20 @@ esp_err_t sync_run(uint32_t window_ms, sync_result_t *out)
     uint8_t mac[6]; char device_id[13] = "unknown";
     if (esp_read_mac(mac, ESP_MAC_WIFI_STA) == ESP_OK)
         snprintf(device_id, sizeof(device_id), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    char bat_pct[8] = "", bat_v[8] = "";
-    float v = 0; int pct = 0;
-    if (sensors_read_battery(&v, &pct) == ESP_OK) { snprintf(bat_pct, sizeof(bat_pct), "%d", pct); snprintf(bat_v, sizeof(bat_v), "%.2f", v); }
+    // Stato dell'alimentazione letto a inizio ciclo (app_main): percentuale solo a batteria.
+    char bat_pct[8] = "", bat_v[8] = "", src[12] = "";
+    const power_state_t *ps = battery_last();
+    if (ps->valid) {
+        snprintf(bat_v, sizeof(bat_v), "%.2f", ps->mv / 1000.0);
+        snprintf(src, sizeof(src), "%s", ps->source == POWER_SRC_USB ? "usb" : "battery");
+        if (ps->source == POWER_SRC_BATTERY) snprintf(bat_pct, sizeof(bat_pct), "%d", ps->pct);
+    }
 
     int64_t t0 = esp_timer_get_time();
     for (int i = 0; i < n; i++) {
         if ((esp_timer_get_time() - t0) / 1000 > (int64_t)window_ms) { ESP_LOGW(TAG, "finestra di sync esaurita"); break; }
         int64_t tu = esp_timer_get_time();
-        int status = upload_one(names[i], device_id, bat_pct, bat_v);
+        int status = upload_one(names[i], device_id, bat_pct, bat_v, src);
         if (status > 0) {
             char abs[QUEUE_PATH_MAX + 32]; struct stat st;
             queue_abs_path(names[i], abs, sizeof(abs));
@@ -114,7 +120,7 @@ esp_err_t sync_run(uint32_t window_ms, sync_result_t *out)
         }
         if (status <= 0) { // errore di rete (es. abort subito dopo l'associazione): un retry
             vTaskDelay(pdMS_TO_TICKS(1000));
-            status = upload_one(names[i], device_id, bat_pct, bat_v);
+            status = upload_one(names[i], device_id, bat_pct, bat_v, src);
         }
         switch (sync_decide(status)) {
         case SYNC_ACTION_DELETE: queue_delete(names[i]); out->sent++; break;

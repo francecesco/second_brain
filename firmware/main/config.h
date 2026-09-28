@@ -15,6 +15,16 @@
 #define SB_BEEP_START_MS           120   // uno, all'avvio della registrazione (prima del primo campione)
 #define SB_BEEP_STOP_MS            200   // uno, piu' lungo, dopo il salvataggio
 
+// Sorgente di alimentazione (stima: la scheda non segnala la USB). Da tarare con la batteria.
+#define SB_USB_VOLTAGE_MV          4100  // tensione da caricabatterie: sopra si considera USB (senza
+                                         // batteria si legge 4.14-4.18 V; limite: una batteria appena
+                                         // carica sembra USB finche' non scende sotto questo valore)
+#define SB_BATTERY_MIN_RUNNING_MV  3300  // sotto, a batteria il device non sarebbe acceso
+#define SB_BATTERY_MAX_SPREAD_MV   150   // dispersione massima di campioni ravvicinati di una batteria vera
+#define SB_BATTERY_SAMPLES         8     // campioni per lettura, a 5 ms l'uno
+#define SB_CHARGE_RISE_MV          30    // salita tra due cicli che indica carica in corso
+#define SB_CHARGE_TREND_MAX_AGE_S  3600  // la lettura precedente vale solo se piu' recente di cosi'
+
 // Batteria (§3)
 #define SB_BATTERY_MIN_RECORD_PCT  10   // sotto: niente registrazione, niente Wi-Fi
 #define SB_BATTERY_MIN_OTA_PCT     30   // sotto: niente OTA pull

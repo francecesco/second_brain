@@ -5,7 +5,7 @@
 // Inizializza i sensori di bordo: assicura il bus I2C condiviso (SHTC3 + RTC
 // PCF85063, lo stesso bus usato dal codec audio ES8311 via driver legacy
 // driver/i2c.h) e configura l'ADC oneshot per la lettura della batteria
-// (BOARD_BAT_ADC_CHAN) + il GPIO di enable del partitore (BOARD_BAT_ADC_EN).
+// (BOARD_BAT_ADC_CHAN) (partitore sempre collegato).
 esp_err_t sensors_init(void);
 
 // Legge temperatura (°C) e umidita' relativa (%) dal sensore SHTC3.

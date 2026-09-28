@@ -34,12 +34,11 @@
 #include "sync.h"
 #include "status_http.h"
 #include "diag.h"
+#include "battery.h"
 
 static const char *TAG = "app";
 
 typedef struct {
-    int   battery_pct;      // -1 se non letta
-    float battery_v;
     bool  sd_ok;
     bool  wifi_ok;
     int   sent, rejected, remaining;
@@ -129,6 +128,10 @@ static void fmt_mmss(uint32_t ms, char *out, size_t n)
 static void do_capture(cycle_state_t *st)
 {
     diag_t *d = diag_get();
+    if (battery_below(SB_BATTERY_MIN_RECORD_PCT)) {
+        strlcpy(st->capture_msg, "Batteria scarica", sizeof(st->capture_msg));
+        return;
+    }
     if (!st->sd_ok) { strlcpy(st->capture_msg, "SD assente", sizeof(st->capture_msg)); return; }
     uint64_t free_b = 0;
     if (storage_free_bytes(&free_b) == ESP_OK && free_b < SB_SD_MIN_FREE_BYTES) {
@@ -186,16 +189,10 @@ static void do_capture(cycle_state_t *st)
     ESP_LOGI(TAG, "cattura: %s (%s)", st->capture_msg, id);
 }
 
-static void read_battery(cycle_state_t *st)
-{
-    if (sensors_read_battery(&st->battery_v, &st->battery_pct) != ESP_OK) st->battery_pct = -1;
-    ESP_LOGI(TAG, "batteria: %.2fV (%d%%)", st->battery_v, st->battery_pct);
-}
-
 static void do_sync(cycle_state_t *st)
 {
-    if (st->battery_pct >= 0 && st->battery_pct < SB_BATTERY_MIN_RECORD_PCT) {
-        ESP_LOGW(TAG, "batteria %d%%: niente Wi-Fi", st->battery_pct);
+    if (battery_below(SB_BATTERY_MIN_RECORD_PCT)) {
+        ESP_LOGW(TAG, "batteria %d%%: niente Wi-Fi", battery_last()->pct);
         return;
     }
     if (wifi_connect(SB_WIFI_BUDGET_MS) != ESP_OK) { ESP_LOGW(TAG, "no wifi"); return; }
@@ -211,7 +208,7 @@ static void do_sync(cycle_state_t *st)
         st->sent = r.sent; st->rejected = r.rejected; st->remaining = r.remaining; st->server_error = r.server_error;
     }
 
-    if (st->battery_pct < 0 || st->battery_pct >= SB_BATTERY_MIN_OTA_PCT) {
+    if (!battery_below(SB_BATTERY_MIN_OTA_PCT)) {
         char manifest_url[192];
         snprintf(manifest_url, sizeof(manifest_url), "%s/firmware/manifest.json", wifi_server_base_url());
         esp_err_t r = ota_pull(manifest_url);   // non ritorna se aggiorna
@@ -244,8 +241,9 @@ static void show_status(const cycle_state_t *st)
     char l1[32], l2[32], l3[32], l4[48];
     fmt_time_and_version(l1, sizeof(l1));
     fmt_wifi_line(st->wifi_ok, l2, sizeof(l2));
-    if (st->battery_pct >= 0) snprintf(l3, sizeof(l3), "coda: %d  bat %d%%", st->remaining, st->battery_pct);
-    else snprintf(l3, sizeof(l3), "coda: %d", st->remaining);
+    char bl[16];
+    battery_label(bl, sizeof(bl));
+    snprintf(l3, sizeof(l3), "coda: %d  %s", st->remaining, bl);
     if (st->capture_msg[0] && !st->wifi_ok) snprintf(l4, sizeof(l4), "%s / no sync", st->capture_msg);
     else if (!st->wifi_ok) strlcpy(l4, "no sync", sizeof(l4));
     else if (st->server_error) strlcpy(l4, "server ko", sizeof(l4));
@@ -311,8 +309,11 @@ void app_main(void)
         dev_mode();                        // non ritorna
     }
 
-    cycle_state_t st = { .battery_pct = -1, .remaining = 0 };
-    if (sensors_init() == ESP_OK) timesync_load_rtc();   // I2C + RTC: serve per il nome file
+    cycle_state_t st = { .remaining = 0 };
+    if (sensors_init() == ESP_OK) {
+        timesync_load_rtc();               // I2C + RTC: serve per il nome file
+        battery_read(NULL, true);          // ADC, < 1 ms: serve per la soglia di registrazione
+    }
 
     if (mode == BOOT_CAPTURE) audio_init_async();        // I2C/I2S in parallelo al mount SD
 
@@ -321,10 +322,6 @@ void app_main(void)
 
     if (mode == BOOT_CAPTURE) do_capture(&st);
 
-    read_battery(&st);                     // dopo la registrazione: non ritarda l'avvio
-    if (mode == BOOT_CAPTURE && st.battery_pct >= 0 && st.battery_pct < SB_BATTERY_MIN_RECORD_PCT) {
-        ESP_LOGW(TAG, "batteria %d%%: sotto la soglia di registrazione", st.battery_pct);
-    }
 
     do_sync(&st);
     if (st.sd_ok) st.remaining = queue_count(NULL);

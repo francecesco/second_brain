@@ -3,6 +3,7 @@
 #include "queue.h"
 #include "storage.h"
 #include "sensors.h"
+#include "battery.h"
 #include "timesync.h"
 #include "fw_version.h"
 #include "diag.h"
@@ -18,10 +19,11 @@ static esp_err_t status_get(httpd_req_t *req)
 {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "version", fw_version());
-    float v = 0; int pct = -1;
-    if (sensors_init() == ESP_OK && sensors_read_battery(&v, &pct) == ESP_OK) {
-        cJSON_AddNumberToObject(root, "battery_pct", pct);
-        cJSON_AddNumberToObject(root, "battery_v", (double)((int)(v * 100)) / 100.0);
+    power_state_t ps;
+    if (sensors_init() == ESP_OK && battery_read(&ps, false) == ESP_OK) {
+        cJSON_AddStringToObject(root, "power", ps.source == POWER_SRC_USB ? "usb" : "battery");
+        cJSON_AddNumberToObject(root, "battery_v", ps.mv / 1000.0);
+        if (ps.source == POWER_SRC_BATTERY) cJSON_AddNumberToObject(root, "battery_pct", ps.pct);
     }
     time_t now = time(NULL); struct tm utc; gmtime_r(&now, &utc);
     char ts[24];

@@ -72,7 +72,11 @@
 // Il calcolo "value = 0.001 * vol * 2" nel firmware di riferimento conferma un partitore 2:1.
 #define BOARD_BAT_ADC_CHAN   /* adc_channel_t */ ADC_CHANNEL_3   // GPIO4
 #define BOARD_BAT_DIVIDER    2.0f            // partitore 2:1, confermato da adc_bsp.c di riferimento
-#define BOARD_BAT_ADC_EN     /* GPIO */ 17    // VBAT_PWR_PIN: abilita il partitore prima della lettura, attivo alto (1=ON)
+#define BOARD_BAT_LATCH      /* GPIO */ 17    // BAT_Control (schema Waveshare): MANTIENE l'alimentazione da batteria.
+                                               // A batteria il tasto PWR accende la scheda solo finche' e' premuto;
+                                               // il firmware deve portare questo pin a 1 subito e tenerlo alto (anche
+                                               // in deep sleep, con hold). 0 = spegnimento fisico. Il partitore di
+                                               // BAT_ADC (200K/200K su VBAT) e' sempre collegato: non serve abilitarlo.
 #define BOARD_BTN_USER       /* GPIO */ 0     // BOOT_BUTTON_PIN: tasto utente generico (capture/wake); NON usato per
                                                // dev-mode perche' e' anche il pin di strapping BOOT (vedi power.c)
 #define BOARD_BTN_ACTIVE_LOW 1

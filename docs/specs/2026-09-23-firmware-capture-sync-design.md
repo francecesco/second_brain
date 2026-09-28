@@ -179,6 +179,7 @@ X-Device-Id: 70041dd8263c                (MAC STA, hex minuscolo)
 X-Firmware-Version: 0.6.0
 X-Battery-Pct: 95
 X-Battery-Voltage: 4.15
+X-Power-Source: battery                   (aggiunto 2026-09-28: battery | usb; X-Battery-Pct solo a batteria)
 
 <byte del WAV, in streaming dalla SD a blocchi di 4 KB>
 ```
