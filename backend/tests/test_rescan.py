@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date, timedelta
+import uuid
 
 import pytest
 from sqlalchemy import delete, select
@@ -105,3 +106,46 @@ def test_cli_rescan(archive, db, monkeypatch, capsys, settings):
     db.commit()
     assert main(["rescan"]) == 0
     assert "aggiunte 2" in capsys.readouterr().out
+
+
+def test_idempotence_for_trashed_items(archive, db, settings):
+    """Moving to trash by hand should be idempotent: second rescan has updated=0."""
+    cap = first(db)
+    # Move to trash manually (sidecar still has trashed_at: null)
+    new_rel = archive.move(cap.rel_path, ".trash/2026/09/23")
+    # First rescan: sets trashed_at to NOW, syncs sidecar
+    report1 = rescan(db, archive, NOW)
+    db.commit()
+    db.refresh(cap)
+    assert report1.updated == 1
+    assert cap.trashed_at == NOW
+    # Verify sidecar was synced
+    sidecar = archive.read_sidecar(new_rel)
+    assert sidecar["trashed_at"] == NOW.isoformat()
+    # Second rescan: should be idempotent (updated=0)
+    later = NOW + timedelta(days=1)
+    report2 = rescan(db, archive, later)
+    db.commit()
+    db.refresh(cap)
+    assert report2.updated == 0
+    assert cap.trashed_at == NOW  # unchanged
+    sidecar = archive.read_sidecar(new_rel)
+    assert sidecar["trashed_at"] == NOW.isoformat()  # unchanged
+
+
+def test_sidecar_without_wav(archive, db, settings):
+    """A .json sidecar without its .wav file is reported and not imported."""
+    # Create a sidecar without its WAV
+    orphan_dir = settings.archive_dir / "2026/09/22"
+    orphan_dir.mkdir(parents=True)
+    (orphan_dir / "120000_aabbccddeeff.json").write_text(
+        '{"schema_version": 1, "id": "11111111-2222-3333-4444-555555555555", '
+        '"device_id": "aabbccddeeff", "capture_id": "cap_20260922_120000", '
+        '"recorded_at": "2026-09-22T12:00:00+00:00", "received_at": "2026-09-28T12:00:00+00:00", '
+        '"duration_s": 1.0, "size_bytes": 32044, "sha256": "' + 'a' * 64 + '"}\n'
+    )
+    report = rescan(db, archive, NOW)
+    assert any("120000_aabbccddeeff" in p and "sidecar senza WAV" in p for p in report.problems)
+    assert report.added == 0  # not imported
+    db.commit()
+    assert db.get(Capture, uuid.UUID("11111111-2222-3333-4444-555555555555")) is None

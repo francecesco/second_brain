@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from .archive import TRASH, Archive
 from .models import Capture, Device
 from .naming import DEFAULT_DEVICE_TYPE, parse_day_dir
-from .sidecar import sidecar_to_fields
+from .sidecar import sidecar_to_fields, capture_to_sidecar
 
 
 @dataclass
@@ -25,18 +25,31 @@ class RescanReport:
     problems: list[str] = field(default_factory=list)
 
 
+def _sync_trashed_at(archive: Archive, rel_wav: str, sidecar_data: dict,
+                     resolved_trashed_at: datetime | None) -> None:
+    """Rewrite sidecar if trashed_at changed, keeping disk as truth."""
+    sidecar_trashed_at = sidecar_data.get("trashed_at")
+    resolved_iso = resolved_trashed_at.isoformat() if resolved_trashed_at else None
+    if sidecar_trashed_at != resolved_iso:
+        sidecar_data["trashed_at"] = resolved_iso
+        archive.write_sidecar(rel_wav, sidecar_data)
+
+
 def _load(archive: Archive, rel_wav: str, now: datetime, report: RescanReport) -> dict | None:
     if not archive.abs(rel_wav).is_file():
         report.problems.append(f"{rel_wav}: sidecar senza WAV")
         return None
     in_trash = rel_wav.startswith(TRASH + "/")
     try:
-        fields = sidecar_to_fields(archive.read_sidecar(rel_wav))
+        sidecar_data = archive.read_sidecar(rel_wav)
+        fields = sidecar_to_fields(sidecar_data)
         day = parse_day_dir(rel_wav.removeprefix(TRASH + "/").rsplit("/", 1)[0])
     except (ValueError, KeyError, TypeError) as exc:
         report.problems.append(f"{rel_wav}: sidecar non leggibile ({exc})")
         return None
-    fields["trashed_at"] = (fields["trashed_at"] or now) if in_trash else None
+    resolved_trashed_at = (fields["trashed_at"] or now) if in_trash else None
+    _sync_trashed_at(archive, rel_wav, sidecar_data, resolved_trashed_at)
+    fields["trashed_at"] = resolved_trashed_at
     return fields | {"rel_path": rel_wav, "day": day}
 
 
