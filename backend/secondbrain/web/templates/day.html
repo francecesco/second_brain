@@ -1,0 +1,4 @@
+{% extends "finder.html" %}
+{% block main %}
+{% for c in captures %}{% include "_row.html" %}{% else %}<p class="empty">Nessuna registrazione in questo giorno.</p>{% endfor %}
+{% endblock %}

@@ -4,6 +4,8 @@ import struct
 import uuid
 from datetime import UTC, date, datetime
 
+from sqlalchemy import select
+
 from secondbrain.models import Capture, Device
 
 TEST_DB = os.environ.get(
@@ -68,3 +70,8 @@ def capture_headers(token: str | None = None, capture_id: str = "cap_20260923_19
 def upload(client, wav: bytes | None = None, **kw):
     body = make_wav() if wav is None else wav
     return client.post("/captures", content=body, headers=capture_headers(**kw))
+
+
+def capture_by(db, capture_id: str) -> Capture:
+    db.expire_all()
+    return db.scalars(select(Capture).where(Capture.capture_id == capture_id)).one()

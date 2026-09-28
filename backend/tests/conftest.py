@@ -1,5 +1,5 @@
 """Fixture condivise: Postgres di test migrato, sessione su DB svuotato."""
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -7,14 +7,15 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from secondbrain.app import create_app
 from secondbrain.catalog import make_engine, make_sessionmaker
 from secondbrain.config import Settings
 from secondbrain.devices import create_device
-from secondbrain.models import Base
-from tests.helpers import DEV, LAN_CLIENT, NOW, TEST_DB
+from secondbrain.models import Base, WebSession
+from secondbrain.web.auth import set_password
+from tests.helpers import DEV, DEV2, LAN_CLIENT, NOW, PASSWORD, TEST_DB, make_wav, upload
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -98,3 +99,29 @@ def token(db):
     _, tok = create_device(db, DEV, "e-paper", "epaper154", NOW)
     db.commit()
     return tok
+
+
+@dataclass
+class Ui:
+    client: TestClient
+    csrf: str
+
+
+@pytest.fixture
+def ui(lan_client, db):
+    set_password(db, PASSWORD, NOW)
+    db.commit()
+    lan_client.post("/login", data={"password": PASSWORD}, follow_redirects=False)
+    session = db.scalars(select(WebSession)).one()
+    return Ui(lan_client, session.csrf_token)
+
+
+@pytest.fixture
+def recordings(ui):
+    """23/09 21:15:30 (DEV), 23/09 10:00:00 (DEV2), 10/08 09:00:00 (DEV), ora di Roma."""
+    upload(ui.client, make_wav(fill=b"\x01\x00"))
+    upload(ui.client, make_wav(fill=b"\x02\x00"), capture_id="cap_20260923_080000",
+           ts="2026-09-23T08:00:00Z", device=DEV2)
+    upload(ui.client, make_wav(fill=b"\x03\x00"), capture_id="cap_20260810_070000",
+           ts="2026-08-10T07:00:00Z")
+    return ui

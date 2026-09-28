@@ -1,0 +1,10 @@
+{% extends "finder.html" %}
+{% block main %}
+{% if items %}
+<div class="grid">
+  {% for label, count, href in items %}
+  <a href="{{ href }}"><span class="label">{{ label }}</span><span class="count">{{ count }}</span></a>
+  {% endfor %}
+</div>
+{% else %}<p class="empty">Nessuna registrazione.</p>{% endif %}
+{% endblock %}

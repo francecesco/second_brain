@@ -1,0 +1,12 @@
+<audio controls preload="none" src="/captures/{{ c.id }}/audio"></audio>
+<dl>
+  <dt>Registrata</dt><dd>{{ local(c.recorded_at) }}{% if c.date_estimated %} <span class="badge">stimata: ora di ricezione</span>{% endif %}</dd>
+  <dt>Ricevuta</dt><dd>{{ local(c.received_at) }}</dd>
+  <dt>Dispositivo</dt><dd>{{ device_names.get(c.device_id, c.device_id) }} <span class="mono">{{ c.device_id }}</span></dd>
+  <dt>Firmware</dt><dd>{{ c.firmware_version or '—' }}</dd>
+  <dt>Alimentazione</dt><dd>{% if c.power_source == 'usb' %}USB{% elif c.power_source == 'battery' %}batteria{% if c.battery_pct is not none %} {{ c.battery_pct }} %{% endif %}{% else %}—{% endif %}{% if c.battery_v %} · {{ '%.2f'|format(c.battery_v) }} V{% endif %}</dd>
+  <dt>ID cattura</dt><dd class="mono">{{ c.capture_id }}</dd>
+  <dt>SHA-256</dt><dd class="mono">{{ c.sha256 }}</dd>
+  <dt>File</dt><dd><ul class="files">{% for name in files %}<li><a href="/captures/{{ c.id }}/files/{{ name }}">{{ name }}</a></li>{% endfor %}</ul></dd>
+</dl>
+<button type="button" onclick="this.closest('.detail').innerHTML=''">Chiudi</button>

@@ -14,6 +14,7 @@ from .catalog import make_engine, make_sessionmaker
 from .clock import utcnow
 from .config import Settings, load_settings
 from .httputil import public_host
+from .web import browse as web_browse
 from .web import login as web_login
 from .web.auth import CsrfError, NotAuthenticated
 from .web.templating import STATIC_DIR
@@ -57,6 +58,7 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(web_login.router)
+    app.include_router(web_browse.router)
 
     @app.exception_handler(NotAuthenticated)
     async def login_required(request: Request, exc: NotAuthenticated) -> Response:
