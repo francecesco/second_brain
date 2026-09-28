@@ -6,8 +6,19 @@
 <title>{% block title %}Second Brain{% endblock %}</title>
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/htmx.min.js" defer></script>
+<script>
+document.addEventListener("htmx:responseError", function (evt) {
+  var flash = document.getElementById("flash");
+  flash.textContent = evt.detail.xhr.responseText || "Errore";
+  flash.hidden = false;
+});
+document.addEventListener("click", function (evt) {
+  if (evt.target.id === "flash") { evt.target.hidden = true; }
+});
+</script>
 </head>
 <body{% if csrf %} hx-headers='{"X-CSRF-Token": "{{ csrf }}"}'{% endif %}>
+<div id="flash" class="error" role="alert" hidden></div>
 {% block body %}{% endblock %}
 </body>
 </html>

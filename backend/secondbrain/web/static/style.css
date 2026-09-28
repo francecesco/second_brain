@@ -12,6 +12,9 @@ h1 { font-size: 1.2rem; }
 .login { max-width: 22rem; margin: 15vh auto; padding: 0 1rem; }
 .login input { width: 100%; margin: .5rem 0; }
 .error { color: var(--warn); }
+#flash { position: fixed; top: .8rem; left: 50%; transform: translateX(-50%); z-index: 100;
+  max-width: min(90vw, 32rem); background: var(--warn-bg); border: 1px solid var(--warn);
+  border-radius: 6px; padding: .5rem .8rem; cursor: pointer; overflow-wrap: anywhere; }
 .empty { color: var(--muted); }
 .count { color: var(--muted); font-size: .85em; }
 .mono { font-family: ui-monospace, monospace; font-size: .85em; }

@@ -84,7 +84,10 @@ def capture_detail(request: Request, capture_id: uuid.UUID, db: Session = Depend
 def capture_audio(request: Request, capture_id: uuid.UUID, db: Session = Depends(get_db),
                   session: WebSession = Depends(require_login)):
     capture = _capture(db, capture_id)
-    return FileResponse(request.app.state.archive.abs(capture.rel_path), media_type="audio/wav")
+    path = request.app.state.archive.abs(capture.rel_path)
+    if not path.is_file():
+        raise HTTPException(404, "audio non trovato sul disco")
+    return FileResponse(path, media_type="audio/wav")
 
 
 @router.get("/captures/{capture_id}/files/{name}")
@@ -94,4 +97,7 @@ def capture_file(request: Request, capture_id: uuid.UUID, name: str,
     archive = request.app.state.archive
     if name not in archive.related_files(capture.rel_path):
         raise HTTPException(404, "file sconosciuto")
-    return FileResponse(archive.abs(capture.rel_path).parent / name, filename=name)
+    path = archive.abs(capture.rel_path).parent / name
+    if not path.is_file():
+        raise HTTPException(404, "file non trovato sul disco")
+    return FileResponse(path, filename=name)

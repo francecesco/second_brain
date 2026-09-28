@@ -8,6 +8,7 @@ from secondbrain.archive import Archive
 from secondbrain.cli import main
 from secondbrain.models import Capture, Device
 from secondbrain.rescan import rescan
+from secondbrain.sidecar import capture_to_sidecar
 from tests.helpers import DEV, DEV2, NOW, TEST_DB, make_wav, upload
 
 
@@ -131,6 +132,36 @@ def test_idempotence_for_trashed_items(archive, db, settings):
     assert cap.trashed_at == NOW  # unchanged
     sidecar = archive.read_sidecar(new_rel)
     assert sidecar["trashed_at"] == NOW.isoformat()  # unchanged
+
+
+def test_restores_sidecar_when_broken_but_wav_still_on_disk(archive, db):
+    """Un sidecar illeggibile non deve far sparire la riga se il WAV c'è ancora: si
+    ricostruisce il sidecar dal catalogo invece di buttare via titolo, data corretta,
+    device e capture_id."""
+    cap = first(db)
+    archive.abs(cap.rel_path).with_suffix(".json").write_text("{non json")
+    report = rescan(db, archive, NOW)
+    assert report.removed == 0
+    assert any("sidecar ricostruito dal catalogo" in p for p in report.problems)
+    assert not any("senza sidecar" in p for p in report.problems)
+    db.commit()
+    db.refresh(cap)
+    assert db.get(Capture, cap.id) is not None
+    assert archive.read_sidecar(cap.rel_path) == capture_to_sidecar(cap)
+
+
+def test_restores_sidecar_when_deleted_but_wav_still_on_disk(archive, db):
+    """Stesso caso ma con il sidecar del tutto sparito (non solo corrotto)."""
+    cap = first(db)
+    archive.abs(cap.rel_path).with_suffix(".json").unlink()
+    report = rescan(db, archive, NOW)
+    assert report.removed == 0
+    assert any("sidecar ricostruito dal catalogo" in p for p in report.problems)
+    assert not any("senza sidecar" in p for p in report.problems)
+    db.commit()
+    db.refresh(cap)
+    assert db.get(Capture, cap.id) is not None
+    assert archive.read_sidecar(cap.rel_path) == capture_to_sidecar(cap)
 
 
 def test_sidecar_without_wav(archive, db, settings):

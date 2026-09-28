@@ -154,6 +154,12 @@ def test_login_page(client):
     assert r.status_code == 200 and 'name="password"' in r.text
 
 
+def test_base_page_has_a_flash_element_for_htmx_errors(client):
+    r = client.get("/login")
+    assert '<div id="flash" class="error" role="alert" hidden>' in r.text
+    assert "htmx:responseError" in r.text
+
+
 def test_wrong_password_page(client, user):
     r = client.post("/login", data={"password": "no"})
     assert r.status_code == 401 and "Password errata" in r.text

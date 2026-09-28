@@ -89,5 +89,11 @@ def test_file_route_serves_only_related_files(recordings, db, name):
     assert get(recordings, f"/captures/{cap.id}/files/{name}").status_code == 404
 
 
+def test_audio_missing_on_disk_is_404(recordings, db, settings):
+    cap = capture_by(db, "cap_20260923_191530")
+    (settings.archive_dir / cap.rel_path).unlink()
+    assert get(recordings, f"/captures/{cap.id}/audio").status_code == 404
+
+
 def test_unknown_capture(recordings):
     assert get(recordings, f"/captures/{uuid.uuid4()}").status_code == 404

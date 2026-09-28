@@ -108,6 +108,15 @@ def test_token_of_another_device(client, token):
     assert upload(client, token=token, device=DEV2).status_code == 403
 
 
+def test_lan_mode_with_a_valid_token_authenticates_via_token(lan_client, db, token):
+    """In LAN, con un token valido, il dispositivo va comunque autenticato dal token (non
+    dalla regola LAN): il token vince sempre quando c'è."""
+    r = upload(lan_client, token=token)
+    assert r.status_code == 201
+    device = db.get(Device, DEV)
+    assert device is not None and device.token_hash is not None
+
+
 def test_lan_mode_registers_unknown_device(lan_client, db):
     assert upload(lan_client).status_code == 201
     assert db.get(Device, DEV) is not None

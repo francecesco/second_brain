@@ -61,6 +61,16 @@ def _ensure_device(s: Session, device_id: str, now: datetime, report: RescanRepo
         report.devices_created.append(device_id)
 
 
+def _restore_from_catalog(archive: Archive, capture: Capture, report: RescanReport) -> dict:
+    """Il sidecar è illeggibile o sparito ma il WAV c'è ancora: il catalogo ha comunque
+    titolo, data corretta, device e capture_id, quindi si riscrive il sidecar da lì
+    invece di buttare via la riga."""
+    data = capture_to_sidecar(capture)
+    archive.write_sidecar(capture.rel_path, data)
+    report.problems.append(f"{capture.rel_path}: sidecar ricostruito dal catalogo")
+    return sidecar_to_fields(data) | {"rel_path": capture.rel_path, "day": capture.day}
+
+
 def rescan(s: Session, archive: Archive, now: datetime) -> RescanReport:
     report = RescanReport()
     entries: dict[uuid.UUID, dict] = {}
@@ -73,15 +83,23 @@ def rescan(s: Session, archive: Archive, now: datetime) -> RescanReport:
                 f"{rel_wav}: id {values['id']} già usato da {entries[values['id']]['rel_path']}")
             continue
         entries[values["id"]] = values
-    for rel_wav in archive.iter_wavs_without_sidecar():
-        report.problems.append(f"{rel_wav}: WAV senza sidecar, non importato")
 
-    # Prima si tolgono le righe senza file, così i loro rel_path tornano liberi.
+    # Righe la cui riscrittura è fallita sopra (sidecar illeggibile o sparito): se il WAV
+    # esiste ancora si ricostruisce il sidecar dal catalogo, altrimenti si toglie la riga.
+    # Va fatto prima di segnalare i WAV senza sidecar, così uno appena ricostruito non
+    # viene più segnalato come mancante nello stesso giro.
     for capture in s.scalars(select(Capture)).all():
-        if capture.id not in entries:
+        if capture.id in entries:
+            continue
+        if archive.abs(capture.rel_path).is_file():
+            entries[capture.id] = _restore_from_catalog(archive, capture, report)
+        else:
             s.delete(capture)
             report.removed += 1
     s.flush()
+
+    for rel_wav in archive.iter_wavs_without_sidecar():
+        report.problems.append(f"{rel_wav}: WAV senza sidecar, non importato")
 
     for values in entries.values():
         _ensure_device(s, values["device_id"], now, report)
