@@ -93,12 +93,33 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Per riavviare un device fermo in DEV MODE: pressione di PWR (dal firmware 0.4.0), oppure
   push di un firmware, oppure `esptool ... --after hard_reset chip_id` con il cavo dati.
 
-## Stato al 2026-09-28
+## Stato al 2026-09-28 (fine giornata)
 
-- Tutto su `master`, remote `origin` = `github.com/francecesco/second_brain` (pubblico).
-- Device: firmware 0.6.2 (build di test del codice corrente; `version.txt` in git resta
-  0.1.0); coda vuota; conosce la rete di casa e quella dell'ufficio.
-- `backend/` vuoto: prossima fase.
+- Tutto su `master`, allineato con `origin` (`github.com/francecesco/second_brain`, pubblico).
+- **Hardware e firmware: chiusi**, in attesa della batteria. Collaudo completo superato il
+  2026-09-28 (vedi Storico). Firmware sul device: 0.6.2 (build di test del codice corrente;
+  `version.txt` in git resta 0.1.0), coda vuota, conosce rete di casa e ufficio.
+- Batteria: da acquistare con connettore MX1.25 2 pin (polarità da verificare). All'arrivo:
+  prova di mantenimento (acceso dopo il rilascio di PWR e dopo il deep sleep), poi misure
+  e taratura (vedi Idee future).
+- Sul Mac di casa (192.168.1.28) gira `tools/capture_server.py` sulla porta 8000; le
+  catture di prova sono in `firmware/captures_inbox/` e `captures_inbox_old/` (gitignored).
+- `backend/` vuoto.
+
+## Prossima sessione: Fase 1b, backend `secondbrain`
+
+1. Rileggere `docs/specs/2026-09-14-second-brain-design.md` §6–8 e il piano
+   `docs/plans/2026-09-14-secondbrain-backend.md` (10 task TDD, mai eseguito).
+2. Riallineare piano e spec al contratto reale del device
+   (`docs/specs/2026-09-23-firmware-capture-sync-design.md` §6.2 e README): corpo WAV
+   grezzo, metadati negli header `X-Capture-*`, `X-Device-Id`, `X-Firmware-Version`,
+   `X-Battery-*`, `X-Power-Source`; `201` accettata, `409` duplicato; più
+   `GET /firmware/manifest.json` per l'OTA. Il piano originale parlava di multipart.
+3. Decisioni da prendere con l'autore all'inizio: dove gira durante lo sviluppo (Mac o
+   subito ZimaBoard/CasaOS in Docker), modello faster-whisper e lingua, formato e
+   posizione delle note nel vault, cosa fare dell'audio originale.
+4. Workflow come per il firmware: spec approvata a sezioni → piano a task → esecuzione
+   con test, commit piccoli, verifica end-to-end con il device vero.
 
 ## Storico
 
