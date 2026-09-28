@@ -11,9 +11,11 @@ from contextlib import contextmanager
 from sqlalchemy.orm import Session
 
 from . import catalog, devices
+from .archive import Archive
 from .clock import utcnow
 from .config import ConfigError, Settings, load_settings
 from .naming import DEFAULT_DEVICE_TYPE
+from .rescan import rescan
 
 
 class CliError(Exception):
@@ -76,7 +78,25 @@ def _add_device_commands(sub) -> None:
     actions.add_parser("list", help="elenca i dispositivi").set_defaults(func=_device_list)
 
 
-COMMAND_GROUPS: tuple[Callable, ...] = (_add_device_commands,)
+def _rescan(args: argparse.Namespace) -> None:
+    with open_session() as (s, settings):
+        report = rescan(s, Archive(settings.archive_dir), utcnow())
+        s.commit()
+    print(f"Registrazioni: aggiunte {report.added}, aggiornate {report.updated}, "
+          f"rimosse dal catalogo {report.removed}.")
+    if report.devices_created:
+        print("Dispositivi creati senza token: " + ", ".join(report.devices_created)
+              + " (usa 'secondbrain device token <id>')")
+    for problem in report.problems:
+        print(f"attenzione: {problem}")
+
+
+def _add_rescan_command(sub) -> None:
+    sub.add_parser("rescan", help="ricostruisce il catalogo dall'archivio su disco") \
+        .set_defaults(func=_rescan)
+
+
+COMMAND_GROUPS: tuple[Callable, ...] = (_add_device_commands, _add_rescan_command)
 
 
 def build_parser() -> argparse.ArgumentParser:
