@@ -57,8 +57,8 @@ archive/
 - Il **titolo non rinomina il file**: vive nei metadati. La correzione della data sposta i
   file in un'altra cartella del giorno, ma senza cambiarne il nome. Link, file derivati e
   riferimenti futuri non si rompono.
-- Il sidecar `.json` contiene tutti i campi della tabella `captures` (§8) più
-  `schema_version`. Postgres si può ricostruire dal disco con `secondbrain rescan`.
+- Il sidecar `.json` contiene i campi della tabella `captures` (§8) tranne `rel_path` e
+  `day`, più `schema_version`. Postgres si può ricostruire dal disco con `secondbrain rescan`.
 - Ogni modifica dalla UI scrive prima su disco (sidecar, spostamenti), poi sul DB.
 - Dispositivi, release firmware e utenti stanno solo in Postgres: sono configurazione,
   non archivio (backup con `pg_dump`).
@@ -70,10 +70,11 @@ archive/
 Postgres. Configurazione solo da variabili d'ambiente (`.env`). Immagini amd64 e arm64,
 nessuna dipendenza da CasaOS.
 
-**Configurazione** (valori predefiniti tra parentesi): `DATABASE_URL`, `ARCHIVE_DIR`,
-`FIRMWARE_DIR`, `TZ_ARCHIVE` (`Europe/Rome`), `SESSION_SECRET`, `MAX_UPLOAD_BYTES`
-(32 MB), `TRASH_RETENTION_DAYS` (30), `ALLOW_UNAUTHENTICATED_LAN` (`false`),
-`DEVICE_HOSTNAME` (vuoto = nessuna restrizione per hostname).
+**Configurazione** (valori predefiniti tra parentesi): `DATABASE_URL`, `ARCHIVE_DIR`
+(`/data/archive`), `FIRMWARE_DIR` (`/data/firmware`), `TZ_ARCHIVE` (`Europe/Rome`),
+`MAX_UPLOAD_BYTES` (32 MB), `TRASH_RETENTION_DAYS` (30), `ALLOW_UNAUTHENTICATED_LAN`
+(`false`), `DEVICE_HOSTNAME` (vuoto = nessuna restrizione per hostname). Nessun segreto
+di sessione: le sessioni sono righe in DB con id casuali.
 
 **Codice:** pacchetto Python `secondbrain` in `backend/`, un modulo per responsabilità.
 
@@ -94,8 +95,9 @@ nessuna dipendenza da CasaOS.
   salvato in DB come hash. Con `ALLOW_UNAUTHENTICATED_LAN=true` (solo sviluppo) una
   richiesta senza token è accettata e il dispositivo si registra da `X-Device-Id`.
 - Tutto il resto: sessione di login della UI.
-- Se `DEVICE_HOSTNAME` è impostato, su quell'hostname rispondono solo i percorsi dei
-  dispositivi.
+- Se `DEVICE_HOSTNAME` è impostato, su quell'hostname (header `Host`, che `cloudflared`
+  imposta all'hostname pubblico) rispondono solo `POST /captures` e `/firmware/*`.
+  `X-Forwarded-Host` non viene usato: lo può falsificare chiunque.
 
 ## 6. Ricezione: `POST /captures`
 
@@ -105,8 +107,9 @@ Contratto del firmware (§6.2 della spec 2026-09-23), più `Authorization`.
    dispositivo del token → `403`. Si aggiornano `last_seen_at`, firmware e batteria del
    dispositivo.
 2. **Header.** `X-Capture-Id` deve corrispondere a `cap_AAAAMMGG_HHMMSS[_k]` o
-   `cap_unsynced_NNNNNN[_k]`, altrimenti `400`. `Content-Length` obbligatorio, oltre
-   `MAX_UPLOAD_BYTES` → `413`.
+   `cap_unsynced_NNNNNN[_k]`, altrimenti `400`. `Content-Length` obbligatorio (assente →
+   `411`), oltre `MAX_UPLOAD_BYTES` → `413`; byte ricevuti diversi da `Content-Length` →
+   `400`.
 3. **Ricezione in streaming** su `archive/.incoming/<uuid>.tmp`, con sha256 calcolato
    durante la ricezione, poi `fsync`. Body troncato: si cancella il temporaneo (il device
    va in timeout e tiene il file).
@@ -168,21 +171,24 @@ Migrazioni con Alembic.
   `created_at`, `last_seen_at`, `last_firmware`, `last_battery_pct`, `last_battery_v`,
   `last_power_source`.
 - `captures`: `id` (uuid), `device_id` → `devices`, `capture_id`, `recorded_at` (UTC),
-  `date_estimated`, `received_at`, `rel_path` (del WAV), `title`, `duration_s`,
+  `date_estimated`, `received_at`, `day` (data della cartella, per i conteggi dell'albero;
+  resta quella originale anche nel cestino), `rel_path` (del WAV, unico), `title`, `duration_s`,
   `size_bytes`, `sha256`, `firmware_version`, `battery_pct`, `battery_v`,
   `power_source`, `trashed_at`. Indici su `(device_id, capture_id)` (non unico, vedi §6
-  punto 5) e su `recorded_at`.
+  punto 5), `recorded_at` e `day`. `rel_path` e `day` non stanno nel sidecar: si
+  ricavano dalla posizione del file, così `rescan` segue anche gli spostamenti a mano.
 - `firmware_releases`: `type`, `version`, `file`, `sha256`, `published_at`, `current`
   (una sola corrente per tipo).
-- `users` (una riga), `sessions`, `login_attempts`.
+- `users` (una riga), `web_sessions` (id casuale, token CSRF, scadenza 30 giorni),
+  `login_attempts`.
 
 ## 9. OTA
 
 - Binari nel volume `firmware/<tipo>/secondbrain-X.Y.Z.bin`.
 - `GET /firmware/<tipo>/manifest.json` e l'alias `GET /firmware/manifest.json` (tipo
   `epaper154`, il percorso del firmware attuale). Il manifest `{version, url, sha256}`
-  viene generato dalla release corrente, con l'URL costruito da schema e host della
-  richiesta (rispettando `X-Forwarded-Proto`/`X-Forwarded-Host` dietro il tunnel).
+  viene generato dalla release corrente, con l'URL costruito dall'header `Host` e
+  dallo schema della richiesta (`X-Forwarded-Proto` dietro il tunnel).
   Nessuna release → `404`: il firmware attuale logga l'errore e prosegue senza
   aggiornare, come per ogni risposta diversa da `200`.
 - `GET /firmware/<tipo>/<file>.bin` serve il binario.
