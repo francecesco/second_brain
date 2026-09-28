@@ -1,19 +1,22 @@
 """Applicazione FastAPI: stato condiviso, router, ciclo di vita (spec §5)."""
+import asyncio
 import logging
 from collections.abc import Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 
 from fastapi import FastAPI, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ingest, ota
+from . import ingest, library, ota
 from .archive import Archive
 from .catalog import make_engine, make_sessionmaker
 from .clock import utcnow
 from .config import Settings, load_settings
 from .httputil import public_host
+from .web import actions as web_actions
 from .web import browse as web_browse
 from .web import login as web_login
 from .web.auth import CsrfError, NotAuthenticated
@@ -22,6 +25,29 @@ from .web.templating import STATIC_DIR
 log = logging.getLogger(__name__)
 
 DEVICE_PATHS = ("/captures", "/firmware/")
+PURGE_INTERVAL_S = 24 * 3600
+
+
+def _purge_once(app: FastAPI) -> int:
+    with app.state.sessionmaker() as s:
+        return library.purge_trash(s, app.state.archive, app.state.clock(),
+                                   app.state.settings.trash_retention_days)
+
+
+async def _purge(app: FastAPI) -> None:
+    try:
+        removed = await run_in_threadpool(_purge_once, app)
+    except Exception:  # noqa: BLE001 - la pulizia non deve fermare il servizio
+        log.exception("pulizia del cestino fallita")
+        return
+    if removed:
+        log.info("cestino: eliminate %d registrazioni scadute", removed)
+
+
+async def _purge_loop(app: FastAPI) -> None:
+    while True:
+        await asyncio.sleep(PURGE_INTERVAL_S)
+        await _purge(app)
 
 
 def _is_device_path(path: str) -> bool:
@@ -34,7 +60,12 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
         removed = app.state.archive.clean_incoming()
         if removed:
             log.warning("rimossi %d upload incompleti da .incoming", removed)
+        await _purge(app)
+        task = asyncio.create_task(_purge_loop(app))
         yield
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
         app.state.engine.dispose()
 
     app = FastAPI(title="secondbrain", lifespan=lifespan,
@@ -59,6 +90,7 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(web_login.router)
     app.include_router(web_browse.router)
+    app.include_router(web_actions.router)
 
     @app.exception_handler(NotAuthenticated)
     async def login_required(request: Request, exc: NotAuthenticated) -> Response:

@@ -1,0 +1,5 @@
+{% extends "finder.html" %}
+{% block main %}
+<p class="empty">Registrazioni arrivate senza un orario affidabile: la data è quella di ricezione. Apri una registrazione e correggi data e ora.</p>
+{% for c in captures %}{% include "_row.html" %}{% else %}<p class="empty">Niente da sistemare.</p>{% endfor %}
+{% endblock %}

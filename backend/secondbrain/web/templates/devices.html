@@ -1,0 +1,20 @@
+{% extends "finder.html" %}
+{% block main %}
+{% if devices %}
+<div class="table-wrap"><table>
+<tr><th>Nome</th><th>ID</th><th>Tipo</th><th>Ultimo contatto</th><th>Firmware</th><th>Alimentazione</th><th>Token</th></tr>
+{% for d in devices %}
+{% set rel = releases.get(d.type) %}
+<tr>
+  <td><form method="post" action="/devices/{{ d.id }}/name" class="actions"><input type="hidden" name="csrf" value="{{ csrf }}"><input name="name" value="{{ d.name }}" maxlength="100" aria-label="Nome"><button type="submit">Rinomina</button></form></td>
+  <td class="mono">{{ d.id }}</td>
+  <td>{{ d.type }}</td>
+  <td>{{ local(d.last_seen_at) if d.last_seen_at else 'mai' }}</td>
+  <td>{{ d.last_firmware or '—' }}{% if rel %} <span class="count">(pubblicata {{ rel.version }})</span>{% endif %}</td>
+  <td>{% if d.last_power_source == 'usb' %}USB{% elif d.last_power_source == 'battery' %}batteria{% if d.last_battery_pct is not none %} {{ d.last_battery_pct }} %{% endif %}{% else %}—{% endif %}{% if d.last_battery_v %} · {{ '%.2f'|format(d.last_battery_v) }} V{% endif %}</td>
+  <td>{{ 'sì' if d.token_hash else 'no' }}</td>
+</tr>
+{% endfor %}
+</table></div>
+{% else %}<p class="empty">Nessun dispositivo: si registrano con <code>secondbrain device add</code>.</p>{% endif %}
+{% endblock %}

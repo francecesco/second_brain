@@ -1,0 +1,22 @@
+{% extends "finder.html" %}
+{% block main %}
+<p class="empty">Le registrazioni nel cestino si eliminano da sole dopo {{ retention_days }} giorni.</p>
+{% if captures %}
+<div class="table-wrap"><table>
+<tr><th>Registrata</th><th>Titolo</th><th>Dispositivo</th><th>Nel cestino dal</th><th></th></tr>
+{% for c in captures %}
+<tr>
+  <td>{{ local(c.recorded_at) }}</td>
+  <td>{{ c.title or 'senza titolo' }}</td>
+  <td>{{ device_names.get(c.device_id, c.device_id) }}</td>
+  <td>{{ local(c.trashed_at) }}</td>
+  <td class="actions">
+    <a href="/captures/{{ c.id }}/audio">Ascolta</a>
+    <form method="post" action="/trash/{{ c.id }}/restore"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Ripristina</button></form>
+    <form method="post" action="/trash/{{ c.id }}/delete" onsubmit="return confirm('Eliminare definitivamente? Non si può annullare.')"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Elimina</button></form>
+  </td>
+</tr>
+{% endfor %}
+</table></div>
+{% else %}<p class="empty">Il cestino è vuoto.</p>{% endif %}
+{% endblock %}

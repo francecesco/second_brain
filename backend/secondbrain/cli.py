@@ -12,7 +12,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from . import catalog, devices, ota
+from . import catalog, devices, library, ota
 from .archive import Archive
 from .clock import utcnow
 from .config import ConfigError, Settings, load_settings
@@ -177,9 +177,23 @@ def _add_unlock_command(sub) -> None:
         .set_defaults(func=_unlock)
 
 
+def _trash_purge(args: argparse.Namespace) -> None:
+    with open_session() as (s, settings):
+        removed = library.purge_trash(s, Archive(settings.archive_dir), utcnow(),
+                                      settings.trash_retention_days)
+    print(f"Eliminate definitivamente {removed} registrazioni scadute nel cestino.")
+
+
+def _add_trash_commands(sub) -> None:
+    group = sub.add_parser("trash", help="cestino")
+    actions = group.add_subparsers(dest="action", required=True)
+    actions.add_parser("purge", help="elimina quelle nel cestino da oltre TRASH_RETENTION_DAYS giorni") \
+        .set_defaults(func=_trash_purge)
+
+
 COMMAND_GROUPS: tuple[Callable, ...] = (_add_device_commands, _add_rescan_command,
                                         _add_firmware_commands, _add_password_command,
-                                        _add_unlock_command)
+                                        _add_unlock_command, _add_trash_commands)
 
 
 def build_parser() -> argparse.ArgumentParser:
