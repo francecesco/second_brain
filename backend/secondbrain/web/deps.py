@@ -27,6 +27,8 @@ async def require_csrf(request: Request,
     token = request.headers.get("x-csrf-token")
     if token is None:
         token = (await request.form()).get("csrf")
-    if not isinstance(token, str) or not secrets.compare_digest(token, session.csrf_token):
+    if not isinstance(token, str) or not secrets.compare_digest(
+            token.encode(), session.csrf_token.encode()):
+        # compare_digest rifiuta str non ASCII (TypeError): confrontiamo sempre i byte.
         raise CsrfError
     return session

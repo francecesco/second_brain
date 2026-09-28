@@ -167,7 +167,10 @@ Una pagina renderizzata dal server (Jinja + htmx), usabile da desktop e da telef
 - **Audio** servito con supporto `Range`.
 - **Login:** utente singolo, password impostata da CLI (hash argon2), cookie di sessione
   `HttpOnly`, `Secure` (dietro HTTPS), `SameSite=Lax`, token CSRF sulle azioni. Dopo 5
-  tentativi falliti in 15 minuti, blocco di 15 minuti.
+  tentativi falliti in 15 minuti dallo stesso client (Cf-Connecting-Ip, altrimenti IP),
+  blocco di quel client; oltre 100 falliti in 15 minuti da tutti i client, blocco
+  generale. `set-password` e `secondbrain unlock` azzerano i blocchi. Il login è
+  serializzato (un solo controllo password alla volta).
 
 ## 8. Schema Postgres
 

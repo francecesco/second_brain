@@ -1,12 +1,15 @@
 import io
+import threading
 from datetime import timedelta
 
 import pytest
 from sqlalchemy import func, select
 
+from secondbrain.catalog import make_sessionmaker
 from secondbrain.cli import main
 from secondbrain.models import LoginAttempt, WebSession
-from secondbrain.web.auth import (SESSION_LIFETIME, BadPassword, LockedOut, NotAuthenticated,
+from secondbrain.web.auth import (MAX_FAILURES, MAX_GLOBAL_FAILURES, MAX_PASSWORD_LEN,
+                                  SESSION_LIFETIME, BadPassword, LockedOut, NotAuthenticated,
                                   current_session, login, set_password)
 from secondbrain.web.templating import format_duration, format_size
 from tests.helpers import NOW, PASSWORD, TEST_DB
@@ -42,6 +45,17 @@ def test_login_without_any_user(db):
         login(db, PASSWORD, NOW, None)
 
 
+def test_password_maximum_length_in_set_password(db):
+    with pytest.raises(BadPassword):
+        set_password(db, "x" * (MAX_PASSWORD_LEN + 1), NOW)
+
+
+def test_password_maximum_length_in_login(db, user):
+    with pytest.raises(NotAuthenticated):
+        login(db, "x" * (MAX_PASSWORD_LEN + 1), NOW, None)
+    assert failures(db) == 1
+
+
 def test_lockout_after_five_failures(db, user):
     for _ in range(5):
         with pytest.raises(NotAuthenticated):
@@ -49,6 +63,74 @@ def test_lockout_after_five_failures(db, user):
     with pytest.raises(LockedOut):
         login(db, PASSWORD, NOW, None)  # bloccato anche con la password giusta
     assert login(db, PASSWORD, NOW + timedelta(minutes=16), None)
+
+
+def test_lockout_is_scoped_per_client(db, user):
+    for _ in range(MAX_FAILURES):
+        with pytest.raises(NotAuthenticated):
+            login(db, "sbagliata", NOW, "1.1.1.1")
+    with pytest.raises(LockedOut):
+        login(db, PASSWORD, NOW, "1.1.1.1")
+    assert login(db, PASSWORD, NOW, "2.2.2.2")  # altro client, non bloccato
+
+
+def test_global_backstop_blocks_everyone(db, user):
+    # Sotto la soglia per client (una sola richiesta a testa) ma sopra il tetto globale.
+    for i in range(MAX_GLOBAL_FAILURES):
+        with pytest.raises(NotAuthenticated):
+            login(db, "sbagliata", NOW, f"ip-{i}")
+    with pytest.raises(LockedOut):
+        login(db, PASSWORD, NOW, "ip-mai-vista-prima")
+
+
+def test_set_password_clears_lockouts(db, user):
+    for i in range(MAX_GLOBAL_FAILURES):
+        with pytest.raises(NotAuthenticated):
+            login(db, "sbagliata", NOW, f"ip-{i}")
+    set_password(db, PASSWORD, NOW)
+    db.commit()
+    assert login(db, PASSWORD, NOW, "ip-nuova")
+
+
+def test_cli_unlock_clears_lockouts(monkeypatch, db, user):
+    monkeypatch.setenv("DATABASE_URL", TEST_DB)
+    for i in range(MAX_GLOBAL_FAILURES):
+        with pytest.raises(NotAuthenticated):
+            login(db, "sbagliata", NOW, f"ip-{i}")
+    assert main(["unlock"]) == 0
+    assert login(db, PASSWORD, NOW, "ip-nuova")
+
+
+def test_login_is_serialized_under_concurrency(engine, user):
+    """10 tentativi sbagliati in parallelo, ciascuno con una sessione propria: il lock
+    serializza check-verifica-registrazione, quindi non più di MAX_FAILURES arrivano a
+    eseguire argon2 e a essere registrati prima che scatti il blocco."""
+    sessionmaker = make_sessionmaker(engine)
+    outcomes = []
+    lock = threading.Lock()
+
+    def attempt():
+        with sessionmaker() as s:
+            try:
+                login(s, "sbagliata", NOW, "3.3.3.3")
+                outcome = "ok"
+            except NotAuthenticated:
+                outcome = "NotAuthenticated"
+            except LockedOut:
+                outcome = "LockedOut"
+        with lock:
+            outcomes.append(outcome)
+
+    threads = [threading.Thread(target=attempt) for _ in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert outcomes.count("NotAuthenticated") == MAX_FAILURES
+    assert outcomes.count("LockedOut") == 10 - MAX_FAILURES
+    with sessionmaker() as s:
+        assert failures(s) == MAX_FAILURES
 
 
 def test_success_clears_failures(db, user):
@@ -117,6 +199,12 @@ def test_logout_requires_csrf(client, user, db):
     assert db.scalars(select(WebSession)).all() == []
 
 
+def test_csrf_rejects_non_ascii_token(client, user):
+    client.post("/login", data={"password": PASSWORD}, follow_redirects=False)
+    r = client.post("/logout", data={"csrf": "à" * 10}, follow_redirects=False)
+    assert r.status_code == 403
+
+
 def test_cli_set_password(monkeypatch, db, capsys):
     monkeypatch.setenv("DATABASE_URL", TEST_DB)
     monkeypatch.setattr("sys.stdin", io.StringIO(PASSWORD + "\n"))
@@ -124,6 +212,13 @@ def test_cli_set_password(monkeypatch, db, capsys):
     assert login(db, PASSWORD, NOW, None)
     monkeypatch.setattr("sys.stdin", io.StringIO("corta\n"))
     assert main(["set-password", "--stdin"]) == 1
+
+
+def test_cli_set_password_stdin_strips_crlf(monkeypatch, db):
+    monkeypatch.setenv("DATABASE_URL", TEST_DB)
+    monkeypatch.setattr("sys.stdin", io.StringIO(PASSWORD + "\r\n"))
+    assert main(["set-password", "--stdin"]) == 0
+    assert login(db, PASSWORD, NOW, None)
 
 
 @pytest.mark.parametrize("seconds,text", [(0, "0:00"), (59.6, "1:00"), (125, "2:05"), (600, "10:00")])

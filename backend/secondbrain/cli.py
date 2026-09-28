@@ -18,7 +18,7 @@ from .clock import utcnow
 from .config import ConfigError, Settings, load_settings
 from .naming import DEFAULT_DEVICE_TYPE
 from .rescan import rescan
-from .web.auth import BadPassword, set_password
+from .web.auth import BadPassword, clear_lockouts, set_password
 
 
 class CliError(Exception):
@@ -145,7 +145,7 @@ def _add_firmware_commands(sub) -> None:
 
 def _set_password(args: argparse.Namespace) -> None:
     if args.stdin:
-        password = sys.stdin.readline().rstrip("\n")
+        password = sys.stdin.readline().rstrip("\r\n")
     else:
         password = getpass.getpass("Nuova password: ")
         if getpass.getpass("Ripeti la password: ") != password:
@@ -165,8 +165,21 @@ def _add_password_command(sub) -> None:
     cmd.set_defaults(func=_set_password)
 
 
+def _unlock(args: argparse.Namespace) -> None:
+    with open_session() as (s, _):
+        n = clear_lockouts(s)
+        s.commit()
+    print(f"Sblocco eseguito: rimossi {n} tentativi falliti.")
+
+
+def _add_unlock_command(sub) -> None:
+    sub.add_parser("unlock", help="rimuove i tentativi falliti e sblocca l'accesso") \
+        .set_defaults(func=_unlock)
+
+
 COMMAND_GROUPS: tuple[Callable, ...] = (_add_device_commands, _add_rescan_command,
-                                        _add_firmware_commands, _add_password_command)
+                                        _add_firmware_commands, _add_password_command,
+                                        _add_unlock_command)
 
 
 def build_parser() -> argparse.ArgumentParser:
