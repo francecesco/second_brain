@@ -100,8 +100,9 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 
 ## Stato al 2026-09-29
 
-- `master` allineato con `origin` (`github.com/francecesco/second_brain`, pubblico) fino
-  alla Fase 1a. Il backend è sul branch `backend-fase1b`, merge su decisione dell'autore.
+- Tutto su `master`, compreso il backend (branch `backend-fase1b` unito il 2026-09-29).
+  `origin` (`github.com/francecesco/second_brain`, pubblico) è fermo alla Fase 1a: il
+  push lo fa l'autore.
 - **Hardware e firmware: chiusi**, in attesa della batteria. Firmware sul device: 0.6.3
   (build di test del codice corrente, installata via OTA dal backend; `version.txt` in
   git resta 0.1.0), conosce rete di casa e ufficio.
