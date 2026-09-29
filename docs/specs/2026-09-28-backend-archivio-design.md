@@ -1,7 +1,20 @@
 # Backend Fase 1b — Archivio delle registrazioni — Design / Spec
 
 **Data:** 2026-09-28
-**Stato:** design approvato a sezioni il 2026-09-28, spec da rivedere; piano da scrivere.
+**Stato:** implementato e **verificato col device vero sul Mac il 2026-09-29** (branch
+`backend-fase1b`, piano `docs/plans/2026-09-28-backend-archivio.md`, task 1–13, 252 test
+su Postgres reale). Verificati: upload dal device in LAN senza token (`201`), finder da
+Mac e telefono, login, titolo, cestino, correzione data, OTA pull 0.6.2 → 0.6.3 servito
+dal backend. **Da fare:** Task 14, deploy sulla ZimaBoard con tunnel Cloudflare, e le
+verifiche di §10 che ne dipendono (IP reale del device, `401` senza token dal tunnel).
+Deviazioni/aggiunte emerse in esecuzione: blocco del login per client (`Cf-Connecting-Ip`
+o IP) con tetto globale, login serializzato e comando `secondbrain unlock` (§7); la porta
+è pubblicata solo in IPv4 (un bind IPv6 allargava la regola LAN); `MAX_UPLOAD_BYTES`
+configurabile; compose con nome di progetto `secondbrain`; in `rescan` un sidecar valido
+vince sempre sulla riga di catalogo; nel finder nomi dei giorni ("Lunedì 28") e titolo di
+default per fascia e ora ("Nota del mattino, 10:32"), calcolato e mai salvato, icone nei
+menu. Su Docker Desktop l'app vede l'IP del gateway del bridge (`172.x`), non quello del
+device (README).
 **Dipende da:** `docs/specs/2026-09-23-firmware-capture-sync-design.md` (contratto
 `POST /captures` §6.2, implementato e verificato sul device).
 **Sostituisce:** per la parte backend, §6–8 di `docs/specs/2026-09-14-second-brain-design.md`

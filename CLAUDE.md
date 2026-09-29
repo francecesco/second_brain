@@ -14,11 +14,11 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - **Nessun riferimento all'assistente** nei commit, nelle PR, nel codice, nei commenti,
   nella documentazione, nei nomi di file/branch/tag: niente `Co-Authored-By`, niente
   "Generated with". Questo file è l'unica eccezione, voluta dall'autore.
-- Messaggi di commit in italiano, prefisso `firmware:` o `docs:`, corpo che spiega il
-  perché e, se c'è, cosa è stato verificato sull'hardware.
+- Messaggi di commit in italiano, prefisso `firmware:`, `backend:` o `docs:`, corpo che
+  spiega il perché e, se c'è, cosa è stato verificato sull'hardware.
 - Il remote GitHub lo apre l'autore quando vuole: non creare repo né remote di iniziativa.
-- Branch di lavoro per fase (`firmware-fase0`, `firmware-fase1a`); merge in `master` su
-  decisione dell'autore. Il branch principale si chiama `master`.
+- Branch di lavoro per fase (`firmware-fase0`, `firmware-fase1a`, `backend-fase1b`);
+  merge in `master` su decisione dell'autore. Il branch principale si chiama `master`.
 
 **Codice firmware**
 
@@ -57,10 +57,11 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   Senza cavo dati (USB solo alimentazione) si lavora via Wi-Fi: `POST /ota` per il push,
   `GET /status` per lo stato, OTA pull pubblicando un manifest sul server di test.
 - ESP-IDF v5.3.1 in `~/esp/esp-idf`: `. ~/esp/esp-idf/export.sh` prima di `idf.py`.
-- Server di test sul Mac: `python3 tools/capture_server.py` (porta 8000, `POST /captures`
-  + `GET /firmware/*` da `ota_serve/firmware/`). Il device deve avere in `secrets.h` il
-  base URL del Mac **su quella rete** (a casa `192.168.1.28`, in ufficio `192.168.0.157`,
-  può cambiare col DHCP).
+- Server sul Mac: dal 2026-09-29 il device carica sul backend vero (`cd backend && docker
+  compose up -d`, porta 8000; vedi `backend/README.md`). `tools/capture_server.py` resta
+  come server di prova minimale, ma non va avviato insieme al backend (stessa porta).
+  Il device deve avere in `secrets.h` il base URL del Mac **su quella rete** (a casa
+  `192.168.1.28`, in ufficio `192.168.0.244` il 2026-09-29, cambia col DHCP).
 - Rete di casa: due AP con lo stesso SSID FASTWEB; quello con BSSID `cc:2d:21:5f:59:29`
   non inoltra TCP (ping ok, connessioni in timeout in entrambe le direzioni). Per questo
   la voce di casa in `secrets.h` forza il BSSID del router `54:78:f0:bd:65:eb`.
@@ -69,9 +70,13 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Non c'è batteria collegata: staccando la USB il device si spegne e **l'RTC si azzera**
   (NTP lo risistema al primo sync). Un taglio di alimentazione durante la registrazione
   è il test di recupero dei `.part`.
-- Trappola OTA: se in `ota_serve/firmware/manifest.json` resta una versione più alta di
-  quella flashata, il device si aggiorna a quel binario al primo ciclo. Dopo un flash via
-  USB, rigenerare o rimuovere il manifest.
+- Trappola OTA: se sul server resta pubblicata una versione più alta di quella flashata
+  (`secondbrain firmware list` sul backend, `ota_serve/firmware/manifest.json` con
+  `capture_server.py`), il device si aggiorna a quel binario al primo ciclo. Dopo un flash
+  via USB, `secondbrain firmware rollback` o pubblicare la versione flashata.
+- OTA col backend: `docker compose cp <bin> app:/tmp/fw.bin` e `docker compose exec app
+  secondbrain firmware publish /tmp/fw.bin --version X.Y.Z`; il manifest è generato
+  dalla release corrente.
 - Audio: l'amplificatore dell'altoparlante (GPIO46) è **attivo alto** e impiega centinaia
   di ms a svegliarsi; il canale I2S TX va aperto solo per il beep (il full-duplex spostava
   il microfono sullo slot sbagliato) con `auto_clear` (altrimenti in underrun ripete
@@ -93,33 +98,38 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Per riavviare un device fermo in DEV MODE: pressione di PWR (dal firmware 0.4.0), oppure
   push di un firmware, oppure `esptool ... --after hard_reset chip_id` con il cavo dati.
 
-## Stato al 2026-09-28 (fine giornata)
+## Stato al 2026-09-29
 
-- Tutto su `master`, allineato con `origin` (`github.com/francecesco/second_brain`, pubblico).
-- **Hardware e firmware: chiusi**, in attesa della batteria. Collaudo completo superato il
-  2026-09-28 (vedi Storico). Firmware sul device: 0.6.2 (build di test del codice corrente;
-  `version.txt` in git resta 0.1.0), coda vuota, conosce rete di casa e ufficio.
+- `master` allineato con `origin` (`github.com/francecesco/second_brain`, pubblico) fino
+  alla Fase 1a. Il backend è sul branch `backend-fase1b`, merge su decisione dell'autore.
+- **Hardware e firmware: chiusi**, in attesa della batteria. Firmware sul device: 0.6.3
+  (build di test del codice corrente, installata via OTA dal backend; `version.txt` in
+  git resta 0.1.0), conosce rete di casa e ufficio.
 - Batteria: da acquistare con connettore MX1.25 2 pin (polarità da verificare). All'arrivo:
   prova di mantenimento (acceso dopo il rilascio di PWR e dopo il deep sleep), poi misure
   e taratura (vedi Idee future).
-- Sul Mac di casa (192.168.1.28) gira `tools/capture_server.py` sulla porta 8000; le
-  catture di prova sono in `firmware/captures_inbox/` e `captures_inbox_old/` (gitignored).
-- `backend/` vuoto.
+- **Backend Fase 1b** (`backend/`, spec `docs/specs/2026-09-28-backend-archivio-design.md`):
+  implementato e verificato col device vero sul Mac (upload, finder, OTA). Gira sul Mac
+  in Docker sulla porta 8000 con `ALLOW_UNAUTHENTICATED_LAN=true`; `backend/.env` e
+  `backend/data/` sono locali e gitignored. Manca il Task 14: deploy sulla ZimaBoard.
+- Le catture di prova di `capture_server.py` sono state cancellate il 2026-09-29.
 
-## Prossima sessione: Fase 1b, backend `secondbrain`
+## Prossima sessione
 
-1. Rileggere `docs/specs/2026-09-14-second-brain-design.md` §6–8 e il piano
-   `docs/plans/2026-09-14-secondbrain-backend.md` (10 task TDD, mai eseguito).
-2. Riallineare piano e spec al contratto reale del device
-   (`docs/specs/2026-09-23-firmware-capture-sync-design.md` §6.2 e README): corpo WAV
-   grezzo, metadati negli header `X-Capture-*`, `X-Device-Id`, `X-Firmware-Version`,
-   `X-Battery-*`, `X-Power-Source`; `201` accettata, `409` duplicato; più
-   `GET /firmware/manifest.json` per l'OTA. Il piano originale parlava di multipart.
-3. Decisioni da prendere con l'autore all'inizio: dove gira durante lo sviluppo (Mac o
-   subito ZimaBoard/CasaOS in Docker), modello faster-whisper e lingua, formato e
-   posizione delle note nel vault, cosa fare dell'audio originale.
-4. Workflow come per il firmware: spec approvata a sezioni → piano a task → esecuzione
-   con test, commit piccoli, verifica end-to-end con il device vero.
+1. **Deploy sulla ZimaBoard** (Task 14 del piano `docs/plans/2026-09-28-backend-archivio.md`),
+   da casa. Servono dall'autore: dominio Cloudflare e hostname (proposti `brain.<dominio>`
+   per la UI, `ingest.<dominio>` per i dispositivi), `utente@host` SSH, cartella dati
+   (proposta `/DATA/AppData/secondbrain`). Verifiche: `X-Forwarded-Proto` dal tunnel,
+   Bot Fight Mode spento sull'hostname dei dispositivi, IP reale del device nei log (non
+   `172.x`), `401` senza token dal tunnel, login da rete mobile. Poi `secrets.h` punta
+   alla ZimaBoard per la rete di casa.
+2. **Fase successiva del backend: trascrizione** (da progettare: spec a sezioni). Da
+   decidere con l'autore: modello faster-whisper e lingua, trascrizione all'arrivo o in
+   coda, dove gira (CPU modesta della ZimaBoard), formato del file nella cartella del
+   giorno, titolo automatico.
+3. **Firmware "HTTPS + token"** (spec separata, punti in §11 della spec backend): prima
+   di tutto 401/403/429 come errori temporanei (oggi ogni 4xx manda il file in
+   `rejected/`), poi TLS e token. Da provare col tunnel attivo.
 
 ## Storico
 
@@ -179,14 +189,24 @@ corretto con hold in deep sleep. Riconoscimento USB/batteria per stima (nessun s
 hardware), percentuale da curva LiPo tipica, soglie solo a batteria, display "USB" o
 "bat NN%", header `X-Power-Source`. Da tarare con la batteria reale.
 
+**2026-09-28/29 — Fase 1b, backend archivio** (`docs/specs/2026-09-28-backend-archivio-design.md`,
+piano in 14 task). Decisioni: niente AI né Obsidian in questa fase; FastAPI + Postgres in
+Docker; i file sono la verità (`archive/AAAA/MM/GG/HHMMSS_<device>.wav` + sidecar JSON) e
+Postgres è un catalogo ricostruibile con `rescan`; UI finder con login singolo, titolo,
+cestino recuperabile, correzione data, filtro per dispositivo; accesso da fuori con
+tunnel Cloudflare; token per dispositivo, upload senza token solo dalla LAN; OTA servito
+dal backend. Emersi in revisione: blocco del login per client (un blocco globale era un
+DoS), login serializzato, bypass dell'hostname dei dispositivi col punto finale, rescan
+che cancellava righe con sidecar rotto, pubblicazione IPv6 che allargava la regola LAN.
+Su Docker Desktop l'app vede l'IP del gateway, non quello del device. Verificato col
+device vero: upload, finder, OTA 0.6.2 → 0.6.3. Poi leggibilità: nomi dei giorni, titolo
+di default per fascia del giorno, icone.
+
 ## Idee future e cose rimandate
 
-- **Fase 1b — backend** `secondbrain`: implementare il contratto `POST /captures` di
-  `docs/specs/2026-09-23-firmware-capture-sync-design.md` §6.2 (idempotente su
-  `X-Capture-Id`, `409` sui duplicati), trascrizione con faster-whisper, nota `.md` con
-  frontmatter nel vault, indice SQLite/FTS5, endpoint `GET /firmware/manifest.json` per
-  l'OTA. Il piano TDD esiste già; va allineato al contratto header-based (la spec di
-  progetto parlava di multipart).
+- **Backend dopo l'archivio**: trascrizione con faster-whisper, titolo automatico, ricerca
+  nel testo, poi eventualmente note nel vault Obsidian. I file derivati stanno nella
+  cartella del giorno con lo stesso nome base dell'audio.
 - **Fase 2 — display glanceable**: `GET /digest.bmp` 200×200 1-bit renderizzato dal
   server, cache su SD, mostrato al posto della schermata di stato.
 - **Refresh parziale e-Paper**: contatore che scorre durante la registrazione, meno
