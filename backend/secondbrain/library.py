@@ -13,9 +13,8 @@ from sqlalchemy.orm import Session
 from .archive import TRASH, Archive
 from .models import Capture
 from .naming import day_dir, local_day
+from .notefile import MAX_TITLE_LEN
 from .sidecar import capture_to_sidecar
-
-MAX_TITLE_LEN = 200
 
 
 class NotFound(LookupError):
