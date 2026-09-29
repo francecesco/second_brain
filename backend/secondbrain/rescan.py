@@ -84,14 +84,21 @@ def rescan(s: Session, archive: Archive, now: datetime) -> RescanReport:
             continue
         entries[values["id"]] = values
 
+    # Un rel_path già rivendicato da un sidecar valido (con un id diverso, es. modificato
+    # a mano) non va mai ricostruito dal catalogo: vince il sidecar, come per ogni altro
+    # sidecar valido.
+    claimed_rel_paths = {values["rel_path"] for values in entries.values()}
+
     # Righe la cui riscrittura è fallita sopra (sidecar illeggibile o sparito): se il WAV
-    # esiste ancora si ricostruisce il sidecar dal catalogo, altrimenti si toglie la riga.
-    # Va fatto prima di segnalare i WAV senza sidecar, così uno appena ricostruito non
-    # viene più segnalato come mancante nello stesso giro.
+    # esiste ancora e nessun sidecar valido rivendica la stessa posizione, si ricostruisce
+    # il sidecar dal catalogo; altrimenti (WAV sparito, o la posizione è rivendicata da un
+    # sidecar valido con un altro id) si toglie la riga. Va fatto prima di segnalare i WAV
+    # senza sidecar, così uno appena ricostruito non viene più segnalato come mancante
+    # nello stesso giro.
     for capture in s.scalars(select(Capture)).all():
         if capture.id in entries:
             continue
-        if archive.abs(capture.rel_path).is_file():
+        if capture.rel_path not in claimed_rel_paths and archive.abs(capture.rel_path).is_file():
             entries[capture.id] = _restore_from_catalog(archive, capture, report)
         else:
             s.delete(capture)

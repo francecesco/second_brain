@@ -164,6 +164,46 @@ def test_restores_sidecar_when_deleted_but_wav_still_on_disk(archive, db):
     assert archive.read_sidecar(cap.rel_path) == capture_to_sidecar(cap)
 
 
+def test_sidecar_id_mismatch_lets_sidecar_wins_over_old_row(archive, db):
+    """Un sidecar valido ma con un id diverso da quello della riga che possiede oggi
+    quel rel_path (es. modificato a mano) rivendica la posizione: vince il sidecar, la
+    vecchia riga si toglie e il sidecar non va sovrascritto con i dati della vecchia
+    riga (altrimenti si perderebbe il nuovo id, o peggio il rel_path finirebbe
+    rivendicato due volte)."""
+    cap = first(db)
+    old_id = cap.id
+    new_id = uuid.uuid4()
+    data = archive.read_sidecar(cap.rel_path)
+    data["id"] = str(new_id)
+    archive.write_sidecar(cap.rel_path, data)
+    report = rescan(db, archive, NOW)
+    assert (report.removed, report.added) == (1, 1)
+    db.commit()
+    assert db.get(Capture, old_id) is None
+    new_cap = db.get(Capture, new_id)
+    assert new_cap is not None and new_cap.rel_path == cap.rel_path
+    assert archive.read_sidecar(cap.rel_path)["id"] == str(new_id)
+
+
+def test_restores_sidecar_when_broken_and_trashed(archive, db):
+    """Combinazione non ancora coperta: riga nel cestino con sidecar corrotto. Deve
+    restare nel cestino con il suo trashed_at, non tornare in archivio."""
+    cap = first(db)
+    new_rel = archive.move(cap.rel_path, ".trash/2026/09/23")
+    rescan(db, archive, NOW)  # primo giro: marca trashed_at e sincronizza il sidecar
+    db.commit()
+    db.refresh(cap)
+    archive.abs(new_rel).with_suffix(".json").write_text("{non json")
+    report = rescan(db, archive, NOW + timedelta(days=1))
+    assert report.removed == 0
+    assert any("sidecar ricostruito dal catalogo" in p for p in report.problems)
+    db.commit()
+    db.refresh(cap)
+    assert db.get(Capture, cap.id) is not None
+    assert cap.trashed_at == NOW
+    assert archive.read_sidecar(new_rel) == capture_to_sidecar(cap)
+
+
 def test_sidecar_without_wav(archive, db, settings):
     """A .json sidecar without its .wav file is reported and not imported."""
     # Create a sidecar without its WAV
