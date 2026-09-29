@@ -18,12 +18,13 @@ def test_redact_removes_known_secrets_and_obviously_fake_key_shapes():
 
 
 def test_redact_matches_realistic_length_fake_keys_too():
-    # Stessa lunghezza indicativa di una chiave vera, ma con "test" dentro: non è la forma
-    # esatta di una chiave reale, resta comunque presa dal pattern.
-    text = ("gsk_test1234567890abcdefghijklmnopqrstuvwxyz1234567890ABCD "
-            "sk-test1234567890abcdefghijklmnopqrstuvwxyz")
-    out = base.redact(text)
-    assert "test1234567890abcdefghijklmnopqrstuvwxyz" not in out
+    # Lunghezza complessiva paragonabile a una chiave vera, ma a segmenti separati da `_`/`-`:
+    # nessuna sequenza alfanumerica ininterrotta assomiglia a una chiave reale (Ruling P2),
+    # eppure il pattern (che accetta anche `_`/`-` nel corpo) la prende per intero.
+    groq_like = "gsk_test_" + "_".join(["a1b2c3d4", "e5f6g7h8", "i9j0k1l2", "m3n4o5p6", "q7r8s9t0"])
+    openai_like = "sk-test-" + "-".join(["a1b2c3d4", "e5f6g7h8", "i9j0k1l2", "m3n4o5p6", "q7r8s9t0"])
+    out = base.redact(f"{groq_like} {openai_like}")
+    assert "a1b2c3d4" not in out and "q7r8s9t0" not in out
 
 
 def test_redact_sk_pattern_has_a_word_boundary():
