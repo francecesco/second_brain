@@ -4,12 +4,10 @@ import logging
 import httpx
 import pytest
 
-from secondbrain.ai.audio import AudioSource
 from secondbrain.ai.base import ContentError, ServiceError
 from secondbrain.ai.openai_compatible import OpenAICompatible
 from secondbrain.ai.registry import PROVIDER_SPECS
-from tests.ai_fakes import Recorder
-from tests.helpers import make_wav
+from tests.ai_fakes import Recorder, audio  # noqa: F401 - fixture riusata
 
 KEY = "gsk_test_secret_0123456789abcdef"
 TEXT_MODEL_FOR_TESTS = "gpt-test"
@@ -23,13 +21,6 @@ def make(name, recorder, **over):
     fields.update(over)
     return OpenAICompatible(name, client=httpx.Client(transport=httpx.MockTransport(recorder)),
                             **fields)
-
-
-@pytest.fixture
-def audio(tmp_path):
-    wav = tmp_path / "091530_70041dd8263c.wav"
-    wav.write_bytes(make_wav(1.0))
-    return AudioSource(wav, tmp_path)
 
 
 def chat(content):

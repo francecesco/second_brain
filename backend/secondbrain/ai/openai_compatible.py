@@ -5,37 +5,21 @@ formati audio accettati. La chiave va nell'header Authorization.
 """
 import httpx
 
-from .audio import AudioError, AudioSource
-from .base import (CHECK_TIMEOUT, ENRICH_TIMEOUT, TRANSCRIBE_TIMEOUT, CheckResult, ContentError,
-                   Enrichment, ProviderError, ServiceError, Transcript, check_models,
-                   enrich_prompt, error_code, http_detail, json_body, parse_enrichment, send)
+from .audio import AudioSource
+from .base import (CHECK_TIMEOUT, ENRICH_TIMEOUT, OK, TRANSCRIBE_TIMEOUT, CheckResult,
+                   ContentError, Enrichment, ProviderBase, ProviderError, ServiceError,
+                   Transcript, check_request_size, enrich_prompt, error_code, http_detail,
+                   json_body, parse_enrichment, prepare_audio, run_check)
 
 # Sull'audio questi codici dicono "il file non va bene": nessun altro provider.
 AUDIO_CONTENT_STATUSES = (400, 413, 415, 422)
 # ...tranne quando il corpo dice che il problema è la chiave o il modello.
 SERVICE_ERROR_CODES = ("invalid_api_key", "model_not_found", "model_decommissioned")
-OK = 200
 
 
-class OpenAICompatible:
-    def __init__(self, name: str, *, api_key: str, base_url: str, transcribe_model: str,
-                 text_model: str, audio_formats: tuple[str, ...], max_bytes: int,
-                 client: httpx.Client):
-        self.name = name
-        self._key = api_key
-        self.base_url = base_url.rstrip("/")
-        self.transcribe_model = transcribe_model
-        self.text_model = text_model
-        self.audio_formats = audio_formats
-        self.max_bytes = max_bytes
-        self._client = client
-
+class OpenAICompatible(ProviderBase):
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._key}"}
-
-    def _send(self, method: str, path: str, **kwargs) -> httpx.Response:
-        return send(self._client, method, f"{self.base_url}{path}", provider=self.name,
-                    secrets=(self._key,), headers=self._headers(), **kwargs)
 
     def _error(self, response: httpx.Response, *, audio: bool) -> ProviderError:
         detail = http_detail(response, (self._key,))
@@ -45,14 +29,8 @@ class OpenAICompatible:
         return ServiceError(self.name, detail)
 
     def transcribe(self, audio: AudioSource, language: str) -> Transcript:
-        try:
-            path, mime = audio.prepare(self.audio_formats)
-        except AudioError as exc:
-            raise ContentError(self.name, str(exc)) from None
-        size = path.stat().st_size
-        if size > self.max_bytes:
-            raise ContentError(self.name, f"audio di {size} byte oltre il limite di "
-                                          f"{self.max_bytes}")
+        path, mime = prepare_audio(self.name, audio, self.audio_formats)
+        check_request_size(self.name, path.stat().st_size, self.max_bytes, what="audio")
         with open(path, "rb") as f:
             response = self._send(
                 "POST", "/audio/transcriptions", timeout=TRANSCRIBE_TIMEOUT,
@@ -88,14 +66,11 @@ class OpenAICompatible:
 
     def check(self) -> CheckResult:
         """"Prova": elenco dei modelli, chiamata gratuita che verifica anche la chiave."""
-        try:
-            response = self._send("GET", "/models", timeout=CHECK_TIMEOUT)
-            if response.status_code != OK:
-                return CheckResult(False, self._error(response, audio=False).detail)
-            body = json_body(self.name, response)
-        except ServiceError as exc:
-            return CheckResult(False, exc.detail)
-        data = body.get("data")
-        models = data if isinstance(data, list) else []
-        ids = {str(m.get("id")) for m in models if isinstance(m, dict)}
-        return check_models(ids, (self.transcribe_model, self.text_model))
+        def extract_names(body: dict) -> set[str]:
+            data = body.get("data")
+            models = data if isinstance(data, list) else []
+            return {str(m.get("id")) for m in models if isinstance(m, dict)}
+
+        return run_check(self.name, (self._key,),
+                         lambda: self._send("GET", "/models", timeout=CHECK_TIMEOUT),
+                         extract_names, (self.transcribe_model, self.text_model))

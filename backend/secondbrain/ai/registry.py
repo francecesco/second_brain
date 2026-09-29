@@ -5,6 +5,12 @@ pagina impostazioni e si controllano col pulsante "Prova".
 """
 from dataclasses import dataclass, field
 
+import httpx
+
+from .base import Provider
+from .gemini import Gemini
+from .openai_compatible import OpenAICompatible
+
 KIND_OPENAI_COMPATIBLE = "openai_compatible"
 KIND_GEMINI = "gemini"
 MB = 1000 * 1000  # i provider dichiarano i limiti in MB decimali: così si resta sotto
@@ -51,3 +57,12 @@ class ProviderConfig:
     @property
     def spec(self) -> ProviderSpec:
         return PROVIDER_SPECS[self.name]
+
+
+def build_provider(config: ProviderConfig, client: httpx.Client) -> Provider:
+    """L'adattatore giusto per il provider, con i modelli scelti nelle impostazioni."""
+    spec = config.spec
+    adapter = Gemini if spec.kind == KIND_GEMINI else OpenAICompatible
+    return adapter(config.name, api_key=config.api_key, base_url=spec.base_url,
+                   transcribe_model=config.transcribe_model, text_model=config.text_model,
+                   audio_formats=spec.audio_formats, max_bytes=spec.max_bytes, client=client)

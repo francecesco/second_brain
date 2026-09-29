@@ -10,8 +10,9 @@ header, niente corpo della richiesta, lunghezza limitata.
 """
 import json
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 import httpx
@@ -19,8 +20,9 @@ import httpx
 from ..languages import language_name
 from ..notefile import (MAX_SUMMARY_LEN, MAX_TAGS, MAX_TITLE_LEN, EnrichmentInvalid,
                         validate_enrichment)
-from .audio import AudioSource
+from .audio import AudioError, AudioSource
 
+OK = 200
 MAX_ERROR_LEN = 300
 REDACTED = "***"
 KEY_PATTERNS = (
@@ -137,6 +139,54 @@ def send(client: httpx.Client, method: str, url: str, *, provider: str,
                                             secrets)) from None
 
 
+class ProviderBase:
+    """Campi comuni e invio HTTP dei due adattatori (OpenAI-compatibile e Gemini, spec §4).
+
+    Ogni sottoclasse implementa solo `_headers` (dove va la chiave) e la classificazione
+    degli errori: il resto (campi del costruttore, preparazione dell'audio, invio della
+    richiesta, struttura di "Prova") è qui.
+    """
+
+    def __init__(self, name: str, *, api_key: str, base_url: str, transcribe_model: str,
+                text_model: str, audio_formats: tuple[str, ...], max_bytes: int,
+                client: httpx.Client):
+        self.name = name
+        self._key = api_key
+        self.base_url = base_url.rstrip("/")
+        self.transcribe_model = transcribe_model
+        self.text_model = text_model
+        self.audio_formats = audio_formats
+        self.max_bytes = max_bytes
+        self._client = client
+
+    def _headers(self) -> dict[str, str]:
+        raise NotImplementedError
+
+    def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        headers = self._headers() | kwargs.pop("headers", {})
+        return send(self._client, method, f"{self.base_url}{path}", provider=self.name,
+                   secrets=(self._key,), headers=headers, **kwargs)
+
+
+def prepare_audio(provider: str, audio: AudioSource,
+                  formats: Sequence[str]) -> tuple[Path, str]:
+    """(file, tipo MIME) nel primo formato accettato che si riesce a produrre.
+
+    Un audio illeggibile o senza formato accettato è un problema dell'audio, non del
+    servizio: `ContentError`, non `AudioError`.
+    """
+    try:
+        return audio.prepare(formats)
+    except AudioError as exc:
+        raise ContentError(provider, str(exc)) from None
+
+
+def check_request_size(provider: str, size: int, max_bytes: int, *, what: str) -> None:
+    """Solleva `ContentError` (nessuna richiesta di rete) se `size` supera `max_bytes`."""
+    if size > max_bytes:
+        raise ContentError(provider, f"{what} di {size} byte oltre il limite di {max_bytes}")
+
+
 def json_body(provider: str, response: httpx.Response) -> dict[str, Any]:
     try:
         body = response.json()
@@ -197,3 +247,20 @@ def check_models(available: set[str], wanted: Iterable[str]) -> CheckResult:
     if not wanted:
         return CheckResult(True, "Chiave valida")
     return CheckResult(True, f"Chiave valida; modelli disponibili: {', '.join(wanted)}")
+
+
+def run_check(provider: str, secrets: Iterable[str], request: Callable[[], httpx.Response],
+             extract_names: Callable[[dict[str, Any]], set[str]],
+             wanted: Iterable[str]) -> CheckResult:
+    """Struttura comune di "Prova": una richiesta, un errore non-200 o di rete diventa
+    `CheckResult(False, ...)`, altrimenti si confrontano i modelli voluti con quelli
+    elencati dal provider (`extract_names` sa leggere la forma della sua risposta).
+    """
+    try:
+        response = request()
+        if response.status_code != OK:
+            return CheckResult(False, http_detail(response, secrets))
+        body = json_body(provider, response)
+    except ServiceError as exc:
+        return CheckResult(False, exc.detail)
+    return check_models(extract_names(body), wanted)

@@ -1,5 +1,18 @@
 """Provider e transport finti per i test dell'elaborazione AI: nessun test tocca la rete."""
 import httpx
+import pytest
+
+from secondbrain.ai.audio import AudioSource
+
+from .helpers import make_wav
+
+
+@pytest.fixture
+def audio(tmp_path):
+    """Un `AudioSource` di 1 s pronto per un adattatore, come lo vede il worker."""
+    wav = tmp_path / "091530_70041dd8263c.wav"
+    wav.write_bytes(make_wav(1.0))
+    return AudioSource(wav, tmp_path)
 
 
 class Recorder:
