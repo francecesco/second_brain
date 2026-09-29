@@ -10,7 +10,7 @@ from .. import catalog
 from ..models import Capture, WebSession
 from .context import base_context, clean_device, page_context
 from .deps import get_db, require_login
-from .templating import MONTHS, templates
+from .templating import MONTHS, templates, weekday_label
 
 router = APIRouter()
 
@@ -47,7 +47,8 @@ def browse_month(request: Request, year: int = Path(ge=1970, le=9999),
                  db: Session = Depends(get_db), session: WebSession = Depends(require_login)):
     ctx = page_context(request, db, session, clean_device(device), year, month)
     qs = ctx["qs"]
-    items = [(str(d), n, f"/browse/{year}/{month:02d}/{d:02d}{qs}") for d, n in ctx["tree"]["days"]]
+    items = [(weekday_label(date(year, month, d)), n, f"/browse/{year}/{month:02d}/{d:02d}{qs}")
+             for d, n in ctx["tree"]["days"]]
     crumbs = [("Archivio", f"/browse{qs}"), (str(year), f"/browse/{year}{qs}"),
               (MONTHS[month - 1], None)]
     return templates.TemplateResponse(request, "grid.html", ctx | {"crumbs": crumbs, "items": items})
@@ -66,7 +67,7 @@ def browse_day(request: Request, year: int = Path(ge=1970, le=9999),
     ctx = page_context(request, db, session, device, year, month)
     qs = ctx["qs"]
     crumbs = [("Archivio", f"/browse{qs}"), (str(year), f"/browse/{year}{qs}"),
-              (MONTHS[month - 1], f"/browse/{year}/{month:02d}{qs}"), (str(day), None)]
+              (MONTHS[month - 1], f"/browse/{year}/{month:02d}{qs}"), (weekday_label(the_day), None)]
     return templates.TemplateResponse(request, "day.html", ctx | {
         "crumbs": crumbs, "day_num": day, "captures": catalog.list_day(db, the_day, device)})
 

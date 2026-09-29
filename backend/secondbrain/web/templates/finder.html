@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block body %}
 <header class="top">
   <a class="brand" href="/browse{{ qs }}">Second Brain</a>
@@ -9,10 +10,10 @@
     </select>
   </form>
   <nav>
-    <a href="/fix">Da sistemare{% if estimated_count %} ({{ estimated_count }}){% endif %}</a>
-    <a href="/trash">Cestino</a>
-    <a href="/devices">Dispositivi</a>
-    <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Esci</button></form>
+    <a href="/fix" aria-label="Da sistemare" title="Da sistemare">{{ icon("fix") }}<span class="label">Da sistemare{% if estimated_count %} ({{ estimated_count }}){% endif %}</span></a>
+    <a href="/trash" aria-label="Cestino" title="Cestino">{{ icon("trash") }}<span class="label">Cestino</span></a>
+    <a href="/devices" aria-label="Dispositivi" title="Dispositivi">{{ icon("devices") }}<span class="label">Dispositivi</span></a>
+    <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" aria-label="Esci" title="Esci">{{ icon("logout") }}<span class="label">Esci</span></button></form>
   </nav>
 </header>
 <div class="layout">
@@ -29,7 +30,7 @@
           {% if m == month and tree.days %}
             <ul>
             {% for d, dn in tree.days %}
-              <li><a href="/browse/{{ y }}/{{ '%02d' % m }}/{{ '%02d' % d }}{{ qs }}"{% if d == day_num %} class="current"{% endif %}>{{ d }}</a> <span class="count">{{ dn }}</span></li>
+              <li><a href="/browse/{{ y }}/{{ '%02d' % m }}/{{ '%02d' % d }}{{ qs }}"{% if d == day_num %} class="current"{% endif %}>{{ weekday_short(date(y, m, d)) }}</a> <span class="count">{{ dn }}</span></li>
             {% endfor %}
             </ul>
           {% endif %}

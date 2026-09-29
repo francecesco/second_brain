@@ -1,3 +1,4 @@
+{% from "_icons.html" import icon %}
 <audio controls preload="none" src="/captures/{{ c.id }}/audio"></audio>
 <dl>
   <dt>Registrata</dt><dd>{{ local(c.recorded_at) }}{% if c.date_estimated %} <span class="badge">stimata: ora di ricezione</span>{% endif %}</dd>
@@ -7,19 +8,19 @@
   <dt>Alimentazione</dt><dd>{% if c.power_source == 'usb' %}USB{% elif c.power_source == 'battery' %}batteria{% if c.battery_pct is not none %} {{ c.battery_pct }} %{% endif %}{% else %}—{% endif %}{% if c.battery_v %} · {{ '%.2f'|format(c.battery_v) }} V{% endif %}</dd>
   <dt>ID cattura</dt><dd class="mono">{{ c.capture_id }}</dd>
   <dt>SHA-256</dt><dd class="mono">{{ c.sha256 }}</dd>
-  <dt>File</dt><dd><ul class="files">{% for name in files %}<li><a href="/captures/{{ c.id }}/files/{{ name }}">{{ name }}</a></li>{% endfor %}</ul></dd>
+  <dt>File</dt><dd><ul class="files">{% for name in files %}<li><a href="/captures/{{ c.id }}/files/{{ name }}" aria-label="Scarica {{ name }}" title="Scarica {{ name }}">{{ icon("download") }}{{ name }}</a></li>{% endfor %}</ul></dd>
 </dl>
 {% if not c.trashed_at %}
 <div class="actions">
   <form hx-post="/captures/{{ c.id }}/title" hx-target="#row-{{ c.id }}" hx-swap="outerHTML">
-    <input name="title" value="{{ c.title or '' }}" placeholder="Titolo" maxlength="200" aria-label="Titolo">
-    <button type="submit">Salva titolo</button>
+    <input name="title" value="{{ c.title or '' }}" placeholder="{{ default_title(c.recorded_at, tz) }}" maxlength="200" aria-label="Titolo">
+    <button type="submit" aria-label="Salva titolo" title="Salva titolo">{{ icon("save") }}<span class="label">Salva titolo</span></button>
   </form>
   <form hx-post="/captures/{{ c.id }}/recorded-at">
     <input type="datetime-local" name="recorded_at" step="1" required aria-label="Data e ora" value="{{ c.recorded_at.astimezone(tz).strftime('%Y-%m-%dT%H:%M:%S') }}">
-    <button type="submit">Correggi data/ora</button>
+    <button type="submit" aria-label="Correggi data/ora" title="Correggi data/ora">{{ icon("calendar") }}<span class="label">Correggi data/ora</span></button>
   </form>
-  <button type="button" hx-post="/captures/{{ c.id }}/trash" hx-target="#row-{{ c.id }}" hx-swap="outerHTML" hx-confirm="Spostare la registrazione nel cestino?">Cestino</button>
+  <button type="button" hx-post="/captures/{{ c.id }}/trash" hx-target="#row-{{ c.id }}" hx-swap="outerHTML" hx-confirm="Spostare la registrazione nel cestino?" aria-label="Cestino" title="Cestino">{{ icon("trash") }}<span class="label">Cestino</span></button>
 </div>
 {% endif %}
-<button type="button" onclick="this.closest('.detail').innerHTML=''">Chiudi</button>
+<button type="button" onclick="this.closest('.detail').innerHTML=''" aria-label="Chiudi" title="Chiudi">{{ icon("close") }}<span class="label">Chiudi</span></button>

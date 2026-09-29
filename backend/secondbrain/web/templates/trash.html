@@ -1,4 +1,5 @@
 {% extends "finder.html" %}
+{% from "_icons.html" import icon %}
 {% block main %}
 <p class="empty">Le registrazioni nel cestino si eliminano da sole dopo {{ retention_days }} giorni.</p>
 {% if captures %}
@@ -7,13 +8,13 @@
 {% for c in captures %}
 <tr>
   <td>{{ local(c.recorded_at) }}</td>
-  <td>{{ c.title or 'senza titolo' }}</td>
+  <td>{{ c.title or default_title(c.recorded_at, tz) }}</td>
   <td>{{ device_names.get(c.device_id, c.device_id) }}</td>
   <td>{{ local(c.trashed_at) }}</td>
   <td class="actions">
-    <a href="/captures/{{ c.id }}/audio">Ascolta</a>
-    <form method="post" action="/trash/{{ c.id }}/restore"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Ripristina</button></form>
-    <form method="post" action="/trash/{{ c.id }}/delete" onsubmit="return confirm('Eliminare definitivamente? Non si può annullare.')"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Elimina</button></form>
+    <a href="/captures/{{ c.id }}/audio" aria-label="Ascolta" title="Ascolta">{{ icon("listen") }}<span class="label">Ascolta</span></a>
+    <form method="post" action="/trash/{{ c.id }}/restore"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" aria-label="Ripristina" title="Ripristina">{{ icon("restore") }}<span class="label">Ripristina</span></button></form>
+    <form method="post" action="/trash/{{ c.id }}/delete" onsubmit="return confirm('Eliminare definitivamente? Non si può annullare.')"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" aria-label="Elimina" title="Elimina">{{ icon("delete") }}<span class="label">Elimina</span></button></form>
   </td>
 </tr>
 {% endfor %}

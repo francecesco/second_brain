@@ -1,7 +1,7 @@
 <div class="row" id="row-{{ c.id }}">
   <button type="button" class="row-main" hx-get="/captures/{{ c.id }}" hx-target="#detail-{{ c.id }}">
     <span class="time">{% if show_day %}{{ c.recorded_at.astimezone(tz).strftime('%d/%m/%Y') }} {% endif %}{{ c.recorded_at.astimezone(tz).strftime('%H:%M:%S') }}</span>
-    <span class="title">{{ c.title or 'senza titolo' }}</span>
+    <span class="title">{{ c.title or default_title(c.recorded_at, tz) }}</span>
     {% if c.date_estimated %}<span class="badge">data stimata</span>{% endif %}
     <span class="meta">{{ device_names.get(c.device_id, c.device_id) }} · {{ c.duration_s|duration }} · {{ c.size_bytes|size }}</span>
   </button>

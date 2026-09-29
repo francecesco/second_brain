@@ -34,7 +34,44 @@ def test_month_lists_days(recordings):
 def test_day_lists_recordings_in_time_order(recordings):
     text = get(recordings, "/browse/2026/09/23").text
     assert text.index("10:00:00") < text.index("21:15:30")
-    assert "senza titolo" in text
+    assert "Nota della sera, 21:15" in text
+    assert "senza titolo" not in text
+
+
+def test_month_grid_uses_weekday_labels(recordings):
+    # 2026-09-23 è mercoledì.
+    text = get(recordings, "/browse/2026/09").text
+    assert "Mercoledì 23" in text
+
+
+def test_day_tree_uses_short_weekday_labels(recordings):
+    text = get(recordings, "/browse/2026/09/23").text
+    assert "mer 23" in text
+
+
+def test_day_breadcrumb_uses_weekday_label(recordings):
+    text = get(recordings, "/browse/2026/09/23").text
+    assert '<nav class="crumbs">' in text and "Mercoledì 23" in text.split('<nav class="crumbs">')[1].split("</nav>")[0]
+
+
+def test_title_shown_instead_of_default_once_set(recordings, db):
+    cap = capture_by(db, "cap_20260923_191530")
+    r = recordings.client.post(f"/captures/{cap.id}/title", data={"title": "Idea"},
+                               headers={"X-CSRF-Token": recordings.csrf, "HX-Request": "true"})
+    assert "Idea" in r.text and "Nota della sera, 21:15" not in r.text
+
+
+def test_detail_shows_default_title_as_placeholder(recordings, db):
+    cap = capture_by(db, "cap_20260923_191530")
+    text = get(recordings, f"/captures/{cap.id}").text
+    assert 'placeholder="Nota della sera, 21:15"' in text
+    assert 'value="Nota della sera, 21:15"' not in text
+
+
+def test_nav_has_accessible_icons(recordings):
+    text = get(recordings, "/browse").text
+    assert 'aria-label="Cestino"' in text
+    assert '<svg' in text and 'class="icon"' in text
 
 
 def test_device_filter(recordings):
