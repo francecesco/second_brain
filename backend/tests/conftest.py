@@ -15,7 +15,8 @@ from secondbrain.config import Settings
 from secondbrain.devices import create_device
 from secondbrain.models import Base, WebSession
 from secondbrain.web.auth import set_password
-from tests.helpers import DEV, DEV2, LAN_CLIENT, NOW, PASSWORD, TEST_DB, make_wav, upload
+from tests.helpers import (DEV, DEV2, LAN_CLIENT, NOW, PASSWORD, TEST_DB, TEST_SETTINGS_KEY,
+                          make_wav, upload)
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -66,7 +67,8 @@ def clock():
 @pytest.fixture
 def settings(tmp_path):
     return Settings(database_url=TEST_DB, archive_dir=tmp_path / "archive",
-                    firmware_dir=tmp_path / "firmware", tz_archive=ZoneInfo("Europe/Rome"))
+                    firmware_dir=tmp_path / "firmware", tz_archive=ZoneInfo("Europe/Rome"),
+                    settings_key=TEST_SETTINGS_KEY)
 
 
 @pytest.fixture

@@ -2,6 +2,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
+from cryptography.fernet import Fernet
 
 from secondbrain.config import ConfigError, load_settings
 
@@ -18,6 +19,7 @@ def test_defaults():
     assert s.trash_retention_days == 30
     assert s.allow_unauthenticated_lan is False
     assert s.device_hostname is None
+    assert s.settings_key is None
 
 
 def test_overrides():
@@ -59,3 +61,17 @@ def test_bad_bool(raw):
 def test_bad_int(key, raw):
     with pytest.raises(ConfigError, match=key):
         load_settings(BASE | {key: raw})
+
+
+def test_settings_key_is_optional_and_hidden():
+    key = Fernet.generate_key().decode()
+    s = load_settings(BASE | {"SETTINGS_KEY": f" {key} "})
+    assert s.settings_key == key
+    assert key not in repr(s)
+    assert load_settings(BASE | {"SETTINGS_KEY": "   "}).settings_key is None
+
+
+@pytest.mark.parametrize("raw", ["corta", "x" * 44])
+def test_bad_settings_key(raw):
+    with pytest.raises(ConfigError, match="SETTINGS_KEY"):
+        load_settings(BASE | {"SETTINGS_KEY": raw})

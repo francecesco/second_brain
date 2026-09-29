@@ -1,9 +1,11 @@
 """Configurazione del servizio, letta solo da variabili d'ambiente (spec §5)."""
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from cryptography.fernet import Fernet
 
 DEFAULT_MAX_UPLOAD_BYTES = 32 * 1024 * 1024
 MIN_MAX_UPLOAD_BYTES = 1024
@@ -28,6 +30,9 @@ class Settings:
     trash_retention_days: int = DEFAULT_TRASH_RETENTION_DAYS
     allow_unauthenticated_lan: bool = False
     device_hostname: str | None = None
+    # Chiave Fernet per le chiavi API dei provider (spec AI §8): mai nel repr, quindi mai
+    # nei log anche se qualcuno stampa le impostazioni.
+    settings_key: str | None = field(default=None, repr=False)
 
 
 def _bool(env: Mapping[str, str], key: str, default: bool) -> bool:
@@ -55,6 +60,17 @@ def _int(env: Mapping[str, str], key: str, default: int, minimum: int) -> int:
     return value
 
 
+def _settings_key(env: Mapping[str, str]) -> str | None:
+    raw = env.get("SETTINGS_KEY", "").strip()
+    if not raw:
+        return None
+    try:
+        Fernet(raw.encode())
+    except (ValueError, TypeError):
+        raise ConfigError("SETTINGS_KEY non valida: generane una con 'secondbrain gen-key'") from None
+    return raw
+
+
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     env = os.environ if env is None else env
     url = env.get("DATABASE_URL", "").strip()
@@ -76,4 +92,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
                                   DEFAULT_TRASH_RETENTION_DAYS, MIN_TRASH_RETENTION_DAYS),
         allow_unauthenticated_lan=_bool(env, "ALLOW_UNAUTHENTICATED_LAN", False),
         device_hostname=env.get("DEVICE_HOSTNAME", "").strip().lower() or None,
+        settings_key=_settings_key(env),
     )

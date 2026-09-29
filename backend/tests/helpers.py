@@ -17,6 +17,9 @@ DEV = "70041dd8263c"
 DEV2 = "aabbccddeeff"
 PASSWORD = "una-password-lunga"
 
+# Chiave Fernet fissa solo per i test: 32 byte in base64 url-safe.
+TEST_SETTINGS_KEY = "c2Vjb25kYnJhaW4tdGVzdC1rZXktMzItYnl0ZXMhISE="
+
 
 def make_wav(seconds: float = 1.0, rate: int = 16000, fill: bytes = b"\x01\x00",
              audio_format: int = 1, extra_chunk: bytes = b"",
