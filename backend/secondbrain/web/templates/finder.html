@@ -2,15 +2,16 @@
 {% from "_icons.html" import icon %}
 {% block body %}
 <header class="top">
-  <a class="brand" href="/browse{{ qs }}">Second Brain</a>
+  <a class="brand" href="/browse{{ qs }}" aria-label="Second Brain" title="Second Brain">{{ icon("archive") }}<span class="label">Second Brain</span></a>
   <form method="get">
     <select name="device" aria-label="Dispositivo" onchange="this.form.submit()">
       <option value="">Tutti i dispositivi</option>
       {% for d in devices %}<option value="{{ d.id }}"{% if d.id == device %} selected{% endif %}>{{ d.name }}</option>{% endfor %}
     </select>
   </form>
+  {% set fix_label = "Da sistemare (" ~ estimated_count ~ ")" if estimated_count else "Da sistemare" %}
   <nav>
-    <a href="/fix" aria-label="Da sistemare" title="Da sistemare">{{ icon("fix") }}<span class="label">Da sistemare{% if estimated_count %} ({{ estimated_count }}){% endif %}</span></a>
+    <a href="/fix" aria-label="{{ fix_label }}" title="{{ fix_label }}">{{ icon("fix") }}<span class="label">{{ fix_label }}</span></a>
     <a href="/trash" aria-label="Cestino" title="Cestino">{{ icon("trash") }}<span class="label">Cestino</span></a>
     <a href="/devices" aria-label="Dispositivi" title="Dispositivi">{{ icon("devices") }}<span class="label">Dispositivi</span></a>
     <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" aria-label="Esci" title="Esci">{{ icon("logout") }}<span class="label">Esci</span></button></form>

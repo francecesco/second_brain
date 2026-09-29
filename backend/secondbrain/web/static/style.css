@@ -23,7 +23,7 @@ h1 { font-size: 1.2rem; }
 .top { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; padding: .6rem 1rem; border-bottom: 1px solid var(--line); }
 .top .brand { font-weight: 600; color: var(--fg); margin-right: auto; }
 .top nav { display: flex; flex-wrap: wrap; gap: .8rem; align-items: center; }
-.top nav a, .top nav button, .actions a, .actions button { display: inline-flex; align-items: center; gap: .3rem; }
+.top .brand, .top nav a, .top nav button, .actions a, .actions button { display: inline-flex; align-items: center; gap: .3rem; }
 .top form { margin: 0; }
 .layout { display: flex; min-height: calc(100vh - 3rem); }
 .tree { width: 14rem; flex-shrink: 0; border-right: 1px solid var(--line); padding: .8rem; }
@@ -61,5 +61,5 @@ td, th { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--
   .tree > ul { display: none; }
   #tree-toggle:checked ~ ul { display: block; }
   .row .meta { margin-left: 0; width: 100%; }
-  .top nav .label, .actions .label { display: none; }
+  .top .brand .label, .top nav .label, .actions .label { display: none; }
 }

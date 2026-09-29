@@ -75,6 +75,7 @@ def test_fix_lists_estimated_recordings(recordings):
     upload(recordings.client, make_wav(fill=b"\x09\x00"), capture_id="cap_unsynced_000001", ts=None)
     text = recordings.client.get("/fix").text
     assert "28/09/2026 14:00:00" in text and "Da sistemare (1)" in text
+    assert 'aria-label="Da sistemare (1)"' in text and 'title="Da sistemare (1)"' in text
 
 
 def test_devices_page_and_rename(recordings, db, settings, tmp_path):

@@ -74,6 +74,32 @@ def test_nav_has_accessible_icons(recordings):
     assert '<svg' in text and 'class="icon"' in text
 
 
+def _actions_html(text):
+    return text.split('<div class="actions">')[1].split('</div>')[0]
+
+
+def test_detail_close_button_is_inside_actions(recordings, db):
+    cap = capture_by(db, "cap_20260923_191530")
+    text = get(recordings, f"/captures/{cap.id}").text
+    assert 'aria-label="Chiudi"' in _actions_html(text)
+
+
+def test_detail_close_button_is_inside_actions_when_trashed(recordings, db):
+    cap = capture_by(db, "cap_20260923_191530")
+    cap.trashed_at = NOW
+    db.commit()
+    text = get(recordings, f"/captures/{cap.id}").text
+    assert 'aria-label="Chiudi"' in _actions_html(text)
+    # Cestino non c'è più (la cattura è già nel cestino), ma Chiudi resta.
+    assert 'aria-label="Cestino"' not in _actions_html(text)
+
+
+def test_brand_uses_archive_icon(recordings):
+    text = get(recordings, "/browse").text
+    assert 'aria-label="Second Brain"' in text
+    assert text.index('class="brand"') < text.index("Second Brain</span>")
+
+
 def test_device_filter(recordings):
     text = get(recordings, f"/browse/2026/09/23?device={DEV2}").text
     assert "10:00:00" in text and "21:15:30" not in text
