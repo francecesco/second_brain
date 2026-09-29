@@ -12,7 +12,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from . import catalog, devices, library, ota
+from . import catalog, devices, library, ota, settings_store
 from .archive import Archive
 from .clock import utcnow
 from .config import ConfigError, Settings, load_settings
@@ -191,9 +191,19 @@ def _add_trash_commands(sub) -> None:
         .set_defaults(func=_trash_purge)
 
 
+def _gen_key(args: argparse.Namespace) -> None:
+    print(settings_store.generate_key())
+
+
+def _add_gen_key_command(sub) -> None:
+    sub.add_parser("gen-key", help="genera una SETTINGS_KEY per cifrare le chiavi API") \
+        .set_defaults(func=_gen_key)
+
+
 COMMAND_GROUPS: tuple[Callable, ...] = (_add_device_commands, _add_rescan_command,
                                         _add_firmware_commands, _add_password_command,
-                                        _add_unlock_command, _add_trash_commands)
+                                        _add_unlock_command, _add_trash_commands,
+                                        _add_gen_key_command)
 
 
 def build_parser() -> argparse.ArgumentParser:
