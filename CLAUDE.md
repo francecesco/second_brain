@@ -100,7 +100,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 
 ## Stato al 2026-09-30
 
-- Tutto su `master`, compreso il backend (branch `backend-fase1b` unito il 2026-09-29).
+- Tutto su `master`, compreso il backend (`backend-fase1b` e `backend-elaborazione-ai` uniti).
   `origin` (`github.com/francecesco/second_brain`, pubblico) è fermo alla Fase 1a: il
   push lo fa l'autore.
 - **Hardware e firmware: chiusi**, in attesa della batteria. Firmware sul device: 0.6.3
@@ -117,7 +117,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   trascrizione, titolo, riassunto e tag con Groq e Gemini (chiavi inserite dall'autore
   nella pagina Impostazioni, cifrate con `SETTINGS_KEY` del `backend/.env` del Mac), worker
   separato nel compose, ricerca full-text. Verificata sul Mac il 2026-09-30; alcuni test
-  end-to-end rimandati (vedi "Stato" della spec). Branch `backend-elaborazione-ai`.
+  end-to-end rimandati (vedi "Stato" della spec). Unita in `master` il 2026-09-30.
 - Le catture di prova di `capture_server.py` sono state cancellate il 2026-09-29.
 
 ## Prossima sessione
