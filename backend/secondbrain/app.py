@@ -5,6 +5,7 @@ from collections.abc import Callable
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response
@@ -22,6 +23,7 @@ from .web import ai as web_ai
 from .web import browse as web_browse
 from .web import login as web_login
 from .web import search as web_search
+from .web import settings as web_settings
 from .web.auth import CsrfError, NotAuthenticated
 from .web.templating import STATIC_DIR
 
@@ -69,6 +71,7 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
         task.cancel()
         with suppress(asyncio.CancelledError):
             await task
+        app.state.http.close()
         app.state.engine.dispose()
 
     app = FastAPI(title="secondbrain", lifespan=lifespan,
@@ -79,6 +82,7 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
     app.state.engine = make_engine(settings.database_url)
     app.state.sessionmaker = make_sessionmaker(app.state.engine)
     app.state.box = SecretBox(settings.settings_key)
+    app.state.http = httpx.Client()  # solo per "Prova"; nei test lo si sostituisce con un MockTransport
 
     if settings.device_hostname:
         @app.middleware("http")
@@ -97,6 +101,7 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
     app.include_router(web_actions.router)
     app.include_router(web_ai.router)
     app.include_router(web_search.router)
+    app.include_router(web_settings.router)
 
     @app.exception_handler(NotAuthenticated)
     async def login_required(request: Request, exc: NotAuthenticated) -> Response:

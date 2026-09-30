@@ -21,6 +21,7 @@
     <a href="/fix" aria-label="{{ fix_label }}" title="{{ fix_label }}">{{ icon("fix") }}<span class="label">{{ fix_label }}</span></a>
     <a href="/trash" aria-label="Cestino" title="Cestino">{{ icon("trash") }}<span class="label">Cestino</span></a>
     <a href="/devices" aria-label="Dispositivi" title="Dispositivi">{{ icon("devices") }}<span class="label">Dispositivi</span></a>
+    <a href="/settings" aria-label="Impostazioni" title="Impostazioni">{{ icon("settings") }}<span class="label">Impostazioni</span></a>
     <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" aria-label="Esci" title="Esci">{{ icon("logout") }}<span class="label">Esci</span></button></form>
   </nav>
 </header>

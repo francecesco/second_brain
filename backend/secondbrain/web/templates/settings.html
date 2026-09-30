@@ -1,0 +1,51 @@
+{% extends "finder.html" %}
+{% from "_icons.html" import icon %}
+{% block main %}
+{% if not box_available %}<p class="notice" role="alert">{{ icon("fix") }}<span><code>SETTINGS_KEY</code> non impostata: le chiavi API non si possono salvare e l'elaborazione è ferma. Generala con <code>secondbrain gen-key</code>, mettila nel <code>.env</code> e riavvia app e worker.</span></p>{% endif %}
+{% if queued_now is not none %}<p class="notice" role="status">{{ queued_now }} note messe in coda.</p>{% endif %}
+
+<section class="card">
+  <h2>Elaborazione</h2>
+  <form method="post" action="/settings/general" class="settings-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="check"><input type="checkbox" name="active" value="1"{% if not paused %} checked{% endif %}> Elaborazione automatica attiva</label>
+    <label>Lingua delle note
+      <select name="language">{% for code, lang in languages.items() %}<option value="{{ code }}"{% if code == language %} selected{% endif %}>{{ lang.name }}</option>{% endfor %}</select>
+    </label>
+    <div class="actions"><button type="submit" aria-label="Salva" title="Salva">{{ icon("save") }}<span class="label">Salva</span></button></div>
+  </form>
+  <p>Coda: {{ counts.queued }} in coda · {{ counts.running }} in corso · {{ counts.failed }} fallite</p>
+  <form method="post" action="/settings/backfill" class="actions">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit"{% if not backfill_count %} disabled{% endif %}>{{ icon("refresh") }}<span>Elabora le note senza trascrizione ({{ backfill_count }})</span></button>
+  </form>
+</section>
+
+{% for p in providers %}
+{% set name = p.row.name %}
+<section class="card" id="provider-{{ name }}">
+  <h2>{{ p.spec.label }} <span class="count">{% if loop.first %}principale{% else %}riserva {{ loop.index - 1 }}{% endif %}{% if not p.row.enabled %} · disabilitato{% endif %}</span></h2>
+  <div class="actions">
+    <form method="post" action="/settings/providers/{{ name }}/move"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="direction" value="up"><button type="submit"{% if loop.first %} disabled{% endif %} aria-label="Sposta {{ p.spec.label }} su" title="Sposta su">{{ icon("up") }}</button></form>
+    <form method="post" action="/settings/providers/{{ name }}/move"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="direction" value="down"><button type="submit"{% if loop.last %} disabled{% endif %} aria-label="Sposta {{ p.spec.label }} giù" title="Sposta giù">{{ icon("down") }}</button></form>
+  </div>
+  <p>Chiave: <span class="mono">{{ p.key_status }}</span></p>
+  <form method="post" action="/settings/providers/{{ name }}" class="settings-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Nuova chiave API
+      <input type="password" name="api_key" autocomplete="off" placeholder="{{ 'lascia vuoto per non cambiarla' if p.row.api_key_enc else 'incolla la chiave' }}"{% if not box_available %} disabled{% endif %}>
+    </label>
+    <label>Modello di trascrizione <input name="transcribe_model" value="{{ p.row.transcribe_model }}" maxlength="{{ MAX_MODEL_LEN }}"></label>
+    <label>Modello di testo <input name="text_model" value="{{ p.row.text_model }}" maxlength="{{ MAX_MODEL_LEN }}" placeholder="da scegliere"></label>
+    <label class="check"><input type="checkbox" name="enabled" value="1"{% if p.row.enabled %} checked{% endif %}> Abilitato</label>
+    <div class="actions"><button type="submit" aria-label="Salva {{ p.spec.label }}" title="Salva">{{ icon("save") }}<span class="label">Salva</span></button></div>
+  </form>
+  <div class="actions">
+    <button type="button" hx-post="/settings/providers/{{ name }}/test" hx-target="#test-{{ name }}" hx-swap="innerHTML">Prova</button>
+    <span id="test-{{ name }}"></span>
+    {% if p.row.api_key_enc %}<form method="post" action="/settings/providers/{{ name }}/key/delete" onsubmit="return confirm('Rimuovere la chiave di {{ p.spec.label }}?')"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" aria-label="Rimuovi la chiave di {{ p.spec.label }}" title="Rimuovi chiave">{{ icon("delete") }}<span class="label">Rimuovi chiave</span></button></form>{% endif %}
+  </div>
+  <p class="count">Questo mese: {{ (("%." ~ MINUTES_DECIMALS ~ "f")|format(p.minutes)).replace('.', ',') }} min di audio · {{ p.calls }} chiamate</p>
+</section>
+{% endfor %}
+{% endblock %}

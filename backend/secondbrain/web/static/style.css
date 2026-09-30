@@ -79,6 +79,13 @@ td, th { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--
 .hit .title { font-weight: 500; margin-right: .4rem; }
 .hit .excerpt { display: block; color: var(--muted); margin-top: .2rem; }
 mark { background: var(--mark-bg); color: inherit; border-radius: 2px; }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: .8rem 1rem; margin-bottom: 1rem; }
+.card h2 { font-size: 1.05rem; margin: 0 0 .5rem; }
+.settings-form { display: grid; gap: .5rem; max-width: 32rem; }
+.settings-form label { display: grid; gap: .2rem; }
+.settings-form label.check { display: flex; gap: .4rem; align-items: center; }
+.test-result.ok { color: var(--accent); }
+.test-result.ko { color: var(--warn); }
 @media (max-width: 700px) {
   .layout { display: block; }
   .tree { width: auto; border-right: 0; border-bottom: 1px solid var(--line); }

@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..notefile import MAX_SUMMARY_LEN, MAX_TITLE_LEN
 from ..search import MAX_QUERY_LEN
+from ..settings_store import MAX_MODEL_LEN
 
 WEB_DIR = Path(__file__).parent
 STATIC_DIR = WEB_DIR / "static"
@@ -103,3 +104,4 @@ templates.env.globals["ROW_TAG_PREVIEW"] = ROW_TAG_PREVIEW
 templates.env.globals["MAX_SUMMARY_LEN"] = MAX_SUMMARY_LEN
 templates.env.globals["MAX_TITLE_LEN"] = MAX_TITLE_LEN
 templates.env.globals["MAX_QUERY_LEN"] = MAX_QUERY_LEN
+templates.env.globals["MAX_MODEL_LEN"] = MAX_MODEL_LEN
