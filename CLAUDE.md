@@ -98,7 +98,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Per riavviare un device fermo in DEV MODE: pressione di PWR (dal firmware 0.4.0), oppure
   push di un firmware, oppure `esptool ... --after hard_reset chip_id` con il cavo dati.
 
-## Stato al 2026-09-29
+## Stato al 2026-09-30
 
 - Tutto su `master`, compreso il backend (branch `backend-fase1b` unito il 2026-09-29).
   `origin` (`github.com/francecesco/second_brain`, pubblico) è fermo alla Fase 1a: il
@@ -113,6 +113,11 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   implementato e verificato col device vero sul Mac (upload, finder, OTA). Gira sul Mac
   in Docker sulla porta 8000 con `ALLOW_UNAUTHENTICATED_LAN=true`; `backend/.env` e
   `backend/data/` sono locali e gitignored. Manca il Task 14: deploy sulla ZimaBoard.
+- **Elaborazione AI** (spec `docs/specs/2026-09-29-backend-elaborazione-ai-design.md`):
+  trascrizione, titolo, riassunto e tag con Groq e Gemini (chiavi inserite dall'autore
+  nella pagina Impostazioni, cifrate con `SETTINGS_KEY` del `backend/.env` del Mac), worker
+  separato nel compose, ricerca full-text. Verificata sul Mac il 2026-09-30; alcuni test
+  end-to-end rimandati (vedi "Stato" della spec). Branch `backend-elaborazione-ai`.
 - Le catture di prova di `capture_server.py` sono state cancellate il 2026-09-29.
 
 ## Prossima sessione
@@ -124,10 +129,12 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
    Bot Fight Mode spento sull'hostname dei dispositivi, IP reale del device nei log (non
    `172.x`), `401` senza token dal tunnel, login da rete mobile. Poi `secrets.h` punta
    alla ZimaBoard per la rete di casa.
-2. **Fase successiva del backend: trascrizione** (da progettare: spec a sezioni). Da
-   decidere con l'autore: modello faster-whisper e lingua, trascrizione all'arrivo o in
-   coda, dove gira (CPU modesta della ZimaBoard), formato del file nella cartella del
-   giorno, titolo automatico.
+   Con l'elaborazione AI: sulla ZimaBoard va generata una `SETTINGS_KEY` nuova
+   (`secondbrain gen-key`) e le chiavi API vanno reinserite dalla pagina Impostazioni; l'archivio
+   va su `/mnt/Storage1` (l'eMMC di sistema ha 7 GB liberi).
+2. **Test end-to-end rimandati dell'elaborazione AI** (elenco nello "Stato" della spec):
+   fallback con chiave sbagliata, stop del worker durante una trascrizione, pausa,
+   correzione + Rielabora, ricerca dal telefono, cestino durante l'elaborazione, rescan.
 3. **Firmware "HTTPS + token"** (spec separata, punti in §11 della spec backend): prima
    di tutto 401/403/429 come errori temporanei (oggi ogni 4xx manda il file in
    `rejected/`), poi TLS e token. Da provare col tunnel attivo.
@@ -190,6 +197,19 @@ corretto con hold in deep sleep. Riconoscimento USB/batteria per stima (nessun s
 hardware), percentuale da curva LiPo tipica, soglie solo a batteria, display "USB" o
 "bat NN%", header `X-Power-Source`. Da tarare con la batteria reale.
 
+**2026-09-29/30 — Elaborazione AI delle note** (`docs/specs/2026-09-29-backend-elaborazione-ai-design.md`,
+piano in 15 task). La ZimaBoard (Celeron N3450 senza AVX, RAM condivisa con Immich) non
+regge faster-whisper: si usano provider esterni intercambiabili (Groq, Gemini, poi OpenAI)
+con un principale e riserve, chiavi cifrate impostate dalla UI. Worker separato con coda in
+Postgres (`SKIP LOCKED`, lease, priorità, backoff 1 min → 6 h), due fasi (trascrizione,
+arricchimento), file `<base>.md` (verità dei campi AI, frontmatter leggibile da Obsidian) e
+`<base>.ai.json` nella cartella del giorno, correzioni a mano protette da "Rielabora",
+ricerca full-text in italiano. Emersi in revisione: lock di riga su tutte le operazioni
+della nota con ordine nota → lavoro, rescan che poteva svuotare una trascrizione se
+girava insieme al worker, chiavi finte nei test che somigliavano a chiavi vere (repo
+pubblico), tag nella lista attaccati al titolo. Verificato col device: Groq, Gemini,
+arretrato.
+
 **2026-09-28/29 — Fase 1b, backend archivio** (`docs/specs/2026-09-28-backend-archivio-design.md`,
 piano in 14 task). Decisioni: niente AI né Obsidian in questa fase; FastAPI + Postgres in
 Docker; i file sono la verità (`archive/AAAA/MM/GG/HHMMSS_<device>.wav` + sidecar JSON) e
@@ -205,9 +225,10 @@ di default per fascia del giorno, icone.
 
 ## Idee future e cose rimandate
 
-- **Backend dopo l'archivio**: trascrizione con faster-whisper, titolo automatico, ricerca
-  nel testo, poi eventualmente note nel vault Obsidian. I file derivati stanno nella
-  cartella del giorno con lo stesso nome base dell'audio.
+- **Backend dopo l'elaborazione AI**: adattatore locale (faster-whisper o altro) passando a
+  un NAS più potente; divisione in pezzi dell'audio oltre i limiti dei provider; vista per
+  tag; note nel vault Obsidian (i `.md` sono già nel formato giusto); arricchimento con il
+  PiAgent.
 - **Fase 2 — display glanceable**: `GET /digest.bmp` 200×200 1-bit renderizzato dal
   server, cache su SD, mostrato al posto della schermata di stato.
 - **Refresh parziale e-Paper**: contatore che scorre durante la registrazione, meno

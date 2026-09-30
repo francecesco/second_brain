@@ -1,7 +1,23 @@
 # Backend — Elaborazione AI delle note (trascrizione, titolo, riassunto, tag) — Design / Spec
 
 **Data:** 2026-09-29
-**Stato:** design approvato a sezioni il 2026-09-29, spec da rivedere; piano da scrivere.
+**Stato:** implementato e **verificato col device vero sul Mac il 2026-09-30** (branch
+`backend-elaborazione-ai`, piano `docs/plans/2026-09-29-backend-elaborazione-ai.md`, 15 task,
+494 test). Verificati con chiavi vere: Groq e Gemini (trascrizione, titolo, riassunto, tag),
+cambio del provider principale, arretrato delle note già in archivio, utilizzo mensile,
+nessuna chiave nei log. **Da verificare più avanti** (rimandati dall'autore): fallback con
+una chiave sbagliata sul principale, arresto del worker durante una trascrizione, pausa,
+correzione + Rielabora, ricerca dal telefono, cestino durante l'elaborazione, rescan dopo
+una modifica a mano del `.md`.
+Deviazioni emerse in esecuzione: il `.ai.json` si compone nelle due fasi di una stessa
+elaborazione (l'arricchimento aggiunge la sua parte), e "Rielabora" lo sostituisce; la
+ricerca usa la lingua delle impostazioni, mentre ogni nota è indicizzata nella propria;
+`processed_at` è tra virgolette nel YAML; riassunto e tag si correggono solo su una nota già
+elaborata (la trascrizione sempre); `enrich_provider` nel frontmatter solo quando è diverso
+da `provider`; una `SETTINGS_KEY` malformata equivale a una assente (errore nel log, avviso
+nella pagina, il resto del backend funziona); un file audio sparito durante l'elaborazione
+si riprova con il backoff invece di fallire subito; avviso quando nessun provider ha un
+modello di testo; tutte le operazioni di `library` prendono il lock sulla riga della nota.
 **Dipende da:** `docs/specs/2026-09-28-backend-archivio-design.md` (archivio su disco,
 catalogo Postgres, UI finder), implementata e verificata col device.
 **Cambia rispetto alla spec di progetto** (`docs/specs/2026-09-14-second-brain-design.md`):
