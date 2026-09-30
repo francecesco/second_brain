@@ -75,6 +75,23 @@ def test_expired_lease_is_taken_again_and_counted(note, db):
     assert job.locked_until == later + jobs.LEASE
 
 
+def test_held_recognises_only_the_current_lease(note, db):
+    lease = jobs.claim(db, NOW).locked_until
+    assert jobs.held(db, note, lease, NOW) is not None
+    db.rollback()
+    assert jobs.held(db, note, lease, lease) is None  # scaduto
+    db.rollback()
+    renewed = jobs.advance(db, note, jobs.STAGE_ENRICH, NOW + timedelta(minutes=1))
+    db.commit()
+    assert jobs.held(db, note, lease, NOW) is None  # lease rinnovato: vale solo il nuovo
+    assert jobs.held(db, note, renewed.locked_until, NOW) is not None
+    db.rollback()
+    jobs.enqueue(db, note, NOW)
+    db.commit()
+    assert jobs.held(db, note, renewed.locked_until, NOW) is None  # rimesso in coda
+    db.rollback()
+
+
 def test_a_job_that_keeps_crashing_the_worker_ends_failed(note, db):
     now = NOW
     for _ in range(jobs.MAX_ATTEMPTS):

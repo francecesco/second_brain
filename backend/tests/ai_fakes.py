@@ -2,8 +2,10 @@
 import httpx
 import pytest
 
+from secondbrain import settings_store as store
 from secondbrain.ai.audio import AudioSource
 from secondbrain.ai.base import CheckResult, Enrichment, Transcript
+from secondbrain.ai.registry import PROVIDER_SPECS
 
 from .helpers import make_wav
 
@@ -77,3 +79,18 @@ class FakeFactory:
 
     def __call__(self, config):
         return self.providers[config.name]
+
+
+FAKE_KEYS = {"groq": "gsk_test_groq_0123456789", "gemini": "AIza-test-gemini-0123456789abcdefghij",
+             "openai": "sk-test-openai-0123456789"}
+
+
+def configure_providers(db, box, now, names=("groq", "gemini")) -> None:
+    """Provider con una chiave finta e i modelli di default, nell'ordine di default."""
+    store.ensure_providers(db, now)
+    for name in names:
+        spec = PROVIDER_SPECS[name]
+        store.save_provider(db, box, name, api_key=FAKE_KEYS[name],
+                            transcribe_model=spec.transcribe_model, text_model=spec.text_model,
+                            enabled=True, now=now)
+    db.commit()

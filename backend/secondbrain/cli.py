@@ -5,21 +5,27 @@ COMMAND_GROUPS; ogni azione riceve gli argomenti e solleva CliError in caso di e
 """
 import argparse
 import getpass
+import logging
 import sys
+import threading
 import uuid
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
+import httpx
 from sqlalchemy.orm import Session
 
 from . import catalog, devices, jobs, library, ota, settings_store
+from .ai.registry import build_provider
 from .archive import Archive
 from .clock import utcnow
 from .config import ConfigError, Settings, load_settings
 from .naming import DEFAULT_DEVICE_TYPE
 from .rescan import rescan
+from .settings_store import SecretBox
 from .web.auth import BadPassword, clear_lockouts, set_password
+from .worker import LOG_FORMAT, Worker, install_signal_handlers, run_forever
 
 
 class CliError(Exception):
@@ -224,6 +230,33 @@ def _add_process_command(sub) -> None:
     cmd.set_defaults(func=_process)
 
 
+def _worker(args: argparse.Namespace) -> None:
+    settings = load_settings()
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # una riga per richiesta è rumore
+    box = SecretBox(settings.settings_key)
+    if not box.available:
+        logging.getLogger(__name__).warning(
+            "SETTINGS_KEY non impostata: il worker resta fermo (vedi 'secondbrain gen-key')")
+    engine = catalog.make_engine(settings.database_url)
+    client = httpx.Client()
+    stop = threading.Event()
+    install_signal_handlers(stop)
+    worker = Worker(sessionmaker=catalog.make_sessionmaker(engine),
+                    archive=Archive(settings.archive_dir), tz=settings.tz_archive, box=box,
+                    factory=lambda config: build_provider(config, client))
+    try:
+        run_forever(worker, stop)
+    finally:
+        client.close()
+        engine.dispose()
+
+
+def _add_worker_command(sub) -> None:
+    sub.add_parser("worker", help="elabora le note in coda (servizio worker del compose)") \
+        .set_defaults(func=_worker)
+
+
 def _gen_key(args: argparse.Namespace) -> None:
     print(settings_store.generate_key())
 
@@ -236,7 +269,8 @@ def _add_gen_key_command(sub) -> None:
 COMMAND_GROUPS: tuple[Callable, ...] = (_add_device_commands, _add_rescan_command,
                                         _add_firmware_commands, _add_password_command,
                                         _add_unlock_command, _add_trash_commands,
-                                        _add_gen_key_command, _add_process_command)
+                                        _add_gen_key_command, _add_process_command,
+                                        _add_worker_command)
 
 
 def build_parser() -> argparse.ArgumentParser:

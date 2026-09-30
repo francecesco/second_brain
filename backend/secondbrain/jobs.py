@@ -129,7 +129,21 @@ def claim(s: Session, now: datetime) -> Job | None:
         return job
 
 
-def advance(s: Session, capture_id: uuid.UUID, stage: str, now: datetime) -> None:
+def held(s: Session, capture_id: uuid.UUID, locked_until: datetime,
+         now: datetime) -> Job | None:
+    """Il lavoro, bloccato, se è ancora del worker che l'ha preso con quel lease.
+
+    Il lease non ha un proprietario: lo riconosce `locked_until`, che cambia a ogni claim.
+    None se il lavoro è sparito, non è più in corso, è stato ripreso o il lease è scaduto.
+    """
+    job = _locked(s, capture_id)
+    if (job is None or job.status != RUNNING or job.locked_until != locked_until
+            or locked_until <= now):
+        return None
+    return job
+
+
+def advance(s: Session, capture_id: uuid.UUID, stage: str, now: datetime) -> Job | None:
     """Fase successiva nello stesso giro del worker: lease rinnovato, tentativi azzerati."""
     job = _locked(s, capture_id)
     if job is not None:
@@ -138,6 +152,7 @@ def advance(s: Session, capture_id: uuid.UUID, stage: str, now: datetime) -> Non
         job.last_error = None
         job.locked_until = now + LEASE
         job.updated_at = now
+    return job
 
 
 def mark_done(s: Session, capture_id: uuid.UUID, now: datetime) -> None:
