@@ -32,6 +32,13 @@ class NotInTrash(ValueError):
     """Operazione permessa solo dal cestino."""
 
 
+class NotProcessed(Exception):
+    """La nota non ha ancora una trascrizione: riassunto e tag non sono ancora suoi (spec AI §10).
+
+    Non è una `ValueError`: un `except ValueError` per il campo sconosciuto non deve
+    inghiottirla per sbaglio."""
+
+
 def _get(s: Session, capture_id: uuid.UUID) -> Capture:
     """La riga resta bloccata fino al commit: le operazioni su file e campi di una nota non
     si accavallano con la scrittura del worker (spec AI §10)."""
@@ -97,6 +104,10 @@ def edit_ai_field(s: Session, archive: Archive, tz: ZoneInfo, capture_id: uuid.U
     capture = _get(s, capture_id)
     if capture.trashed_at is not None:
         raise InTrash("la registrazione è nel cestino")
+    if field != "transcript" and capture.transcript is None:
+        # Creerebbe un .md con transcript="" mai più ripreso da backfill/rescan (jobs._backfill
+        # seleziona Capture.transcript.is_(None)): solo la trascrizione può nascere da zero.
+        raise NotProcessed("la nota non è ancora stata elaborata")
     write_note(s, archive, capture, apply_edit(note_from_capture(capture), field, value), tz)
     s.commit()
     return capture

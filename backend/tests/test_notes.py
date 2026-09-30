@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
-from secondbrain import library
+from secondbrain import jobs, library
 from secondbrain.archive import Archive
 from secondbrain.catalog import make_sessionmaker
 from secondbrain.models import Capture
@@ -68,11 +68,25 @@ def test_edit_summary_marks_it_edited(recordings, db, arch):
 
 def test_edit_tags_and_transcript(recordings, db, arch):
     cap_id = capture_by(db, CID).id
-    library.edit_ai_field(db, arch, ROME, cap_id, "tags", "Lavoro, #casa")
     library.edit_ai_field(db, arch, ROME, cap_id, "transcript", " Testo corretto a mano ")
+    library.edit_ai_field(db, arch, ROME, cap_id, "tags", "Lavoro, #casa")
     cap = fresh(db, cap_id)
     assert (cap.tags, cap.transcript, cap.edited) == (
         ["lavoro", "casa"], "Testo corretto a mano", ["transcript", "tags"])
+
+
+def test_edit_summary_or_tags_refused_before_processing(recordings, db, arch):
+    cap_id = capture_by(db, CID).id
+    jobs.drop(db, cap_id)  # come una nota il cui lavoro è finito o è stato cancellato
+    before = jobs.count_backfill(db)
+    for field in ("summary", "tags"):
+        with pytest.raises(library.NotProcessed):
+            library.edit_ai_field(db, arch, ROME, cap_id, field, "x")
+    cap = fresh(db, cap_id)
+    assert cap.transcript is None
+    with pytest.raises(FileNotFoundError):
+        arch.read_text(cap.rel_path, ".md")
+    assert jobs.count_backfill(db) == before
 
 
 def test_edit_refused_in_trash_unknown_field_or_capture(recordings, db, arch):
