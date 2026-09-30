@@ -40,6 +40,15 @@ def test_processed_row_shows_the_auto_title_and_three_tags(recordings, db, setti
     assert "Chiamare Marco" in text and "Nota della sera" not in text
     assert "telefonate" in text and "extra" not in text
     assert "hx-trigger" not in text and 'aria-label="In coda"' not in text
+    # I chip vanno in un contenitore dedicato, separato dal titolo, cosi possono
+    # andare a capo su una riga propria senza sforare (bug del layout mobile).
+    head_start = text.index(f'id="head-{capture_id}"')
+    title_end = text.index("</span>", text.index('class="title"', head_start))
+    tags_start = text.index('<span class="tags">', head_start)
+    assert tags_start > title_end, "i tag devono stare dopo il titolo, in un contenitore separato"
+    assert text.count('<span class="tags">') == 1
+    assert '<span class="tags"><span class="tag">lavoro</span>' in text
+    assert f'id="head-{capture_id}"' in text
 
 
 def test_manual_title_wins(recordings, db, settings):

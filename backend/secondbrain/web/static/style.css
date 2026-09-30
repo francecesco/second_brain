@@ -54,8 +54,10 @@ main { flex: 1; min-width: 0; padding: 1rem; }
 .table-wrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; }
 td, th { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-.head { display: inline-flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
-.tag { display: inline-block; background: var(--tag-bg); border-radius: 4px; padding: 0 .4rem; font-size: .85em; margin-right: .25rem; }
+.head { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+.tags { display: flex; flex-wrap: wrap; gap: .25rem; align-items: center; }
+.head .tags { flex-basis: 100%; }
+.tag { display: inline-block; background: var(--tag-bg); border-radius: 4px; padding: 0 .4rem; font-size: .85em; }
 .status { display: inline-flex; color: var(--muted); }
 .status.failed { color: var(--warn); }
 .spin .icon { animation: spin 1.2s linear infinite; }
@@ -94,6 +96,7 @@ mark { background: var(--mark-bg); color: inherit; border-radius: 2px; }
   #tree-toggle:checked ~ ul { display: block; }
   .row .meta { margin-left: 0; width: 100%; }
   .top .brand .label, .top nav .label, .actions .label { display: none; }
+  .top nav { flex-basis: 100%; justify-content: flex-end; }
   .search-open { display: inline-flex; }
   .top form.search { display: none; width: 100%; }
   #search-toggle:checked ~ form.search { display: flex; }

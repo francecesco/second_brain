@@ -12,7 +12,8 @@
 <a class="hit" href="/browse/{{ c.day.strftime('%Y/%m/%d') }}?open={{ c.id }}#row-{{ c.id }}">
   <span class="day">{{ day_month_label(c.day) }}</span>
   <span class="title">{{ display_title(c, tz) }}</span>
-  {% for t in (c.tags or [])[:ROW_TAG_PREVIEW] %}<span class="tag">{{ t }}</span>{% endfor %}
+  {% set tag_preview = (c.tags or [])[:ROW_TAG_PREVIEW] %}
+  {% if tag_preview %}<span class="tags">{% for t in tag_preview %}<span class="tag">{{ t }}</span>{% endfor %}</span>{% endif %}
   {% if h.excerpt %}<span class="excerpt">{{ h.excerpt }}</span>{% endif %}
 </a>
 {% else %}<p class="empty">Nessuna nota trovata.</p>{% endfor %}
