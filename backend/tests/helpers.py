@@ -80,6 +80,12 @@ def capture_by(db, capture_id: str) -> Capture:
     return db.scalars(select(Capture).where(Capture.capture_id == capture_id)).one()
 
 
+def htmx(ui) -> dict:
+    """Header di una richiesta htmx autenticata: CSRF + `HX-Request` (le route lo controllano
+    per distinguere un salvataggio via fetch da un invio di form normale)."""
+    return {"X-CSRF-Token": ui.csrf, "HX-Request": "true"}
+
+
 def is_searchable(db, capture_id, words: str) -> bool:
     return db.scalar(text("SELECT search_vector @@ websearch_to_tsquery('italian', :q) "
                           "FROM captures WHERE id = :id"), {"q": words, "id": capture_id})

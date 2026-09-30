@@ -4,13 +4,9 @@ from secondbrain import jobs
 from secondbrain import settings_store as store
 from secondbrain.models import Capture, Job
 from tests.ai_fakes import configure_providers, processed
-from tests.helpers import NOW, capture_by
+from tests.helpers import NOW, capture_by, htmx
 
 CID = "cap_20260923_191530"
-
-
-def htmx(ui):
-    return {"X-CSRF-Token": ui.csrf, "HX-Request": "true"}
 
 
 def cap_id(db):

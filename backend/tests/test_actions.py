@@ -6,13 +6,9 @@ from secondbrain.cli import main
 from secondbrain.clock import utcnow
 from secondbrain.models import Capture
 from secondbrain.ota import publish
-from tests.helpers import DEV, NOW, TEST_DB, capture_by, make_wav, upload
+from tests.helpers import DEV, NOW, TEST_DB, capture_by, htmx, make_wav, upload
 
 CID = "cap_20260923_191530"
-
-
-def htmx(ui):
-    return {"X-CSRF-Token": ui.csrf, "HX-Request": "true"}
 
 
 def test_actions_require_csrf(recordings, db):
