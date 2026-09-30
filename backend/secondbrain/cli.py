@@ -6,13 +6,14 @@ COMMAND_GROUPS; ogni azione riceve gli argomenti e solleva CliError in caso di e
 import argparse
 import getpass
 import sys
+import uuid
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from . import catalog, devices, library, ota, settings_store
+from . import catalog, devices, jobs, library, ota, settings_store
 from .archive import Archive
 from .clock import utcnow
 from .config import ConfigError, Settings, load_settings
@@ -191,6 +192,38 @@ def _add_trash_commands(sub) -> None:
         .set_defaults(func=_trash_purge)
 
 
+def _process(args: argparse.Namespace) -> None:
+    if args.backfill == (args.id is not None):
+        raise CliError("indica l'id di una registrazione oppure --backfill")
+    with open_session() as (s, _):
+        if args.backfill:
+            n = jobs.enqueue_backfill(s, utcnow())
+            s.commit()
+            print(f"Messe in coda {n} note senza trascrizione (priorità bassa).")
+            return
+        try:
+            capture_id = uuid.UUID(args.id)
+        except ValueError:
+            raise CliError(f"id non valido: {args.id!r}") from None
+        try:
+            job = library.reprocess(s, capture_id, utcnow())
+        except library.NotFound:
+            raise CliError(f"registrazione {capture_id} sconosciuta") from None
+        except library.InTrash as exc:
+            raise CliError(str(exc)) from None
+        except jobs.JobRunning:
+            raise CliError("la nota è in elaborazione proprio ora: riprova tra poco") from None
+    print(f"Registrazione {capture_id} in coda (fase {job.stage}).")
+
+
+def _add_process_command(sub) -> None:
+    cmd = sub.add_parser("process", help="mette in coda l'elaborazione AI di una registrazione")
+    cmd.add_argument("id", nargs="?", help="id della registrazione (UUID)")
+    cmd.add_argument("--backfill", action="store_true",
+                     help="tutte le note fuori dal cestino senza trascrizione, priorità bassa")
+    cmd.set_defaults(func=_process)
+
+
 def _gen_key(args: argparse.Namespace) -> None:
     print(settings_store.generate_key())
 
@@ -203,7 +236,7 @@ def _add_gen_key_command(sub) -> None:
 COMMAND_GROUPS: tuple[Callable, ...] = (_add_device_commands, _add_rescan_command,
                                         _add_firmware_commands, _add_password_command,
                                         _add_unlock_command, _add_trash_commands,
-                                        _add_gen_key_command)
+                                        _add_gen_key_command, _add_process_command)
 
 
 def build_parser() -> argparse.ArgumentParser:

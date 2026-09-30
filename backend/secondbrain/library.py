@@ -10,8 +10,9 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import jobs
 from .archive import TRASH, Archive
-from .models import Capture
+from .models import Capture, Job
 from .naming import day_dir, local_day
 from .notefile import MAX_TITLE_LEN
 from .sidecar import capture_to_sidecar
@@ -69,6 +70,7 @@ def trash_capture(s: Session, archive: Archive, capture_id: uuid.UUID, now: date
     if capture.trashed_at is None:
         capture.rel_path = archive.move(capture.rel_path, f"{TRASH}/{day_dir(capture.day)}")
         capture.trashed_at = now
+        jobs.cancel_for_trash(s, capture.id)
         _save(s, archive, capture)
     return capture
 
@@ -80,6 +82,16 @@ def restore_capture(s: Session, archive: Archive, capture_id: uuid.UUID) -> Capt
         capture.trashed_at = None
         _save(s, archive, capture)
     return capture
+
+
+def reprocess(s: Session, capture_id: uuid.UUID, now: datetime) -> Job:
+    """"Rielabora": di nuovo in coda da capo; i campi corretti a mano restano (spec AI §10)."""
+    capture = _get(s, capture_id)
+    if capture.trashed_at is not None:
+        raise InTrash("la registrazione è nel cestino")
+    job = jobs.requeue(s, capture, now)
+    s.commit()
+    return job
 
 
 def delete_capture(s: Session, archive: Archive, capture_id: uuid.UUID) -> None:

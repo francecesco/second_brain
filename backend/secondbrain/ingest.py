@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from starlette.datastructures import Headers
 from starlette.requests import ClientDisconnect
 
-from . import catalog, naming
+from . import catalog, jobs, naming
 from .archive import Archive
 from .devices import AuthError, DeviceMeta, authenticate, bearer_token, record_seen
 from .httputil import is_lan_request
@@ -120,6 +120,9 @@ def _store(state, device_id: str, capture_id: str, ts_header: str | None, meta: 
             raise
         s.add(capture)
         try:
+            # Il lavoro nasce nella stessa transazione della nota (spec AI §7): o ci sono
+            # entrambi o nessuno dei due.
+            jobs.enqueue(s, capture.id, now)
             _commit(s)
         except Exception:
             # A differenza del caso sopra qui non si sa se il COMMIT sia arrivato al database
