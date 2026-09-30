@@ -1,12 +1,15 @@
 from datetime import date, timedelta
 import uuid
+from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 
+from secondbrain import jobs, library
 from secondbrain.archive import Archive
 from secondbrain.cli import main
-from secondbrain.models import Capture, Device
+from secondbrain.models import Capture, Device, Job
+from secondbrain.notefile import Note, render_note
 from secondbrain.rescan import rescan
 from secondbrain.sidecar import capture_to_sidecar
 from tests.helpers import DEV, DEV2, NOW, TEST_DB, make_wav, upload
@@ -106,7 +109,8 @@ def test_cli_rescan(archive, db, monkeypatch, capsys, settings):
     db.execute(delete(Capture))
     db.commit()
     assert main(["rescan"]) == 0
-    assert "aggiunte 2" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "aggiunte 2" in out and "messe in coda da elaborare 2" in out
 
 
 def test_idempotence_for_trashed_items(archive, db, settings):
@@ -220,3 +224,117 @@ def test_sidecar_without_wav(archive, db, settings):
     assert report.added == 0  # not imported
     db.commit()
     assert db.get(Capture, uuid.UUID("11111111-2222-3333-4444-555555555555")) is None
+
+
+ROME = ZoneInfo("Europe/Rome")
+PROCESSED = Note(transcript="Devo chiamare Marco per il preventivo", title="Chiamare Marco",
+                 summary="Preventivo del tetto.", tags=("lavoro",), language="it",
+                 provider="groq", transcribe_model="whisper-large-v3-turbo",
+                 enrich_provider="groq", enrich_model="openai/gpt-oss-120b", processed_at=NOW,
+                 edited=("tags",))
+
+
+def searchable(db, capture_id, words):
+    return db.scalar(text("SELECT search_vector @@ websearch_to_tsquery('italian', :q) "
+                          "FROM captures WHERE id = :id"), {"q": words, "id": capture_id})
+
+
+def test_reads_ai_fields_from_the_note(archive, db):
+    cap = first(db)
+    archive.write_text(cap.rel_path, ".md", render_note(PROCESSED, ROME))
+    report = rescan(db, archive, NOW)
+    db.commit()
+    assert (report.updated, report.problems) == (1, [])
+    cap = first(db)
+    assert (cap.transcript, cap.title_auto, cap.summary, cap.tags, cap.edited, cap.ai_provider,
+            cap.processed_at) == (PROCESSED.transcript, "Chiamare Marco", "Preventivo del tetto.",
+                                  ["lavoro"], ["tags"], "groq", NOW)
+    assert searchable(db, cap.id, "chiamato")
+    assert rescan(db, archive, NOW).updated == 0
+
+
+def test_note_edited_by_hand_on_disk_is_picked_up(archive, db):
+    cap = first(db)
+    archive.write_text(cap.rel_path, ".md", render_note(PROCESSED, ROME))
+    rescan(db, archive, NOW)
+    db.commit()
+    edited = archive.read_text(cap.rel_path, ".md").replace("title: Chiamare Marco",
+                                                            "title: Telefonare a Marco")
+    archive.write_text(cap.rel_path, ".md", edited)
+    rescan(db, archive, NOW)
+    db.commit()
+    assert first(db).title_auto == "Telefonare a Marco"
+    assert searchable(db, cap.id, "telefonare")
+
+
+def test_rebuilt_catalog_keeps_the_ai_fields(archive, db):
+    cap = first(db)
+    archive.write_text(cap.rel_path, ".md", render_note(PROCESSED, ROME))
+    db.execute(delete(Capture))
+    db.commit()
+    report = rescan(db, archive, NOW)
+    db.commit()
+    assert (report.added, report.queued) == (2, 1)  # solo quella senza .md torna in coda
+    assert first(db).summary == "Preventivo del tetto."
+
+
+def test_notes_without_md_are_queued_at_low_priority(archive, db):
+    db.execute(delete(Job))
+    db.commit()
+    report = rescan(db, archive, NOW)
+    db.commit()
+    assert report.queued == 2
+    assert {j.priority for j in db.scalars(select(Job))} == {jobs.PRIORITY_LOW}
+    assert rescan(db, archive, NOW).queued == 0  # già in coda
+
+
+def test_trashed_notes_are_not_queued(archive, db):
+    library.trash_capture(db, archive, first(db).id, NOW)
+    db.execute(delete(Job))
+    db.commit()
+    assert rescan(db, archive, NOW).queued == 1
+
+
+def test_broken_note_is_reported_and_keeps_the_catalog(archive, db):
+    cap = first(db)
+    archive.write_text(cap.rel_path, ".md", render_note(PROCESSED, ROME))
+    rescan(db, archive, NOW)
+    jobs.mark_done(db, cap.id, NOW)
+    db.commit()
+    archive.write_text(cap.rel_path, ".md", "---\ntitle: [non chiusa\n---\n")
+    report = rescan(db, archive, NOW)
+    db.commit()
+    assert any("nota .md non leggibile" in p for p in report.problems)
+    assert (report.updated, report.queued) == (0, 0)
+    assert first(db).summary == "Preventivo del tetto."
+
+
+def test_deleted_note_clears_the_fields_and_requeues(archive, db):
+    cap = first(db)
+    archive.write_text(cap.rel_path, ".md", render_note(PROCESSED, ROME))
+    rescan(db, archive, NOW)
+    jobs.mark_done(db, cap.id, NOW)
+    db.commit()
+    archive.derived_path(cap.rel_path, ".md").unlink()
+    report = rescan(db, archive, NOW)
+    db.commit()
+    assert (report.updated, report.queued) == (1, 1)
+    assert (first(db).transcript, first(db).tags) == (None, [])
+
+
+def test_note_running_right_now_is_left_alone(archive, db):
+    """Il worker sta elaborando proprio ora la nota senza `.md`: rescan non la rimette in
+    coda da capo (perderebbe i tentativi fatti e il lease del worker in corso)."""
+    db.execute(delete(Job))
+    db.commit()
+    cap2 = db.scalars(select(Capture).where(Capture.device_id == DEV2)).one()
+    jobs.enqueue(db, cap2.id, NOW, priority=jobs.PRIORITY_LOW)
+    db.commit()
+    running = jobs.claim(db, NOW)  # lo marca `running` con lease valido, e fa commit
+    assert running.capture_id == cap2.id
+    later = NOW + timedelta(minutes=1)
+    report = rescan(db, archive, later)
+    db.commit()
+    assert report.queued == 1  # solo l'altra registrazione, senza lavoro
+    job = jobs.get_job(db, cap2.id)
+    assert (job.status, job.locked_until) == (jobs.RUNNING, running.locked_until)

@@ -65,15 +65,31 @@ def is_active(s: Session, capture_id: uuid.UUID) -> bool:
     return job is not None and job.status in ACTIVE
 
 
+def _has_live_lease(job: Job, now: datetime) -> bool:
+    return job.status == RUNNING and job.locked_until is not None and job.locked_until > now
+
+
 def requeue(s: Session, capture: Capture, now: datetime) -> Job:
     """"Rielabora": se la trascrizione è stata corretta a mano si riparte dall'arricchimento."""
     job = _locked(s, capture.id)
-    if (job is not None and job.status == RUNNING and job.locked_until is not None
-            and job.locked_until > now):
+    if job is not None and _has_live_lease(job, now):
         raise JobRunning(str(capture.id))
     edited_transcript = "transcript" in (capture.edited or []) and capture.transcript is not None
     return enqueue(s, capture.id, now,
                    stage=STAGE_ENRICH if edited_transcript else STAGE_TRANSCRIBE)
+
+
+def enqueue_if_idle(s: Session, capture_id: uuid.UUID, now: datetime, *,
+                    priority: int = PRIORITY_NORMAL, stage: str = STAGE_TRANSCRIBE) -> Job | None:
+    """Come `enqueue`, ma senza pestare i piedi al worker: usata da `rescan`, che può
+    girare mentre il worker gira a sua volta. None (nessuna modifica) se la nota è già in
+    coda o è proprio ora `running` con un lease valido; altrimenti la mette (o rimette) in
+    coda come `enqueue`. Stesso controllo di `requeue` sul lease, tenuto sotto lo stesso
+    lock."""
+    job = _locked(s, capture_id)
+    if job is not None and (job.status == QUEUED or _has_live_lease(job, now)):
+        return None
+    return enqueue(s, capture_id, now, priority=priority, stage=stage)
 
 
 def _backfill():

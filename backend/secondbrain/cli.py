@@ -93,7 +93,7 @@ def _rescan(args: argparse.Namespace) -> None:
         report = rescan(s, Archive(settings.archive_dir), utcnow())
         s.commit()
     print(f"Registrazioni: aggiunte {report.added}, aggiornate {report.updated}, "
-          f"rimosse dal catalogo {report.removed}.")
+          f"rimosse dal catalogo {report.removed}, messe in coda da elaborare {report.queued}.")
     if report.devices_created:
         print("Dispositivi creati senza token: " + ", ".join(report.devices_created)
               + " (usa 'secondbrain device token <id>')")

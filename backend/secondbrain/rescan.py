@@ -1,7 +1,9 @@
 """Ricostruzione del catalogo dai sidecar su disco (spec §4, §6 "Recupero").
 
 Il disco è la verità: posizione del file → rel_path, day e stato del cestino; sidecar →
-tutto il resto. Righe senza file vengono tolte, file senza sidecar solo segnalati.
+tutto il resto; `<base>.md` → campi AI (spec AI §6). Righe senza file vengono tolte, file
+senza sidecar solo segnalati; un `.md` illeggibile è segnalato e non cancella niente; una
+nota fuori dal cestino senza `.md` va in coda con priorità bassa.
 """
 import uuid
 from dataclasses import dataclass, field
@@ -10,9 +12,13 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .archive import TRASH, Archive
+from . import jobs
+from .archive import NOTE_SUFFIX, TRASH, Archive
 from .models import Capture, Device
 from .naming import DEFAULT_DEVICE_TYPE, parse_day_dir
+from .notefile import NoteError, parse_note
+from .notes import EMPTY_AI_FIELDS, lock_capture, note_fields
+from .search import refresh_search_vector
 from .sidecar import sidecar_to_fields, capture_to_sidecar
 
 
@@ -21,6 +27,7 @@ class RescanReport:
     added: int = 0
     updated: int = 0
     removed: int = 0
+    queued: int = 0
     devices_created: list[str] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
 
@@ -51,6 +58,22 @@ def _load(archive: Archive, rel_wav: str, now: datetime, report: RescanReport) -
     _sync_trashed_at(archive, rel_wav, sidecar_data, resolved_trashed_at)
     fields["trashed_at"] = resolved_trashed_at
     return fields | {"rel_path": rel_wav, "day": day}
+
+
+def _note_fields(archive: Archive, rel_wav: str, report: RescanReport) -> tuple[dict | None, bool]:
+    """(campi AI dal `.md`, oppure None se è illeggibile e il catalogo resta com'è; manca il `.md`)."""
+    try:
+        text = archive.read_text(rel_wav, NOTE_SUFFIX)
+    except FileNotFoundError:
+        return dict(EMPTY_AI_FIELDS), True
+    except (OSError, UnicodeDecodeError) as exc:
+        report.problems.append(f"{rel_wav}: nota .md non leggibile ({exc})")
+        return None, False
+    try:
+        return note_fields(parse_note(text)), False
+    except NoteError as exc:
+        report.problems.append(f"{rel_wav}: nota .md non leggibile ({exc})")
+        return None, False
 
 
 def _ensure_device(s: Session, device_id: str, now: datetime, report: RescanReport) -> None:
@@ -108,9 +131,18 @@ def rescan(s: Session, archive: Archive, now: datetime) -> RescanReport:
     for rel_wav in archive.iter_wavs_without_sidecar():
         report.problems.append(f"{rel_wav}: WAV senza sidecar, non importato")
 
+    to_queue: list[uuid.UUID] = []
     for values in entries.values():
+        ai_fields, missing_note = _note_fields(archive, values["rel_path"], report)
+        if ai_fields is not None:
+            values.update(ai_fields)
+        if missing_note and values["trashed_at"] is None:
+            to_queue.append(values["id"])
         _ensure_device(s, values["device_id"], now, report)
-        capture = s.get(Capture, values["id"])
+        # Riga già esistente: il lock è quello di Task 9 (`notes.lock_capture`), lo stesso
+        # che tiene UI e worker mentre scrivono i campi AI, perché il worker può girare
+        # nello stesso momento di un rescan.
+        capture = lock_capture(s, values["id"])
         if capture is None:
             s.add(Capture(**values))
             report.added += 1
@@ -121,4 +153,13 @@ def rescan(s: Session, archive: Archive, now: datetime) -> RescanReport:
         if changed:
             report.updated += 1
     s.flush()
+
+    for capture_id in entries:
+        refresh_search_vector(s, s.get(Capture, capture_id))
+    for capture_id in to_queue:
+        # `enqueue_if_idle` tiene il lock sulla riga del lavoro (dopo quello sulla riga
+        # della registrazione, sopra) e lascia stare una nota già in coda o che il worker
+        # sta elaborando proprio ora, invece di rimetterla in coda da capo.
+        if jobs.enqueue_if_idle(s, capture_id, now, priority=jobs.PRIORITY_LOW) is not None:
+            report.queued += 1
     return report
