@@ -189,9 +189,13 @@ docker compose logs -f worker      # "trascritta …", "elaborata …", errori g
 Nel finder ogni riga mostra l'icona di stato (orologio in coda, rotella in corso,
 triangolo fallita); una nota fallita mostra l'errore nel dettaglio e si rimette in coda
 con **Rielabora** (i campi corretti a mano restano come sono). Se le note restano in
-coda, il finder dice perché: manca `SETTINGS_KEY`, elaborazione in pausa o nessun
-provider con una chiave. Il worker ritenta dopo 1 min, 5 min, 30 min, 2 h e 6 h; al
+coda, il finder dice perché: `SETTINGS_KEY` mancante o non valida, elaborazione in
+pausa, nessun provider con una chiave o nessuno con un modello di testo. Il worker ritenta dopo 1 min, 5 min, 30 min, 2 h e 6 h; al
 sesto tentativo fallito la nota resta "fallita".
+
+**Correzioni a mano nel `.md`** (es. da Obsidian): dopo aver modificato un `.md`, lanciare
+`secondbrain rescan` prima di correggere quella nota dalla UI o di rielaborarla, altrimenti
+UI e worker riscrivono il `.md` partendo dal catalogo e la modifica si perde.
 
 ## Accesso da fuori con Cloudflare Tunnel
 

@@ -57,3 +57,14 @@ def test_unreadable_audio(tmp_path):
 
 def test_every_provider_format_is_known():
     assert all(fmt in MIME_TYPES for spec in PROVIDERS for fmt in spec.audio_formats)
+
+
+def test_missing_audio_is_not_unreadable(tmp_path):
+    """Final review 3: un WAV sparito (spostato nel frattempo) non è un errore di contenuto."""
+    gone = tmp_path / "spostato.wav"
+    with pytest.raises(FileNotFoundError):
+        AudioSource(gone, tmp_path).duration_s
+    with pytest.raises(FileNotFoundError):
+        AudioSource(gone, tmp_path).prepare((FLAC, WAV))
+    with pytest.raises(FileNotFoundError):
+        wav_to_flac(gone, tmp_path / "x.flac")

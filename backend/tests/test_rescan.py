@@ -6,10 +6,13 @@ import pytest
 from sqlalchemy import delete, select
 
 from secondbrain import jobs, library
+from secondbrain import rescan as rescan_module
 from secondbrain.archive import Archive
+from secondbrain.catalog import make_sessionmaker
 from secondbrain.cli import main
 from secondbrain.models import Capture, Device, Job
-from secondbrain.notefile import Note, render_note
+from secondbrain.notefile import Note, parse_note, render_note
+from secondbrain.notes import write_note
 from secondbrain.rescan import rescan
 from secondbrain.sidecar import capture_to_sidecar
 from tests.helpers import DEV, DEV2, NOW, TEST_DB, is_searchable, make_wav, upload
@@ -333,3 +336,50 @@ def test_note_running_right_now_is_left_alone(archive, db):
     assert report.queued == 1  # solo l'altra registrazione, senza lavoro
     job = jobs.get_job(db, cap2.id)
     assert (job.status, job.locked_until) == (jobs.RUNNING, running.locked_until)
+
+
+def test_note_written_by_the_worker_while_waiting_for_the_lock_is_kept(archive, db, monkeypatch):
+    """Final review 1: il worker finisce la trascrizione mentre rescan aspetta il lock della
+    riga; rescan legge il `.md` solo dopo averlo preso, quindi non azzera il catalogo."""
+    db.execute(delete(Job))
+    db.commit()
+    cap_id = first(db).id
+    real_lock = rescan_module.lock_capture
+
+    def worker_writes_first(s, capture_id):
+        if capture_id == cap_id:
+            with make_sessionmaker(db.get_bind())() as worker:
+                write_note(worker, archive, real_lock(worker, capture_id), PROCESSED, ROME)
+                worker.commit()
+        return real_lock(s, capture_id)
+
+    monkeypatch.setattr(rescan_module, "lock_capture", worker_writes_first)
+    report = rescan(db, archive, NOW)
+    db.commit()
+    cap = first(db)
+    assert cap.transcript == PROCESSED.transcript and cap.summary == PROCESSED.summary
+    assert parse_note(archive.read_text(cap.rel_path, ".md")).transcript == PROCESSED.transcript
+    assert report.queued == 1  # solo l'altra, davvero senza `.md`
+
+
+@pytest.mark.parametrize("old,new", [
+    ("language: it", "language: portoghese"),
+    ("provider: groq", f"provider: {'p' * 40}"),
+    ("transcribe: whisper-large-v3-turbo", f"transcribe: {'m' * 101}"),
+])
+def test_note_with_values_too_long_for_the_catalog_is_reported(archive, db, old, new):
+    """Final review 2: niente DataError al flush, il rescan finisce e il catalogo resta."""
+    cap = first(db)
+    archive.write_text(cap.rel_path, ".md", render_note(PROCESSED, ROME))
+    rescan(db, archive, NOW)
+    jobs.mark_done(db, cap.id, NOW)
+    db.commit()
+    text = archive.read_text(cap.rel_path, ".md")
+    assert old in text
+    archive.write_text(cap.rel_path, ".md", text.replace(old, new))
+    report = rescan(db, archive, NOW)
+    db.commit()
+    assert any("nota .md non leggibile" in p for p in report.problems)
+    cap = first(db)
+    assert (cap.language, cap.ai_provider, cap.ai_transcribe_model) == (
+        "it", "groq", "whisper-large-v3-turbo")

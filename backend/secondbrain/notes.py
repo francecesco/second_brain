@@ -14,12 +14,16 @@ from .models import Capture
 from .notefile import Note, render_note
 from .search import refresh_search_vector
 
-# Campi AI del catalogo di una nota senza `.md` (mai elaborata, o `.md` cancellato).
-EMPTY_AI_FIELDS = {
-    "transcript": None, "title_auto": None, "summary": None, "tags": [], "edited": [],
-    "language": None, "ai_provider": None, "ai_transcribe_model": None,
-    "ai_enrich_provider": None, "ai_enrich_model": None, "processed_at": None,
-}
+def empty_ai_fields() -> dict:
+    """Campi AI del catalogo di una nota senza `.md` (mai elaborata, o `.md` cancellato).
+
+    Un dizionario nuovo a ogni chiamata, con liste nuove: nessuna riga ne condivide un'altra.
+    """
+    return {
+        "transcript": None, "title_auto": None, "summary": None, "tags": [], "edited": [],
+        "language": None, "ai_provider": None, "ai_transcribe_model": None,
+        "ai_enrich_provider": None, "ai_enrich_model": None, "processed_at": None,
+    }
 
 
 def lock_capture(s: Session, capture_id: uuid.UUID) -> Capture | None:

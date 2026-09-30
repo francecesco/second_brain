@@ -23,6 +23,14 @@ class NotConvertible(AudioError):
     """WAV leggibile ma con campioni che il FLAC non conserverebbe identici."""
 
 
+def _unreadable(path: Path, exc: sf.SoundFileError) -> Exception:
+    """Un WAV sparito (spostato da una correzione della data a lavoro in corso) non è un
+    errore di contenuto: FileNotFoundError, che il worker riprova con il backoff."""
+    if not path.exists():
+        return FileNotFoundError(f"audio non trovato: {path.name}")
+    return AudioError(f"audio illeggibile: {exc}")
+
+
 def wav_to_flac(src: Path, dst: Path) -> None:
     try:
         with sf.SoundFile(str(src)) as wav:
@@ -33,7 +41,7 @@ def wav_to_flac(src: Path, dst: Path) -> None:
                 for block in wav.blocks(blocksize=BLOCK_FRAMES, dtype="int32"):
                     flac.write(block)
     except sf.SoundFileError as exc:
-        raise AudioError(f"audio illeggibile: {exc}") from None
+        raise _unreadable(src, exc) from None
 
 
 class AudioSource:
@@ -51,7 +59,7 @@ class AudioSource:
             try:
                 self._duration = float(sf.info(str(self.wav_path)).duration)
             except sf.SoundFileError as exc:
-                raise AudioError(f"audio illeggibile: {exc}") from None
+                raise _unreadable(self.wav_path, exc) from None
         return self._duration
 
     def _flac_path(self) -> Path:
@@ -70,5 +78,7 @@ class AudioSource:
                 except NotConvertible:
                     continue
             if fmt == WAV:
+                if not self.wav_path.exists():
+                    raise FileNotFoundError(f"audio non trovato: {self.wav_path.name}")
                 return self.wav_path, MIME_TYPES[WAV]
         raise AudioError(f"nessun formato accettato tra: {', '.join(formats)}")

@@ -43,6 +43,7 @@ POLL_INTERVAL_S = 5.0
 AI_SCHEMA_VERSION = 1
 TEMP_PREFIX = "secondbrain-audio-"
 IDLE_NO_KEY = "SETTINGS_KEY non impostata"
+IDLE_BAD_KEY = "SETTINGS_KEY non valida"
 IDLE_PAUSED = "elaborazione in pausa"
 IDLE_NO_PROVIDER = "nessun provider abilitato con una chiave"
 
@@ -97,7 +98,7 @@ class Worker:
 
     def _check(self, s: Session) -> tuple[str | None, list[ProviderConfig]]:
         if not self.box.available:
-            return IDLE_NO_KEY, []
+            return (IDLE_BAD_KEY if self.box.invalid else IDLE_NO_KEY), []
         if store.is_paused(s):
             return IDLE_PAUSED, []
         configs = store.provider_configs(s, self.box)
@@ -128,6 +129,8 @@ class Worker:
         except (ContentError, AudioError) as exc:
             self._fail(lease, str(exc), permanent=True)
         except chain.AllProvidersFailed as exc:
+            self._fail(lease, str(exc), permanent=False)
+        except FileNotFoundError as exc:  # WAV spostato a lavoro in corso: si riprova
             self._fail(lease, str(exc), permanent=False)
         except Exception as exc:  # noqa: BLE001 - disco pieno, DB, bug: si riprova con backoff
             log.exception("elaborazione di %s interrotta da un errore locale", capture_id)
@@ -217,6 +220,12 @@ class Worker:
             if held is None:
                 return
             capture, _ = held
+            if capture.transcript is None:  # catalogo azzerato nel frattempo (es. rescan)
+                jobs.release(s, lease.capture_id, now, stage=jobs.STAGE_TRANSCRIBE)
+                s.commit()
+                log.warning("nota %s senza trascrizione nel catalogo: di nuovo da trascrivere",
+                            lease.capture_id)
+                return
             note = notefile.apply_enrichment(  # rilegge `edited` sotto il lock
                 notes.note_from_capture(capture), enrichment.title, enrichment.summary,
                 enrichment.tags, provider=config.name, model=enrichment.model, at=now)
@@ -251,7 +260,8 @@ class Worker:
                 record_usage(s, provider, month_start(self.clock(), self.tz), audio_seconds)
                 s.commit()
         except Exception as exc:  # noqa: BLE001 - effetto collaterale, mai bloccante
-            log.warning("utilizzo di %s non registrato: %s", provider, type(exc).__name__)
+            log.warning("utilizzo di %s non registrato: %s", provider, type(exc).__name__,
+                        exc_info=True)
 
     def _fail(self, lease: _Lease, error: str, *, permanent: bool) -> None:
         with self.sessionmaker() as s:
@@ -273,7 +283,7 @@ class Worker:
                 s.commit()
         except Exception as exc:  # noqa: BLE001 - si sta uscendo comunque
             log.warning("impossibile rimettere in coda %s (%s): lo riprenderà il lease",
-                        lease.capture_id, type(exc).__name__)
+                        lease.capture_id, type(exc).__name__, exc_info=True)
 
 
 def run_forever(worker, stop: threading.Event, interval: float = POLL_INTERVAL_S) -> None:

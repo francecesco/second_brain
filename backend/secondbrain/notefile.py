@@ -11,11 +11,18 @@ from zoneinfo import ZoneInfo
 
 import yaml
 
+from .languages import LANGUAGES
+
 EDITABLE_FIELDS = ("transcript", "summary", "tags")
-MAX_TITLE_LEN = 200  # come le colonne captures.title e captures.title_auto
+# Lunghezze delle colonne del catalogo (models.py le usa): un valore più lungo scritto a mano
+# nel `.md` è una nota illeggibile, non un DataError a metà rescan.
+MAX_TITLE_LEN = 200  # captures.title e captures.title_auto
 MAX_SUMMARY_LEN = 500
 MAX_TAGS = 8
-MAX_TAG_LEN = 40  # come gli elementi di captures.tags
+MAX_TAG_LEN = 40  # elementi di captures.tags
+MAX_LANGUAGE_LEN = 8  # captures.language
+MAX_PROVIDER_LEN = 32  # captures.ai_provider, captures.ai_enrich_provider, ai_providers.name
+MAX_MODEL_LEN = 100  # modelli in captures e ai_providers
 DELIMITER = "---"
 YAML_WIDTH = 10_000  # niente a capo automatici dentro titolo e riassunto
 
@@ -124,6 +131,20 @@ def _opt_str(data: dict, key: str) -> str | None:
     return str(value)
 
 
+def _bounded(data: dict, key: str, max_len: int) -> str | None:
+    value = _opt_str(data, key)
+    if value is not None and len(value) > max_len:
+        raise NoteError(f"{key}: più lungo di {max_len} caratteri")
+    return value
+
+
+def _language(data: dict) -> str | None:
+    value = _opt_str(data, "language")
+    if value is not None and value not in LANGUAGES:
+        raise NoteError(f"language: lingua sconosciuta {value[:MAX_LANGUAGE_LEN]!r}")
+    return value
+
+
 def _list(data: dict, key: str) -> list:
     value = data.get(key)
     if value is None:
@@ -163,17 +184,18 @@ def parse_note(text: str) -> Note:
         raise NoteError("models: attesa una mappa")
     title = _opt_str(data, "title")
     summary = _opt_str(data, "summary")
-    provider = _opt_str(data, "provider")
-    enrich_model = _opt_str(models, "enrich")
+    provider = _bounded(data, "provider", MAX_PROVIDER_LEN)
+    enrich_model = _bounded(models, "enrich", MAX_MODEL_LEN)
     return Note(
         transcript=body.strip(),
         title=clean_title(title) if title is not None else None,
         summary=clean_summary(summary) if summary is not None else None,
         tags=normalize_tags(_list(data, "tags")),
-        language=_opt_str(data, "language"),
+        language=_language(data),
         provider=provider,
-        transcribe_model=_opt_str(models, "transcribe"),
-        enrich_provider=_opt_str(data, "enrich_provider") or (provider if enrich_model else None),
+        transcribe_model=_bounded(models, "transcribe", MAX_MODEL_LEN),
+        enrich_provider=(_bounded(data, "enrich_provider", MAX_PROVIDER_LEN)
+                         or (provider if enrich_model else None)),
         enrich_model=enrich_model,
         processed_at=_datetime(data.get("processed_at")),
         edited=_edited(str(name) for name in _list(data, "edited")),
@@ -182,10 +204,21 @@ def parse_note(text: str) -> Note:
 
 def apply_transcript(note: Note, text: str, *, provider: str, model: str, language: str,
                      at: datetime) -> Note:
-    """Risultato della trascrizione; una trascrizione corretta a mano non si tocca."""
+    """Risultato della trascrizione; una trascrizione corretta a mano non si tocca.
+
+    Senza parlato non ci sarà arricchimento: titolo, riassunto e tag di un'elaborazione
+    precedente ("Rielabora") non descrivono più niente e si tolgono, salvo quelli corretti
+    a mano.
+    """
     keep = "transcript" in note.edited
-    return replace(note, transcript=note.transcript if keep else text.strip(), provider=provider,
-                   transcribe_model=model, language=language, processed_at=at)
+    transcript = note.transcript if keep else text.strip()
+    note = replace(note, transcript=transcript, provider=provider, transcribe_model=model,
+                   language=language, processed_at=at)
+    if transcript:
+        return note
+    return replace(note, title=None, enrich_provider=None, enrich_model=None,
+                   summary=note.summary if "summary" in note.edited else None,
+                   tags=note.tags if "tags" in note.edited else ())
 
 
 def apply_enrichment(note: Note, title: str, summary: str | None, tags: tuple[str, ...], *,

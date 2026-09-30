@@ -36,6 +36,7 @@ TRANSCRIBE_TIMEOUT = httpx.Timeout(300.0, connect=CONNECT_TIMEOUT_S)  # 10 min d
 ENRICH_TIMEOUT = httpx.Timeout(120.0, connect=CONNECT_TIMEOUT_S)
 CHECK_TIMEOUT = httpx.Timeout(15.0, connect=CONNECT_TIMEOUT_S)
 CODE_FENCE = "```"
+FENCE_LANGUAGE = "json"  # etichetta dopo il fence, confrontata senza badare alle maiuscole
 
 
 class ProviderError(Exception):
@@ -218,7 +219,9 @@ def transcribe_prompt(language: str) -> str:
 def _strip_fence(content: str) -> str:
     text = content.strip()
     if text.startswith(CODE_FENCE):
-        text = text.removeprefix(CODE_FENCE).removeprefix("json").removesuffix(CODE_FENCE)
+        text = text.removeprefix(CODE_FENCE).removesuffix(CODE_FENCE)
+        if text[:len(FENCE_LANGUAGE)].lower() == FENCE_LANGUAGE:  # ```json o ```JSON
+            text = text[len(FENCE_LANGUAGE):]
     return text.strip()
 
 

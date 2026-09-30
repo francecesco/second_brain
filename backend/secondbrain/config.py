@@ -16,6 +16,10 @@ _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off", ""}
 
 
+BAD_SETTINGS_KEY = ("SETTINGS_KEY non valida: elaborazione AI ferma, il resto funziona. "
+                    "Generane una con 'secondbrain gen-key'")
+
+
 class ConfigError(ValueError):
     """Variabile d'ambiente mancante o non valida."""
 
@@ -33,6 +37,9 @@ class Settings:
     # Chiave Fernet per le chiavi API dei provider (spec AI §8): mai nel repr, quindi mai
     # nei log anche se qualcuno stampa le impostazioni.
     settings_key: str | None = field(default=None, repr=False)
+    # SETTINGS_KEY presente ma malformata: si tratta come mancante (spec AI §8, il resto del
+    # backend funziona come oggi) e lo si dice nel log e nelle pagine.
+    settings_key_invalid: bool = False
 
 
 def _bool(env: Mapping[str, str], key: str, default: bool) -> bool:
@@ -60,15 +67,16 @@ def _int(env: Mapping[str, str], key: str, default: int, minimum: int) -> int:
     return value
 
 
-def _settings_key(env: Mapping[str, str]) -> str | None:
+def _settings_key(env: Mapping[str, str]) -> tuple[str | None, bool]:
+    """(chiave, malformata?): una chiave non valida non ferma l'app, solo l'elaborazione AI."""
     raw = env.get("SETTINGS_KEY", "").strip()
     if not raw:
-        return None
+        return None, False
     try:
         Fernet(raw.encode())
     except (ValueError, TypeError):
-        raise ConfigError("SETTINGS_KEY non valida: generane una con 'secondbrain gen-key'") from None
-    return raw
+        return None, True
+    return raw, False
 
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
@@ -81,6 +89,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         tz = ZoneInfo(tz_name)
     except (ZoneInfoNotFoundError, ValueError):
         raise ConfigError(f"TZ_ARCHIVE: fuso orario sconosciuto {tz_name!r}") from None
+    settings_key, settings_key_invalid = _settings_key(env)
     return Settings(
         database_url=url,
         archive_dir=Path(env.get("ARCHIVE_DIR", "/data/archive")),
@@ -92,5 +101,6 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
                                   DEFAULT_TRASH_RETENTION_DAYS, MIN_TRASH_RETENTION_DAYS),
         allow_unauthenticated_lan=_bool(env, "ALLOW_UNAUTHENTICATED_LAN", False),
         device_hostname=env.get("DEVICE_HOSTNAME", "").strip().lower() or None,
-        settings_key=_settings_key(env),
+        settings_key=settings_key,
+        settings_key_invalid=settings_key_invalid,
     )

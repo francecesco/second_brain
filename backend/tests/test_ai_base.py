@@ -63,6 +63,9 @@ def test_parse_enrichment():
     e = base.parse_enrichment("groq", "m", '```json\n{"title": "T", "summary": "S", '
                               '"tags": ["#A"]}\n```', {"grezza": 1})
     assert (e.title, e.summary, e.tags, e.model, e.raw) == ("T", "S", ("a",), "m", {"grezza": 1})
+    upper = base.parse_enrichment("groq", "m", '```JSON\n{"title": "T", "summary": "S", '
+                                  '"tags": []}\n```', {})
+    assert upper.title == "T"
     with pytest.raises(ServiceError, match="non JSON"):
         base.parse_enrichment("groq", "m", "ecco il titolo", {})
     with pytest.raises(ServiceError, match="fuori schema"):

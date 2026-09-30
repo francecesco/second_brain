@@ -72,6 +72,10 @@ def test_settings_key_is_optional_and_hidden():
 
 
 @pytest.mark.parametrize("raw", ["corta", "x" * 44])
-def test_bad_settings_key(raw):
-    with pytest.raises(ConfigError, match="SETTINGS_KEY"):
-        load_settings(BASE | {"SETTINGS_KEY": raw})
+def test_bad_settings_key_is_treated_as_missing(raw):
+    """Final review 9 (spec §8): una SETTINGS_KEY malformata ferma solo l'elaborazione AI,
+    non l'ingest: niente ConfigError, chiave assente e segnalata come non valida."""
+    s = load_settings(BASE | {"SETTINGS_KEY": raw})
+    assert (s.settings_key, s.settings_key_invalid) == (None, True)
+    assert raw not in repr(s)
+    assert load_settings(BASE).settings_key_invalid is False

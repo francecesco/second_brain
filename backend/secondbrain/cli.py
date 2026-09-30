@@ -20,7 +20,7 @@ from . import catalog, devices, jobs, library, ota, settings_store
 from .ai.registry import build_provider
 from .archive import Archive
 from .clock import utcnow
-from .config import ConfigError, Settings, load_settings
+from .config import BAD_SETTINGS_KEY, ConfigError, Settings, load_settings
 from .naming import DEFAULT_DEVICE_TYPE
 from .rescan import rescan
 from .settings_store import SecretBox
@@ -234,8 +234,10 @@ def _worker(args: argparse.Namespace) -> None:
     settings = load_settings()
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
     logging.getLogger("httpx").setLevel(logging.WARNING)  # una riga per richiesta è rumore
-    box = SecretBox(settings.settings_key)
-    if not box.available:
+    box = SecretBox(settings.settings_key, invalid=settings.settings_key_invalid)
+    if box.invalid:
+        logging.getLogger(__name__).error(BAD_SETTINGS_KEY)
+    elif not box.available:
         logging.getLogger(__name__).warning(
             "SETTINGS_KEY non impostata: il worker resta fermo (vedi 'secondbrain gen-key')")
     engine = catalog.make_engine(settings.database_url)

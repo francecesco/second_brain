@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import OperationalError
 
 from secondbrain import jobs, library
@@ -22,8 +22,8 @@ from secondbrain.models import AiProvider, Capture, Job
 from secondbrain.notefile import parse_note
 from secondbrain.usage import usage_for_month
 from secondbrain.worker import Shutdown, Worker, run_forever
-from tests.ai_fakes import (DEFAULT_TEXT, FAKE_KEYS, FakeFactory, FakeProvider,
-                            configure_providers)
+from tests.ai_fakes import (DEFAULT_ENRICHMENT, DEFAULT_TEXT, FAKE_KEYS, FakeFactory,
+                            FakeProvider, configure_providers)
 from tests.helpers import DEV2, NOW, TEST_DB, TEST_SETTINGS_KEY, capture_by, make_wav, upload
 
 ROME = ZoneInfo("Europe/Rome")
@@ -361,6 +361,7 @@ def test_usage_failure_does_not_fail_the_note(env, db, monkeypatch, caplog):
     assert job_of(db, env).status == jobs.DONE
     assert fresh(db, env).transcript == DEFAULT_TEXT
     assert any("utilizzo" in message for message in warnings_in(caplog))
+    assert all(r.exc_info for r in caplog.records if "utilizzo" in r.getMessage())
 
 
 def test_shutdown_requeue_failure_is_logged(env, db, monkeypatch, caplog):
@@ -373,6 +374,7 @@ def test_shutdown_requeue_failure_is_logged(env, db, monkeypatch, caplog):
         env.worker.run_once()
     assert job_of(db, env).status == jobs.RUNNING  # lo riprende il lease
     assert any("coda" in message for message in warnings_in(caplog))
+    assert all(r.exc_info for r in caplog.records if "rimettere in coda" in r.getMessage())
 
 
 def test_api_keys_never_leak_through_the_worker(env, db, caplog):
@@ -412,3 +414,81 @@ def test_api_keys_never_leak_through_the_worker(env, db, caplog):
         assert all(key not in text for text in raised)
         assert key not in caplog.text
     client.close()
+
+
+def test_transcript_wiped_before_enrichment_goes_back_to_transcription(env, db):
+    """Final review 1: se tra le due fasi il catalogo perde la trascrizione (un rescan che
+    ha letto il `.md` prima che esistesse), il worker torna a trascrivere invece di
+    riscrivere il `.md` vuoto."""
+    def catalog_wiped_meanwhile():
+        with other_session(db) as other:
+            other.execute(update(Capture).where(Capture.id == env.cap_id)
+                          .values(transcript=None))
+            other.commit()
+        return DEFAULT_ENRICHMENT
+
+    env.groq.enrichments = [catalog_wiped_meanwhile]
+    assert env.worker.run_once()
+    cap = fresh(db, env)
+    assert parse_note(env.archive.read_text(cap.rel_path, ".md")).transcript == DEFAULT_TEXT
+    job = job_of(db, env)
+    assert (job.status, job.stage, job.attempts) == (jobs.QUEUED, jobs.STAGE_TRANSCRIBE, 0)
+    assert cap.title_auto is None
+
+
+def test_audio_moved_away_mid_job_is_retried(env, db):
+    """Final review 3: il WAV spostato (correzione della data) tra `_begin` e la lettura
+    non è "audio illeggibile" per sempre: si riprova con il backoff."""
+    path = env.archive.abs(fresh(db, env).rel_path)
+    data = path.read_bytes()
+    path.unlink()
+    assert env.worker.run_once()
+    job = job_of(db, env)
+    assert (job.status, job.attempts, job.next_run_at) == (jobs.QUEUED, 1, NOW + jobs.BACKOFF[0])
+    assert "illeggibile" not in job.last_error
+    path.write_bytes(data)
+    env.clock.now = job.next_run_at
+    assert env.worker.run_once()
+    assert job_of(db, env).status == jobs.DONE
+
+
+def test_empty_transcript_on_reprocess_clears_the_old_enrichment(env, db):
+    """Final review 4: "Rielabora" senza parlato non lascia titolo, riassunto e tag vecchi;
+    i campi corretti a mano restano."""
+    env.worker.run_once()
+    library.edit_ai_field(db, env.archive, ROME, env.cap_id, "tags", "mio")
+    library.reprocess(db, env.cap_id, NOW)
+    env.groq.transcripts = [""]
+    assert env.worker.run_once()
+    cap = fresh(db, env)
+    assert (cap.transcript, cap.title_auto, cap.summary, cap.tags, cap.ai_enrich_provider) == (
+        "", None, None, ["mio"], None)
+    note = parse_note(env.archive.read_text(cap.rel_path, ".md"))
+    assert (note.title, note.summary, note.tags) == (None, None, ("mio",))
+    assert job_of(db, env).status == jobs.DONE
+
+
+def test_bad_settings_key_keeps_the_worker_idle(env, db, clock, caplog):
+    """Final review 9: SETTINGS_KEY non valida = worker fermo, con il motivo nel log."""
+    caplog.set_level(logging.INFO)
+    worker = Worker(sessionmaker=make_sessionmaker(db.get_bind()), archive=env.archive,
+                    tz=ROME, box=store.SecretBox(None, invalid=True), factory=FakeFactory(),
+                    clock=clock)
+    assert not worker.run_once()
+    assert "SETTINGS_KEY non valida" in caplog.text
+    assert job_of(db, env).status == jobs.QUEUED
+
+
+def test_cli_worker_with_a_bad_settings_key_idles(monkeypatch, settings, caplog):
+    seen = {}
+    monkeypatch.setenv("DATABASE_URL", TEST_DB)
+    monkeypatch.setenv("ARCHIVE_DIR", str(settings.archive_dir))
+    monkeypatch.setenv("SETTINGS_KEY", "corta-e-sbagliata")
+    monkeypatch.setattr("secondbrain.cli.install_signal_handlers", lambda stop: None)
+    monkeypatch.setattr("secondbrain.cli.run_forever",
+                        lambda worker, stop: seen.update(worker=worker))
+    assert main(["worker"]) == 0
+    assert not seen["worker"].box.available and seen["worker"].box.invalid
+    errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+    assert any("SETTINGS_KEY non valida" in m for m in errors)
+    assert "corta-e-sbagliata" not in caplog.text

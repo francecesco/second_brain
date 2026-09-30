@@ -4,7 +4,8 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from secondbrain.languages import language_name, text_search_config
-from secondbrain.notefile import (MAX_SUMMARY_LEN, MAX_TAG_LEN, MAX_TAGS, MAX_TITLE_LEN,
+from secondbrain.notefile import (MAX_MODEL_LEN, MAX_PROVIDER_LEN, MAX_SUMMARY_LEN, MAX_TAG_LEN,
+                                  MAX_TAGS, MAX_TITLE_LEN,
                                   EnrichmentInvalid, Note, NoteError, apply_edit,
                                   apply_enrichment, apply_transcript, parse_note,
                                   parse_tags_input, render_note, validate_enrichment)
@@ -157,3 +158,28 @@ def test_validate_enrichment_normalizes_and_limits():
 def test_validate_enrichment_rejects_bad_shapes(data):
     with pytest.raises(EnrichmentInvalid):
         validate_enrichment(data)
+
+
+@pytest.mark.parametrize("line", [
+    "language: portoghese",
+    f"provider: {'p' * (MAX_PROVIDER_LEN + 1)}",
+    f"enrich_provider: {'p' * (MAX_PROVIDER_LEN + 1)}",
+    f"models: {{transcribe: {'m' * (MAX_MODEL_LEN + 1)}}}",
+    f"models: {{enrich: {'m' * (MAX_MODEL_LEN + 1)}}}",
+])
+def test_parse_rejects_values_the_catalog_cannot_hold(line):
+    """Final review 2: un valore scritto a mano che non sta nella colonna è un `.md`
+    illeggibile, non un errore del database a metà rescan."""
+    with pytest.raises(NoteError):
+        parse_note(f"---\n{line}\n---\n\nTesto.\n")
+
+
+def test_empty_transcript_clears_the_previous_enrichment():
+    """Final review 4: "Rielabora" senza parlato non lascia titolo, riassunto e tag vecchi."""
+    old = Note(transcript="vecchio", title="Vecchio", summary="vecchio", tags=("a",),
+               enrich_provider="groq", enrich_model="m", edited=("tags",))
+    note = apply_transcript(old, "  ", provider="groq", model="w", language="it", at=AT)
+    assert (note.transcript, note.title, note.summary, note.tags) == ("", None, None, ("a",))
+    assert (note.enrich_provider, note.enrich_model) == (None, None)
+    kept = apply_transcript(old, "nuovo", provider="groq", model="w", language="it", at=AT)
+    assert (kept.title, kept.summary) == ("Vecchio", "vecchio")

@@ -1,7 +1,8 @@
 {% from "_icons.html" import icon %}
 {% set job = c.job %}
 <audio controls preload="none" src="/captures/{{ c.id }}/audio"></audio>
-{% if job and job.status == "failed" %}<p class="notice" role="alert">{{ icon("fix") }}<span>Elaborazione non riuscita: {{ job.last_error or "errore sconosciuto" }}</span></p>{% endif %}
+{% if job and job.status == "failed" %}<p class="notice" role="alert">{{ icon("fix") }}<span>Elaborazione non riuscita: {{ (job.last_error or "errore sconosciuto")|redact }}</span></p>
+{% elif job and job.status == "queued" and job.last_error %}<p class="notice" role="status">{{ icon("fix") }}<span>Ultimo tentativo non riuscito, nuovo tentativo alle {{ local(job.next_run_at) }}: {{ job.last_error|redact }}</span></p>{% endif %}
 {% if c.transcript is not none or c.edited %}
 {% for field in DETAIL_FIELDS %}{% include "_ai_field.html" %}{% endfor %}
 {% if c.processed_at %}<p class="provenance">Elaborata con {{ c.ai_provider or '—' }} · {{ c.ai_transcribe_model or '—' }}{% if c.ai_enrich_provider and c.ai_enrich_provider != c.ai_provider %} · testo con {{ c.ai_enrich_provider }}{% endif %} · {{ local(c.processed_at) }}</p>{% endif %}

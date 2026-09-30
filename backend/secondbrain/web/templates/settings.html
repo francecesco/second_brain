@@ -1,7 +1,8 @@
 {% extends "finder.html" %}
 {% from "_icons.html" import icon %}
 {% block main %}
-{% if not box_available %}<p class="notice" role="alert">{{ icon("fix") }}<span><code>SETTINGS_KEY</code> non impostata: le chiavi API non si possono salvare e l'elaborazione è ferma. Generala con <code>secondbrain gen-key</code>, mettila nel <code>.env</code> e riavvia app e worker.</span></p>{% endif %}
+{% if box_invalid %}<p class="notice" role="alert">{{ icon("fix") }}<span><code>SETTINGS_KEY</code> non valida: le chiavi API non si possono salvare e l'elaborazione è ferma. Generane una nuova con <code>secondbrain gen-key</code>, sostituiscila nel <code>.env</code> e riavvia app e worker.</span></p>
+{% elif not box_available %}<p class="notice" role="alert">{{ icon("fix") }}<span><code>SETTINGS_KEY</code> non impostata: le chiavi API non si possono salvare e l'elaborazione è ferma. Generala con <code>secondbrain gen-key</code>, mettila nel <code>.env</code> e riavvia app e worker.</span></p>{% endif %}
 {% if queued_now is not none %}<p class="notice" role="status">{{ queued_now }} note messe in coda.</p>{% endif %}
 
 <section class="card">

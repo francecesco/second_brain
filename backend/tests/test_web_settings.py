@@ -1,3 +1,4 @@
+import logging
 from dataclasses import replace
 from datetime import date
 
@@ -10,8 +11,8 @@ from secondbrain import settings_store as store
 from secondbrain.models import AiProvider, Job, WebSession
 from secondbrain.usage import record_usage
 from secondbrain.web.auth import set_password
-from tests.ai_fakes import Recorder
-from tests.helpers import NOW, PASSWORD, htmx
+from tests.ai_fakes import Recorder, configure_providers
+from tests.helpers import NOW, PASSWORD, htmx, upload
 
 KEY = "gsk_test_secret_0123456789abcdef"
 MODELS = {"data": [{"id": "whisper-large-v3-turbo"}, {"id": "openai/gpt-oss-120b"}]}
@@ -150,3 +151,27 @@ def test_without_settings_key(ui_without_key):
     assert "SETTINGS_KEY" in text and "secondbrain gen-key" in text
     assert save(client, csrf).status_code == 409
     assert save(client, csrf, api_key="", transcribe_model="altro").status_code == 303
+
+
+def test_settings_page_warns_without_a_text_model(ui, db, settings):
+    """Final review 5: la pagina impostazioni lo dice anche con la coda vuota."""
+    configure_providers(db, store.SecretBox(settings.settings_key), NOW, names=("openai",))
+    assert "Nessun provider AI ha un modello di testo" in ui.client.get("/settings").text
+    configure_providers(db, store.SecretBox(settings.settings_key), NOW, names=("groq",))
+    assert "Nessun provider AI ha un modello di testo" not in ui.client.get("/settings").text
+
+
+def test_bad_settings_key_stops_only_the_ai(make_client, settings, db, caplog):
+    """Final review 9 (spec §8): una SETTINGS_KEY malformata è come una mancante: errore nel
+    log all'avvio (senza il valore), avviso in pagina, ingest e finder funzionano."""
+    bad = replace(settings, settings_key=None, settings_key_invalid=True,
+                  allow_unauthenticated_lan=True)
+    client = make_client(bad)
+    errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
+    assert any("SETTINGS_KEY non valida" in m for m in errors)
+    assert upload(client).status_code == 201
+    set_password(db, PASSWORD, NOW)
+    db.commit()
+    client.post("/login", data={"password": PASSWORD}, follow_redirects=False)
+    assert "SETTINGS_KEY non valida" in client.get("/settings").text
+    assert "SETTINGS_KEY non valida" in client.get("/browse").text

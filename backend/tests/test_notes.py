@@ -10,7 +10,7 @@ from secondbrain.archive import Archive
 from secondbrain.catalog import make_sessionmaker
 from secondbrain.models import Capture
 from secondbrain.notefile import Note, parse_note
-from secondbrain.notes import lock_capture, note_from_capture, write_note
+from secondbrain.notes import empty_ai_fields, lock_capture, note_from_capture, write_note
 from tests.helpers import NOW, capture_by, is_searchable
 
 ROME = ZoneInfo("Europe/Rome")
@@ -111,3 +111,10 @@ def test_edits_wait_for_the_row_lock_held_by_the_worker(recordings, db, engine, 
         worker.rollback()
         worker.close()
     assert fresh(db, cap_id).summary is None
+
+
+def test_empty_ai_fields_are_fresh_every_time():
+    """Final review 7: nessuna lista condivisa tra chiamate (e tra righe del rescan)."""
+    first, second = empty_ai_fields(), empty_ai_fields()
+    assert first == second and first["transcript"] is None
+    assert first["tags"] is not second["tags"] and first["edited"] is not second["edited"]

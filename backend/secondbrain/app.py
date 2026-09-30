@@ -15,7 +15,7 @@ from . import ingest, library, ota
 from .archive import Archive
 from .catalog import make_engine, make_sessionmaker
 from .clock import utcnow
-from .config import Settings, load_settings
+from .config import BAD_SETTINGS_KEY, Settings, load_settings
 from .httputil import public_host
 from .settings_store import SecretBox
 from .web import actions as web_actions
@@ -81,7 +81,9 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
     app.state.archive = Archive(settings.archive_dir)
     app.state.engine = make_engine(settings.database_url)
     app.state.sessionmaker = make_sessionmaker(app.state.engine)
-    app.state.box = SecretBox(settings.settings_key)
+    app.state.box = SecretBox(settings.settings_key, invalid=settings.settings_key_invalid)
+    if settings.settings_key_invalid:
+        log.error(BAD_SETTINGS_KEY)  # mai il valore: potrebbe essere una chiave quasi giusta
     app.state.http = httpx.Client()  # solo per "Prova"; nei test lo si sostituisce con un MockTransport
 
     if settings.device_hostname:

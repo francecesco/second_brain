@@ -17,7 +17,7 @@ from ..ai.registry import PROVIDER_SPECS, ProviderConfig, ProviderSpec, build_pr
 from ..languages import LANGUAGES
 from ..models import AiProvider, WebSession
 from ..usage import month_start, usage_for_month
-from .context import page_context
+from .context import page_context, text_model_notice
 from .deps import get_db, require_csrf, require_login
 from .templating import templates
 
@@ -64,8 +64,13 @@ def settings_page(request: Request, queued: int | None = None, db: Session = Dep
             row=row, spec=PROVIDER_SPECS[row.name], key_status=store.key_status(row, state.box),
             minutes=round(used.audio_seconds / SECONDS_PER_MINUTE, MINUTES_DECIMALS) if used else 0.0,
             calls=used.calls if used else 0))
-    return templates.TemplateResponse(request, "settings.html", page_context(request, db, session) | {
+    context = page_context(request, db, session)
+    # Qui l'avviso del modello di testo compare anche con la coda vuota: è la pagina dove
+    # lo si corregge.
+    context["ai_notice"] = context["ai_notice"] or text_model_notice(db, state.box)
+    return templates.TemplateResponse(request, "settings.html", context | {
         "crumbs": [("Impostazioni", None)], "providers": views, "box_available": state.box.available,
+        "box_invalid": state.box.invalid,
         "paused": store.is_paused(db), "language": store.get_language(db), "languages": LANGUAGES,
         "counts": jobs.queue_counts(db), "backfill_count": jobs.count_backfill(db),
         "queued_now": queued})

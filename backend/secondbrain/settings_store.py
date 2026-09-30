@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from .ai.registry import PROVIDER_SPECS, PROVIDERS, ProviderConfig
 from .languages import DEFAULT_LANGUAGE, LANGUAGES
 from .models import AiProvider, Setting
+from .notefile import MAX_MODEL_LEN
 
 PAUSED_KEY = "processing_paused"
 LANGUAGE_KEY = "language"
@@ -21,7 +22,6 @@ MASK_PREFIX = 4
 MASK_SUFFIX = 3
 MIN_MASKABLE_LEN = 12  # sotto, anche 7 caratteri su pochi sarebbero troppi da mostrare
 MASK_HIDDEN = "…"
-MAX_MODEL_LEN = 100  # come le colonne dei modelli
 MOVE_UP = "up"
 MOVE_DOWN = "down"
 NO_KEY = "nessuna chiave"
@@ -37,8 +37,12 @@ class UnknownProvider(LookupError):
 
 
 class SecretBox:
-    def __init__(self, key: str | None):
+    """`invalid`: nel `.env` c'era una SETTINGS_KEY, ma malformata (config la scarta): per il
+    resto è come se mancasse, ma gli avvisi dicono di correggerla invece che di crearla."""
+
+    def __init__(self, key: str | None, *, invalid: bool = False):
         self._fernet = Fernet(key.encode()) if key else None
+        self.invalid = invalid and self._fernet is None
 
     @property
     def available(self) -> bool:

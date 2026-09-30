@@ -17,7 +17,7 @@ from .archive import NOTE_SUFFIX, TRASH, Archive
 from .models import Capture, Device
 from .naming import DEFAULT_DEVICE_TYPE, parse_day_dir
 from .notefile import NoteError, parse_note
-from .notes import EMPTY_AI_FIELDS, lock_capture, note_fields
+from .notes import empty_ai_fields, lock_capture, note_fields
 from .search import refresh_search_vector
 from .sidecar import sidecar_to_fields, capture_to_sidecar
 
@@ -65,7 +65,7 @@ def _note_fields(archive: Archive, rel_wav: str, report: RescanReport) -> tuple[
     try:
         text = archive.read_text(rel_wav, NOTE_SUFFIX)
     except FileNotFoundError:
-        return dict(EMPTY_AI_FIELDS), True
+        return empty_ai_fields(), True
     except (OSError, UnicodeDecodeError) as exc:
         report.problems.append(f"{rel_wav}: nota .md non leggibile ({exc})")
         return None, False
@@ -133,16 +133,16 @@ def rescan(s: Session, archive: Archive, now: datetime) -> RescanReport:
 
     to_queue: list[uuid.UUID] = []
     for values in entries.values():
+        _ensure_device(s, values["device_id"], now, report)
+        # Riga già esistente: prima il lock (`notes.lock_capture`, lo stesso che tengono UI e
+        # worker mentre scrivono i campi AI), poi la lettura del `.md`. Letto prima, un `.md`
+        # scritto dal worker nel frattempo verrebbe sovrascritto con i campi vuoti.
+        capture = lock_capture(s, values["id"])
         ai_fields, missing_note = _note_fields(archive, values["rel_path"], report)
         if ai_fields is not None:
             values.update(ai_fields)
         if missing_note and values["trashed_at"] is None:
             to_queue.append(values["id"])
-        _ensure_device(s, values["device_id"], now, report)
-        # Riga già esistente: il lock è quello di Task 9 (`notes.lock_capture`), lo stesso
-        # che tiene UI e worker mentre scrivono i campi AI, perché il worker può girare
-        # nello stesso momento di un rescan.
-        capture = lock_capture(s, values["id"])
         if capture is None:
             s.add(Capture(**values))
             report.added += 1

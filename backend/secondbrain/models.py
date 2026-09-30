@@ -8,6 +8,9 @@ from sqlalchemy import (BigInteger, Boolean, Date, DateTime, Double, ForeignKey,
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TSVECTOR
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from .notefile import (MAX_LANGUAGE_LEN, MAX_MODEL_LEN, MAX_PROVIDER_LEN, MAX_TAG_LEN,
+                       MAX_TITLE_LEN)
+
 EMPTY_ARRAY = text("'{}'")
 
 
@@ -48,7 +51,7 @@ class Capture(Base):
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     day: Mapped[date] = mapped_column(Date)
     rel_path: Mapped[str] = mapped_column(String(255), unique=True)
-    title: Mapped[str | None] = mapped_column(String(200))
+    title: Mapped[str | None] = mapped_column(String(MAX_TITLE_LEN))
     duration_s: Mapped[float] = mapped_column(Double)
     size_bytes: Mapped[int] = mapped_column(BigInteger)
     sha256: Mapped[str] = mapped_column(String(64))
@@ -60,17 +63,17 @@ class Capture(Base):
     # Campi AI (spec AI §6-7): la verità è il `.md` accanto al WAV, qui sono una copia
     # per la UI e la ricerca, ricostruibile con `rescan`.
     transcript: Mapped[str | None] = mapped_column(Text)
-    title_auto: Mapped[str | None] = mapped_column(String(200))
+    title_auto: Mapped[str | None] = mapped_column(String(MAX_TITLE_LEN))
     summary: Mapped[str | None] = mapped_column(Text)
-    tags: Mapped[list[str]] = mapped_column(ARRAY(String(40)), default=list,
+    tags: Mapped[list[str]] = mapped_column(ARRAY(String(MAX_TAG_LEN)), default=list,
                                             server_default=EMPTY_ARRAY)
     edited: Mapped[list[str]] = mapped_column(ARRAY(String(16)), default=list,
                                               server_default=EMPTY_ARRAY)
-    language: Mapped[str | None] = mapped_column(String(8))
-    ai_provider: Mapped[str | None] = mapped_column(String(32))
-    ai_transcribe_model: Mapped[str | None] = mapped_column(String(100))
-    ai_enrich_provider: Mapped[str | None] = mapped_column(String(32))
-    ai_enrich_model: Mapped[str | None] = mapped_column(String(100))
+    language: Mapped[str | None] = mapped_column(String(MAX_LANGUAGE_LEN))
+    ai_provider: Mapped[str | None] = mapped_column(String(MAX_PROVIDER_LEN))
+    ai_transcribe_model: Mapped[str | None] = mapped_column(String(MAX_MODEL_LEN))
+    ai_enrich_provider: Mapped[str | None] = mapped_column(String(MAX_PROVIDER_LEN))
+    ai_enrich_model: Mapped[str | None] = mapped_column(String(MAX_MODEL_LEN))
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     search_vector: Mapped[str | None] = mapped_column(TSVECTOR, deferred=True)
     # Sola lettura: il lavoro si cancella con la nota grazie a ON DELETE CASCADE nel DB.
@@ -105,12 +108,12 @@ class Setting(Base):
 class AiProvider(Base):
     __tablename__ = "ai_providers"
 
-    name: Mapped[str] = mapped_column(String(32), primary_key=True)
+    name: Mapped[str] = mapped_column(String(MAX_PROVIDER_LEN), primary_key=True)
     enabled: Mapped[bool] = mapped_column(Boolean)
     position: Mapped[int] = mapped_column(Integer)
     api_key_enc: Mapped[str | None] = mapped_column(Text)  # token Fernet, mai la chiave in chiaro
-    transcribe_model: Mapped[str] = mapped_column(String(100))
-    text_model: Mapped[str] = mapped_column(String(100))
+    transcribe_model: Mapped[str] = mapped_column(String(MAX_MODEL_LEN))
+    text_model: Mapped[str] = mapped_column(String(MAX_MODEL_LEN))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

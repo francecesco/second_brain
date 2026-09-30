@@ -183,3 +183,23 @@ def test_finder_notice_when_key_undecryptable_with_current_settings_key(recordin
     other_box = store.SecretBox(store.generate_key())
     configure_providers(db, other_box, NOW)
     assert "Nessun provider AI con una chiave" in recordings.client.get("/browse").text
+
+
+def test_queued_note_waiting_on_backoff_shows_the_last_error(recordings, db):
+    """Final review 10: in attesa del prossimo tentativo si vede perché l'ultimo è fallito,
+    con la chiave nascosta e l'HTML escapato."""
+    capture_id = cap_id(db)
+    jobs.claim(db, NOW)
+    jobs.fail(db, capture_id, NOW, "groq: HTTP 503 <b>giù</b> gsk_test_abcdefgh0123456789",
+              permanent=False)
+    db.commit()
+    text = recordings.client.get(f"/captures/{capture_id}").text
+    assert "Ultimo tentativo non riuscito" in text
+    assert "groq: HTTP 503 &lt;b&gt;giù&lt;/b&gt;" in text
+    assert "gsk_test_abcdefgh" not in text
+
+
+def test_finder_notice_without_a_text_model(recordings, db, settings):
+    """Final review 5: solo OpenAI, senza modello di testo: l'arricchimento non parte mai."""
+    configure_providers(db, store.SecretBox(settings.settings_key), NOW, names=("openai",))
+    assert "Nessun provider AI ha un modello di testo" in recordings.client.get("/browse").text
