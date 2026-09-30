@@ -4,8 +4,11 @@
 
 Servizio che riceve le registrazioni dal device e-Paper (e in futuro da altri
 dispositivi), le archivia su disco in `archive/AAAA/MM/GG/`, le rende consultabili e
-gestibili da una UI web tipo "finder" e serve il firmware via OTA. Dettagli di design
-in `../docs/specs/2026-09-28-backend-archivio-design.md`.
+gestibili da una UI web tipo "finder" e serve il firmware via OTA. Un worker separato
+trascrive ogni nota e ne ricava titolo, riassunto e tag con un provider AI esterno
+(Groq, Gemini, OpenAI); il risultato si corregge nel finder e si trova con la ricerca.
+Dettagli di design in `../docs/specs/2026-09-28-backend-archivio-design.md` e
+`../docs/specs/2026-09-29-backend-elaborazione-ai-design.md`.
 
 ## Installazione
 
@@ -27,7 +30,12 @@ Poi:
 docker compose up -d --build
 docker compose exec app secondbrain set-password
 docker compose exec app secondbrain device add <mac> --name <nome>
+docker compose exec app secondbrain gen-key
 ```
+
+Incollare l'output di `gen-key` in `SETTINGS_KEY` nel `.env` e ricreare i container con
+`docker compose up -d` (vedi "Elaborazione AI" più sotto): finché manca, il resto del
+servizio funziona ma le note restano in coda senza trascrizione.
 
 Il comando `device add` stampa il token una sola volta: salvarlo, serve al dispositivo
 per autenticarsi (finché il firmware non lo supporta, vedi sotto e §11 della spec,
@@ -50,7 +58,8 @@ data/
     2026/09/28/
       091530_70041dd8263c.wav             audio della registrazione
       091530_70041dd8263c.json            sidecar: metadati della registrazione
-      091530_70041dd8263c.transcript.md   (futuro, AI) stesso nome base
+      091530_70041dd8263c.md              nota: trascrizione, titolo, riassunto, tag (YAML, leggibile da Obsidian)
+      091530_70041dd8263c.ai.json         risposte grezze dei provider AI, mai modificate
     .incoming/                            upload in corso (<uuid>.tmp), ripulita all'avvio
     .trash/2026/09/28/...                 cestino, con la stessa struttura dell'archivio
   firmware/
@@ -81,6 +90,10 @@ Tutti come `docker compose exec app secondbrain ...`:
 | `firmware rollback [--type <tipo>]` | torna alla release precedente |
 | `firmware list` | elenca le release pubblicate (`*` = corrente) |
 | `trash purge` | elimina definitivamente le registrazioni nel cestino scadute (oltre `TRASH_RETENTION_DAYS`) |
+| `gen-key` | genera una `SETTINGS_KEY` (non serve il database) |
+| `process <id>` | rimette in coda l'elaborazione AI di una registrazione (come "Rielabora") |
+| `process --backfill` | mette in coda, a priorità bassa, tutte le note fuori dal cestino senza trascrizione |
+| `worker` | il ciclo del worker (lo lancia il servizio `worker` del compose, non serve a mano) |
 
 Per pubblicare un firmware, il binario va prima copiato dentro il container:
 
@@ -140,6 +153,46 @@ Su Linux con la pubblicazione IPv4 l'IP del client resta quello vero. Dopo un de
 verificare nel log dell'app che una richiesta del device mostri il suo IP `192.168.x.x` e
 non un `172.x`.
 
+## Elaborazione AI
+
+Il servizio `worker` (stessa immagine dell'app) prende dalla coda una nota alla volta:
+la trascrive, poi chiede titolo, riassunto breve e tag, e scrive `<base>.md` e
+`<base>.ai.json` accanto al WAV. Ogni nota nuova entra in coda appena arriva.
+
+**Configurazione**
+
+1. `SETTINGS_KEY` nel `.env` (vedi Installazione), poi `docker compose up -d`.
+2. Nella UI, **Impostazioni** (ingranaggio): incollare la chiave API di almeno un
+   provider, controllare i modelli precompilati e premere **Prova** (elenca i modelli
+   con quella chiave: è gratuito). L'ordine delle schede è principale → riserve: se il
+   principale non risponde (quota, chiave sbagliata, servizio giù) si passa al
+   successivo; se l'audio stesso non va bene la nota risulta "fallita".
+3. **Elabora le note senza trascrizione** mette in coda l'arretrato a priorità bassa: le
+   note nuove passano comunque davanti.
+
+Le chiavi API stanno nel database cifrate con `SETTINGS_KEY`; la pagina le mostra solo
+mascherate. Se `SETTINGS_KEY` si perde, basta generarne un'altra e reinserire le chiavi
+API: nient'altro va perso.
+
+**Privacy.** Audio e testo delle note escono di casa verso il provider scelto (e verso le
+riserve se il principale non risponde) e restano soggetti alla politica sui dati del
+proprio account presso quel provider: controllarla prima di inserire la chiave. In
+archivio resta il WAV originale; al provider va una copia FLAC temporanea (OpenAI riceve
+il WAV).
+
+**Log e stato**
+
+```bash
+docker compose logs -f worker      # "trascritta …", "elaborata …", errori già ripuliti dalle chiavi
+```
+
+Nel finder ogni riga mostra l'icona di stato (orologio in coda, rotella in corso,
+triangolo fallita); una nota fallita mostra l'errore nel dettaglio e si rimette in coda
+con **Rielabora** (i campi corretti a mano restano come sono). Se le note restano in
+coda, il finder dice perché: manca `SETTINGS_KEY`, elaborazione in pausa o nessun
+provider con una chiave. Il worker ritenta dopo 1 min, 5 min, 30 min, 2 h e 6 h; al
+sesto tentativo fallito la nota resta "fallita".
+
 ## Accesso da fuori con Cloudflare Tunnel
 
 1. Creare il tunnel in Cloudflare Zero Trust → Networks → Tunnels (tipo `cloudflared`)
@@ -165,20 +218,26 @@ del piano di questa fase).
   rsync -a "$DATA_DIR/archive/" <destinazione>/
   ```
 
-- **Database** (dispositivi, token, release firmware, utente, sessioni — configurazione,
-  non archivio):
+- **Database** (dispositivi, token, release firmware, utente, sessioni, impostazioni e
+  chiavi API cifrate — configurazione, non archivio; trascrizioni, riassunti e tag stanno
+  anche nei `.md` dell'archivio):
 
   ```bash
   docker compose exec -T postgres pg_dump -U secondbrain secondbrain > secondbrain.sql
   ```
+
+- **`SETTINGS_KEY`** (nel `.env`): senza, le chiavi API del dump non si decifrano e vanno
+  reinserite dalla UI.
 
 **Ripristino su una macchina nuova:** copiare `archive/` e `firmware/` in `DATA_DIR`,
 `docker compose up -d`, poi:
 
 - con un dump: `docker compose exec -T postgres psql -U secondbrain secondbrain < secondbrain.sql`;
 - senza dump: `docker compose exec app secondbrain rescan` ricostruisce le
-  registrazioni dal disco; dispositivi e release firmware vanno registrati di nuovo
-  (`secondbrain device add`, `secondbrain firmware publish`).
+  registrazioni dal disco, comprese trascrizioni, riassunti e tag dai `.md` (le note
+  senza `.md` tornano in coda); dispositivi, release firmware e impostazioni AI vanno
+  registrati di nuovo (`secondbrain device add`, `secondbrain firmware publish`, pagina
+  Impostazioni).
 
 ## Sviluppo
 

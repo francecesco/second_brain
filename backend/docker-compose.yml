@@ -1,6 +1,18 @@
 # Avvio: cp .env.example .env (e completarlo), poi docker compose up -d --build
 # Con il tunnel Cloudflare: docker compose --profile tunnel up -d --build
 name: secondbrain
+
+x-app-environment: &app-environment
+  DATABASE_URL: postgresql+psycopg://secondbrain:${POSTGRES_PASSWORD}@postgres:5432/secondbrain
+  ARCHIVE_DIR: /data/archive
+  FIRMWARE_DIR: /data/firmware
+  TZ_ARCHIVE: ${TZ_ARCHIVE:-Europe/Rome}
+  TRASH_RETENTION_DAYS: ${TRASH_RETENTION_DAYS:-30}
+  ALLOW_UNAUTHENTICATED_LAN: ${ALLOW_UNAUTHENTICATED_LAN:-false}
+  DEVICE_HOSTNAME: ${DEVICE_HOSTNAME:-}
+  MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-33554432}
+  SETTINGS_KEY: ${SETTINGS_KEY:-}
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -23,15 +35,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql+psycopg://secondbrain:${POSTGRES_PASSWORD}@postgres:5432/secondbrain
-      ARCHIVE_DIR: /data/archive
-      FIRMWARE_DIR: /data/firmware
-      TZ_ARCHIVE: ${TZ_ARCHIVE:-Europe/Rome}
-      TRASH_RETENTION_DAYS: ${TRASH_RETENTION_DAYS:-30}
-      ALLOW_UNAUTHENTICATED_LAN: ${ALLOW_UNAUTHENTICATED_LAN:-false}
-      DEVICE_HOSTNAME: ${DEVICE_HOSTNAME:-}
-      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-33554432}
+    environment: *app-environment
     volumes:
       - ${DATA_DIR:-./data}/archive:/data/archive
       - ${DATA_DIR:-./data}/firmware:/data/firmware
@@ -40,6 +44,21 @@ services:
       # docker-proxy, che le presenta all'app con l'IP del gateway del bridge (172.x,
       # privato) invece di quello reale del client, allargando la regola LAN-senza-token.
       - "0.0.0.0:${APP_PORT:-8000}:8000"
+
+  worker:
+    # Stessa immagine dell'app: elabora le note in coda (trascrizione, titolo, riassunto,
+    # tag). Parte dopo l'app, che al suo avvio applica le migrazioni.
+    build: .
+    restart: unless-stopped
+    entrypoint: ["secondbrain", "worker"]
+    depends_on:
+      app:
+        condition: service_healthy
+    environment: *app-environment
+    volumes:
+      - ${DATA_DIR:-./data}/archive:/data/archive
+    healthcheck:
+      disable: true  # il controllo dell'immagine interroga la porta 8000, che il worker non apre
 
   cloudflared:
     image: cloudflare/cloudflared:latest
