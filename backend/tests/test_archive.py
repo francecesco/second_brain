@@ -119,3 +119,34 @@ def test_iter_sidecars_and_orphan_wavs(archive):
         put(archive, rel)
     assert list(archive.iter_sidecar_rels()) == [".trash/2026/09/27/b.wav", f"{DAY}/a.wav"]
     assert list(archive.iter_wavs_without_sidecar()) == [f"{DAY}/c.wav"]
+
+
+def test_write_text_writes_note_files_atomically(archive):
+    put(archive, f"{DAY}/x.wav")
+    archive.write_text(f"{DAY}/x.wav", ".md", "---\nedited: []\n---\n")
+    archive.write_text(f"{DAY}/x.wav", ".ai.json", "{}\n")
+    archive.write_text(f"{DAY}/x.wav", ".md", "---\nedited: [tags]\n---\n")
+    assert archive.read_text(f"{DAY}/x.wav", ".md") == "---\nedited: [tags]\n---\n"
+    assert archive.derived_path(f"{DAY}/x.wav", ".ai.json") == archive.root / DAY / "x.ai.json"
+    assert archive.related_files(f"{DAY}/x.wav") == ["x.ai.json", "x.md", "x.wav"]
+    assert list(archive.incoming_dir.iterdir()) == []
+    assert list(archive.iter_sidecar_rels()) == []  # .ai.json non è mai un sidecar
+
+
+def test_move_carries_the_note_files(archive):
+    for name in ["x.wav", "x.json", "x.md", "x.ai.json"]:
+        put(archive, f"{DAY}/{name}")
+    put(archive, "2026/10/01/x.wav")
+    new = archive.move(f"{DAY}/x.wav", "2026/10/01")
+    assert archive.related_files(new) == ["x_2.ai.json", "x_2.json", "x_2.md", "x_2.wav"]
+
+
+def test_write_text_cleans_up_its_tmp_on_failure(archive, monkeypatch):
+    def boom(*args, **kwargs):
+        raise OSError("disco pieno")
+
+    put(archive, f"{DAY}/x.wav")
+    monkeypatch.setattr("secondbrain.archive.os.replace", boom)
+    with pytest.raises(OSError):
+        archive.write_text(f"{DAY}/x.wav", ".md", "testo")
+    assert list(archive.incoming_dir.iterdir()) == []

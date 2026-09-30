@@ -14,7 +14,9 @@ from . import jobs
 from .archive import TRASH, Archive
 from .models import Capture, Job
 from .naming import day_dir, local_day
-from .notefile import MAX_TITLE_LEN
+from .notefile import EDITABLE_FIELDS, MAX_TITLE_LEN, apply_edit
+from .notes import lock_capture, note_from_capture, write_note
+from .search import refresh_search_vector
 from .sidecar import capture_to_sidecar
 
 
@@ -31,7 +33,9 @@ class NotInTrash(ValueError):
 
 
 def _get(s: Session, capture_id: uuid.UUID) -> Capture:
-    capture = s.get(Capture, capture_id)
+    """La riga resta bloccata fino al commit: le operazioni su file e campi di una nota non
+    si accavallano con la scrittura del worker (spec AI §10)."""
+    capture = lock_capture(s, capture_id)
     if capture is None:
         raise NotFound(str(capture_id))
     return capture
@@ -39,6 +43,7 @@ def _get(s: Session, capture_id: uuid.UUID) -> Capture:
 
 def _save(s: Session, archive: Archive, capture: Capture) -> None:
     archive.write_sidecar(capture.rel_path, capture_to_sidecar(capture))
+    refresh_search_vector(s, capture)  # il titolo manuale pesa nella ricerca
     s.commit()
 
 
@@ -81,6 +86,19 @@ def restore_capture(s: Session, archive: Archive, capture_id: uuid.UUID) -> Capt
         capture.rel_path = archive.move(capture.rel_path, day_dir(capture.day))
         capture.trashed_at = None
         _save(s, archive, capture)
+    return capture
+
+
+def edit_ai_field(s: Session, archive: Archive, tz: ZoneInfo, capture_id: uuid.UUID, field: str,
+                  value: str) -> Capture:
+    """Correzione a mano di trascrizione, riassunto o tag: `.md`, catalogo, `edited`."""
+    if field not in EDITABLE_FIELDS:
+        raise ValueError(f"campo non modificabile: {field!r}")
+    capture = _get(s, capture_id)
+    if capture.trashed_at is not None:
+        raise InTrash("la registrazione è nel cestino")
+    write_note(s, archive, capture, apply_edit(note_from_capture(capture), field, value), tz)
+    s.commit()
     return capture
 
 

@@ -15,6 +15,8 @@ from .naming import unique_base
 INCOMING = ".incoming"
 TRASH = ".trash"
 SIDECAR_SUFFIX = ".json"
+NOTE_SUFFIX = ".md"         # nota leggibile, verità per i campi AI (spec AI §6)
+AI_SUFFIX = ".ai.json"      # risposte grezze dei provider: due punti, quindi mai un sidecar
 
 
 class ArchiveError(ValueError):
@@ -87,20 +89,35 @@ class Archive:
         _fsync_dir(directory)
         return rel_wav
 
-    def write_sidecar(self, rel_wav: str, data: dict) -> None:
-        target = self.abs(rel_wav).with_suffix(SIDECAR_SUFFIX)
+    def _write_atomic(self, target: Path, data: bytes, suffix: str) -> None:
+        """Scrittura in `.incoming/` e rename: chi legge vede il file vecchio o quello nuovo."""
         self.ensure()
-        tmp = self.incoming_dir / f"{uuid.uuid4().hex}.json.tmp"
+        tmp = self.incoming_dir / f"{uuid.uuid4().hex}{suffix}.tmp"
         try:
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2, sort_keys=True)
-                f.write("\n")
+            with open(tmp, "wb") as f:
+                f.write(data)
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, target)
         except BaseException:
             tmp.unlink(missing_ok=True)
             raise
+
+    def write_sidecar(self, rel_wav: str, data: dict) -> None:
+        text = json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        self._write_atomic(self.abs(rel_wav).with_suffix(SIDECAR_SUFFIX), text.encode("utf-8"),
+                           SIDECAR_SUFFIX)
+
+    def derived_path(self, rel_wav: str, suffix: str) -> Path:
+        """`<base><suffix>` accanto al WAV, es. `<base>.md`."""
+        path = self.abs(rel_wav)
+        return path.with_name(path.stem + suffix)
+
+    def write_text(self, rel_wav: str, suffix: str, text: str) -> None:
+        self._write_atomic(self.derived_path(rel_wav, suffix), text.encode("utf-8"), suffix)
+
+    def read_text(self, rel_wav: str, suffix: str) -> str:
+        return self.derived_path(rel_wav, suffix).read_text(encoding="utf-8")
 
     def read_sidecar(self, rel_wav: str) -> dict:
         with open(self.abs(rel_wav).with_suffix(SIDECAR_SUFFIX), encoding="utf-8") as f:
