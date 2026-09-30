@@ -4,7 +4,7 @@ import struct
 import uuid
 from datetime import UTC, date, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from secondbrain.models import Capture, Device
 
@@ -78,3 +78,8 @@ def upload(client, wav: bytes | None = None, **kw):
 def capture_by(db, capture_id: str) -> Capture:
     db.expire_all()
     return db.scalars(select(Capture).where(Capture.capture_id == capture_id)).one()
+
+
+def is_searchable(db, capture_id, words: str) -> bool:
+    return db.scalar(text("SELECT search_vector @@ websearch_to_tsquery('italian', :q) "
+                          "FROM captures WHERE id = :id"), {"q": words, "id": capture_id})

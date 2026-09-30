@@ -3,7 +3,7 @@ import uuid
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select
 
 from secondbrain import jobs, library
 from secondbrain.archive import Archive
@@ -12,7 +12,7 @@ from secondbrain.models import Capture, Device, Job
 from secondbrain.notefile import Note, render_note
 from secondbrain.rescan import rescan
 from secondbrain.sidecar import capture_to_sidecar
-from tests.helpers import DEV, DEV2, NOW, TEST_DB, make_wav, upload
+from tests.helpers import DEV, DEV2, NOW, TEST_DB, is_searchable, make_wav, upload
 
 
 @pytest.fixture
@@ -234,11 +234,6 @@ PROCESSED = Note(transcript="Devo chiamare Marco per il preventivo", title="Chia
                  edited=("tags",))
 
 
-def searchable(db, capture_id, words):
-    return db.scalar(text("SELECT search_vector @@ websearch_to_tsquery('italian', :q) "
-                          "FROM captures WHERE id = :id"), {"q": words, "id": capture_id})
-
-
 def test_reads_ai_fields_from_the_note(archive, db):
     cap = first(db)
     archive.write_text(cap.rel_path, ".md", render_note(PROCESSED, ROME))
@@ -249,7 +244,7 @@ def test_reads_ai_fields_from_the_note(archive, db):
     assert (cap.transcript, cap.title_auto, cap.summary, cap.tags, cap.edited, cap.ai_provider,
             cap.processed_at) == (PROCESSED.transcript, "Chiamare Marco", "Preventivo del tetto.",
                                   ["lavoro"], ["tags"], "groq", NOW)
-    assert searchable(db, cap.id, "chiamato")
+    assert is_searchable(db, cap.id, "chiamato")
     assert rescan(db, archive, NOW).updated == 0
 
 
@@ -264,7 +259,7 @@ def test_note_edited_by_hand_on_disk_is_picked_up(archive, db):
     rescan(db, archive, NOW)
     db.commit()
     assert first(db).title_auto == "Telefonare a Marco"
-    assert searchable(db, cap.id, "telefonare")
+    assert is_searchable(db, cap.id, "telefonare")
 
 
 def test_rebuilt_catalog_keeps_the_ai_fields(archive, db):

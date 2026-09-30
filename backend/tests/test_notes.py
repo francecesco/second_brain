@@ -11,7 +11,7 @@ from secondbrain.catalog import make_sessionmaker
 from secondbrain.models import Capture
 from secondbrain.notefile import Note, parse_note
 from secondbrain.notes import lock_capture, note_from_capture, write_note
-from tests.helpers import NOW, capture_by
+from tests.helpers import NOW, capture_by, is_searchable
 
 ROME = ZoneInfo("Europe/Rome")
 CID = "cap_20260923_191530"
@@ -31,11 +31,6 @@ def fresh(db, capture_id) -> Capture:
     return db.get(Capture, capture_id)
 
 
-def matches(db, capture_id, words: str) -> bool:
-    return db.scalar(text("SELECT search_vector @@ websearch_to_tsquery('italian', :q) "
-                          "FROM captures WHERE id = :id"), {"q": words, "id": capture_id})
-
-
 def test_write_note_updates_disk_catalog_and_search(recordings, db, arch):
     cap = capture_by(db, CID)
     write_note(db, arch, cap, NOTE, ROME)
@@ -45,13 +40,13 @@ def test_write_note_updates_disk_catalog_and_search(recordings, db, arch):
     assert (cap.transcript, cap.title_auto, cap.summary, cap.tags, cap.ai_provider) == (
         NOTE.transcript, "Chiamare Marco", "Preventivo del tetto.", ["lavoro"], "groq")
     assert note_from_capture(cap) == NOTE
-    assert matches(db, cap.id, "chiamato") and matches(db, cap.id, "lavoro")
-    assert not matches(db, cap.id, "spesa")
+    assert is_searchable(db, cap.id, "chiamato") and is_searchable(db, cap.id, "lavoro")
+    assert not is_searchable(db, cap.id, "spesa")
 
 
 def test_manual_title_is_searchable(recordings, db, arch):
     cap = library.set_title(db, arch, capture_by(db, CID).id, "Idea per il digest")
-    assert matches(db, cap.id, "digest")
+    assert is_searchable(db, cap.id, "digest")
 
 
 def test_edit_summary_marks_it_edited(recordings, db, arch):
@@ -63,7 +58,7 @@ def test_edit_summary_marks_it_edited(recordings, db, arch):
     assert (cap.summary, cap.edited, cap.title_auto) == ("Mio riassunto", ["summary"], "Chiamare Marco")
     on_disk = parse_note(arch.read_text(cap.rel_path, ".md"))
     assert (on_disk.summary, on_disk.edited) == ("Mio riassunto", ("summary",))
-    assert matches(db, cap.id, "riassunto")
+    assert is_searchable(db, cap.id, "riassunto")
 
 
 def test_edit_tags_and_transcript(recordings, db, arch):
