@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from fastapi.templating import Jinja2Templates
 
 from ..notefile import MAX_SUMMARY_LEN, MAX_TITLE_LEN
+from ..search import MAX_QUERY_LEN
 
 WEB_DIR = Path(__file__).parent
 STATIC_DIR = WEB_DIR / "static"
@@ -13,6 +14,7 @@ MONTHS = ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio"
           "agosto", "settembre", "ottobre", "novembre", "dicembre")
 WEEKDAYS = ("lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica")
 WEEKDAYS_SHORT = ("lun", "mar", "mer", "gio", "ven", "sab", "dom")
+MONTHS_SHORT = ("gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic")
 KIB = 1024
 MIB = 1024 * 1024
 
@@ -47,6 +49,11 @@ def weekday_label(d: date) -> str:
 def weekday_short(d: date) -> str:
     """"lun 28": per l'albero, dove lo spazio è poco."""
     return f"{WEEKDAYS_SHORT[d.weekday()]} {d.day}"
+
+
+def day_month_label(d: date) -> str:
+    """"Lunedì 29 set": per i risultati della ricerca, che mescolano giorni diversi."""
+    return f"{weekday_label(d)} {MONTHS_SHORT[d.month - 1]}"
 
 
 def default_title(recorded_at_utc: datetime, tz: ZoneInfo) -> str:
@@ -85,6 +92,7 @@ templates.env.globals["MONTHS"] = MONTHS
 templates.env.globals["date"] = date
 templates.env.globals["weekday_label"] = weekday_label
 templates.env.globals["weekday_short"] = weekday_short
+templates.env.globals["day_month_label"] = day_month_label
 templates.env.globals["default_title"] = default_title
 templates.env.globals["display_title"] = display_title
 templates.env.globals["reprocess_confirm"] = reprocess_confirm
@@ -94,3 +102,4 @@ templates.env.globals["ROW_POLL_S"] = ROW_POLL_S
 templates.env.globals["ROW_TAG_PREVIEW"] = ROW_TAG_PREVIEW
 templates.env.globals["MAX_SUMMARY_LEN"] = MAX_SUMMARY_LEN
 templates.env.globals["MAX_TITLE_LEN"] = MAX_TITLE_LEN
+templates.env.globals["MAX_QUERY_LEN"] = MAX_QUERY_LEN

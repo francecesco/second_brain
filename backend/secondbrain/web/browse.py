@@ -2,7 +2,7 @@
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -57,8 +57,8 @@ def browse_month(request: Request, year: int = Path(ge=1970, le=9999),
 @router.get("/browse/{year}/{month}/{day}")
 def browse_day(request: Request, year: int = Path(ge=1970, le=9999),
                month: int = Path(ge=1, le=12), day: int = Path(ge=1, le=31),
-               device: str | None = None, db: Session = Depends(get_db),
-               session: WebSession = Depends(require_login)):
+               device: str | None = None, open_id: uuid.UUID | None = Query(None, alias="open"),
+               db: Session = Depends(get_db), session: WebSession = Depends(require_login)):
     try:
         the_day = date(year, month, day)
     except ValueError:
@@ -69,7 +69,8 @@ def browse_day(request: Request, year: int = Path(ge=1970, le=9999),
     crumbs = [("Archivio", f"/browse{qs}"), (str(year), f"/browse/{year}{qs}"),
               (MONTHS[month - 1], f"/browse/{year}/{month:02d}{qs}"), (weekday_label(the_day), None)]
     return templates.TemplateResponse(request, "day.html", ctx | {
-        "crumbs": crumbs, "day_num": day, "captures": catalog.list_day(db, the_day, device)})
+        "crumbs": crumbs, "day_num": day, "captures": catalog.list_day(db, the_day, device),
+        "open_id": open_id})  # nota da aprire subito (clic su un risultato della ricerca)
 
 
 @router.get("/captures/{capture_id}")

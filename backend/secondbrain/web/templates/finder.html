@@ -9,8 +9,15 @@
       {% for d in devices %}<option value="{{ d.id }}"{% if d.id == device %} selected{% endif %}>{{ d.name }}</option>{% endfor %}
     </select>
   </form>
+  <input type="checkbox" id="search-toggle" hidden>
+  <label for="search-toggle" class="search-open" aria-label="Apri la ricerca" title="Cerca">{{ icon("search") }}</label>
+  <form class="search" method="get" action="/search" role="search">
+    <input type="search" name="q" value="{{ q or '' }}" placeholder="Cerca nelle note" aria-label="Cerca nelle note" maxlength="{{ MAX_QUERY_LEN }}">
+    <button type="submit" aria-label="Cerca" title="Cerca">{{ icon("search") }}</button>
+  </form>
   {% set fix_label = "Da sistemare (" ~ estimated_count ~ ")" if estimated_count else "Da sistemare" %}
   <nav>
+    <a href="/search" aria-label="Ricerca" title="Ricerca">{{ icon("search") }}<span class="label">Ricerca</span></a>
     <a href="/fix" aria-label="{{ fix_label }}" title="{{ fix_label }}">{{ icon("fix") }}<span class="label">{{ fix_label }}</span></a>
     <a href="/trash" aria-label="Cestino" title="Cestino">{{ icon("trash") }}<span class="label">Cestino</span></a>
     <a href="/devices" aria-label="Dispositivi" title="Dispositivi">{{ icon("devices") }}<span class="label">Dispositivi</span></a>

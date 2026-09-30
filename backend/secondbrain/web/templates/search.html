@@ -1,0 +1,20 @@
+{% extends "finder.html" %}
+{% from "_icons.html" import icon %}
+{% block main %}
+<form class="search-page" method="get" action="/search" role="search">
+  <input type="search" name="q" value="{{ q }}" placeholder="Cerca nelle note" aria-label="Cerca nelle note" maxlength="{{ MAX_QUERY_LEN }}" autofocus>
+  {% if tag %}<input type="hidden" name="tag" value="{{ tag }}"><span class="tag">{{ tag }} <a href="/search?q={{ q|urlencode }}" aria-label="Togli il filtro {{ tag }}" title="Togli il filtro">×</a></span>{% endif %}
+  <button type="submit" aria-label="Cerca" title="Cerca">{{ icon("search") }}<span class="label">Cerca</span></button>
+</form>
+{% if q or tag %}
+{% for h in hits %}
+{% set c = h.capture %}
+<a class="hit" href="/browse/{{ c.day.strftime('%Y/%m/%d') }}?open={{ c.id }}#row-{{ c.id }}">
+  <span class="day">{{ day_month_label(c.day) }}</span>
+  <span class="title">{{ display_title(c, tz) }}</span>
+  {% for t in (c.tags or [])[:ROW_TAG_PREVIEW] %}<span class="tag">{{ t }}</span>{% endfor %}
+  {% if h.excerpt %}<span class="excerpt">{{ h.excerpt }}</span>{% endif %}
+</a>
+{% else %}<p class="empty">Nessuna nota trovata.</p>{% endfor %}
+{% else %}<p class="empty">Cerca per parole (anche "tra virgolette" o -escluse) o apri un tag dal dettaglio di una nota.</p>{% endif %}
+{% endblock %}
