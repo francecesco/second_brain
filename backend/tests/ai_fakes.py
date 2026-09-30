@@ -2,12 +2,15 @@
 import httpx
 import pytest
 
+from secondbrain import jobs, notes
 from secondbrain import settings_store as store
 from secondbrain.ai.audio import AudioSource
 from secondbrain.ai.base import CheckResult, Enrichment, Transcript
 from secondbrain.ai.registry import PROVIDER_SPECS
+from secondbrain.archive import Archive
+from secondbrain.notefile import Note
 
-from .helpers import make_wav
+from .helpers import NOW, make_wav
 
 
 @pytest.fixture
@@ -94,3 +97,18 @@ def configure_providers(db, box, now, names=("groq", "gemini")) -> None:
                             transcribe_model=spec.transcribe_model, text_model=spec.text_model,
                             enabled=True, now=now)
     db.commit()
+
+
+def processed(db, settings, capture_id, **over):
+    """La nota come la lascia il worker a elaborazione finita (lavoro `done`)."""
+    fields = dict(transcript=DEFAULT_TEXT, title="Chiamare Marco", summary="Preventivo del tetto.",
+                  tags=("lavoro", "casa"), language="it", provider="groq",
+                  transcribe_model="whisper-large-v3-turbo", enrich_provider="groq",
+                  enrich_model="openai/gpt-oss-120b", processed_at=NOW)
+    fields.update(over)
+    capture = notes.lock_capture(db, capture_id)
+    notes.write_note(db, Archive(settings.archive_dir), capture, Note(**fields),
+                     settings.tz_archive)
+    jobs.mark_done(db, capture_id, NOW)
+    db.commit()
+    return capture

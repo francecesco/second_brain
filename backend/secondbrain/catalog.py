@@ -4,7 +4,7 @@ from datetime import date
 
 from sqlalchemy import Integer, cast, create_engine, extract, func, select
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, selectinload, sessionmaker
 
 from .models import Capture, Device
 
@@ -70,7 +70,8 @@ def day_counts(s: Session, year: int, month: int,
 
 
 def list_day(s: Session, day: date, device_id: str | None = None) -> list[Capture]:
-    stmt = select(Capture).where(Capture.day == day).order_by(Capture.recorded_at)
+    stmt = (select(Capture).where(Capture.day == day).order_by(Capture.recorded_at)
+            .options(selectinload(Capture.job)))  # lo stato di ogni riga, in una query sola
     return list(s.scalars(_active(stmt, device_id)))
 
 
@@ -81,7 +82,7 @@ def count_estimated(s: Session) -> int:
 
 def list_estimated(s: Session) -> list[Capture]:
     stmt = (select(Capture).where(Capture.date_estimated.is_(True))
-            .order_by(Capture.recorded_at.desc()))
+            .order_by(Capture.recorded_at.desc()).options(selectinload(Capture.job)))
     return list(s.scalars(_active(stmt, None)))
 
 

@@ -5,6 +5,8 @@ from zoneinfo import ZoneInfo
 
 from fastapi.templating import Jinja2Templates
 
+from ..notefile import MAX_SUMMARY_LEN, MAX_TITLE_LEN
+
 WEB_DIR = Path(__file__).parent
 STATIC_DIR = WEB_DIR / "static"
 MONTHS = ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio",
@@ -19,6 +21,11 @@ MATTINO_START_HOUR = 5
 POMERIGGIO_START_HOUR = 12
 SERA_START_HOUR = 18
 NOTTE_START_HOUR = 23
+
+ROW_POLL_S = 5  # righe in coda o in corso: htmx le ricarica ogni tanti secondi
+ROW_TAG_PREVIEW = 3  # tag mostrati nell'intestazione della riga, per non affollarla
+DETAIL_FIELDS = ("summary", "tags", "transcript")  # ordine nel dettaglio (spec AI §10)
+FIELD_LABELS = {"summary": "Riassunto", "tags": "Tag", "transcript": "Trascrizione"}
 
 
 def format_duration(seconds: float) -> str:
@@ -58,6 +65,19 @@ def default_title(recorded_at_utc: datetime, tz: ZoneInfo) -> str:
     return f"Nota {band}, {time_str}"
 
 
+def display_title(capture, tz: ZoneInfo) -> str:
+    """Titolo mostrato: manuale, altrimenti automatico, altrimenti il default per fascia."""
+    return capture.title or capture.title_auto or default_title(capture.recorded_at, tz)
+
+
+def reprocess_confirm(capture) -> str:
+    """Domanda prima di "Rielabora": dice quali campi corretti a mano restano invariati."""
+    edited = [FIELD_LABELS[name].lower() for name in DETAIL_FIELDS if name in (capture.edited or [])]
+    if not edited:
+        return "Rielaborare la nota?"
+    return f"Rielaborare la nota? I campi corretti a mano ({', '.join(edited)}) resteranno invariati."
+
+
 templates = Jinja2Templates(directory=WEB_DIR / "templates")
 templates.env.filters["duration"] = format_duration
 templates.env.filters["size"] = format_size
@@ -66,3 +86,11 @@ templates.env.globals["date"] = date
 templates.env.globals["weekday_label"] = weekday_label
 templates.env.globals["weekday_short"] = weekday_short
 templates.env.globals["default_title"] = default_title
+templates.env.globals["display_title"] = display_title
+templates.env.globals["reprocess_confirm"] = reprocess_confirm
+templates.env.globals["DETAIL_FIELDS"] = DETAIL_FIELDS
+templates.env.globals["FIELD_LABELS"] = FIELD_LABELS
+templates.env.globals["ROW_POLL_S"] = ROW_POLL_S
+templates.env.globals["ROW_TAG_PREVIEW"] = ROW_TAG_PREVIEW
+templates.env.globals["MAX_SUMMARY_LEN"] = MAX_SUMMARY_LEN
+templates.env.globals["MAX_TITLE_LEN"] = MAX_TITLE_LEN

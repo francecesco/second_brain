@@ -46,6 +46,7 @@
     </ul>
   </aside>
   <main>
+    {% if ai_notice %}<p class="notice" role="status">{{ icon("fix") }}<span>{{ ai_notice }}</span> <a href="/settings">Impostazioni</a></p>{% endif %}
     {% if crumbs %}<nav class="crumbs">{% for label, href in crumbs %}{% if not loop.first %} › {% endif %}{% if href %}<a href="{{ href }}">{{ label }}</a>{% else %}{{ label }}{% endif %}{% endfor %}</nav>{% endif %}
     {% block main %}{% endblock %}
   </main>

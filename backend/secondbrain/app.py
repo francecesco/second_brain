@@ -16,7 +16,9 @@ from .catalog import make_engine, make_sessionmaker
 from .clock import utcnow
 from .config import Settings, load_settings
 from .httputil import public_host
+from .settings_store import SecretBox
 from .web import actions as web_actions
+from .web import ai as web_ai
 from .web import browse as web_browse
 from .web import login as web_login
 from .web.auth import CsrfError, NotAuthenticated
@@ -75,6 +77,7 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
     app.state.archive = Archive(settings.archive_dir)
     app.state.engine = make_engine(settings.database_url)
     app.state.sessionmaker = make_sessionmaker(app.state.engine)
+    app.state.box = SecretBox(settings.settings_key)
 
     if settings.device_hostname:
         @app.middleware("http")
@@ -91,6 +94,7 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
     app.include_router(web_login.router)
     app.include_router(web_browse.router)
     app.include_router(web_actions.router)
+    app.include_router(web_ai.router)
 
     @app.exception_handler(NotAuthenticated)
     async def login_required(request: Request, exc: NotAuthenticated) -> Response:

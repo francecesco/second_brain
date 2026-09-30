@@ -8,7 +8,7 @@
 {% for c in captures %}
 <tr>
   <td>{{ local(c.recorded_at) }}</td>
-  <td>{{ c.title or default_title(c.recorded_at, tz) }}</td>
+  <td>{{ display_title(c, tz) }}</td>
   <td>{{ device_names.get(c.device_id, c.device_id) }}</td>
   <td>{{ local(c.trashed_at) }}</td>
   <td class="actions">

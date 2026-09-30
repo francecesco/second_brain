@@ -1,5 +1,11 @@
 {% from "_icons.html" import icon %}
+{% set job = c.job %}
 <audio controls preload="none" src="/captures/{{ c.id }}/audio"></audio>
+{% if job and job.status == "failed" %}<p class="notice" role="alert">{{ icon("fix") }}<span>Elaborazione non riuscita: {{ job.last_error or "errore sconosciuto" }}</span></p>{% endif %}
+{% if c.transcript is not none or c.edited %}
+{% for field in DETAIL_FIELDS %}{% include "_ai_field.html" %}{% endfor %}
+{% if c.processed_at %}<p class="provenance">Elaborata con {{ c.ai_provider or '—' }} · {{ c.ai_transcribe_model or '—' }}{% if c.ai_enrich_provider and c.ai_enrich_provider != c.ai_provider %} · testo con {{ c.ai_enrich_provider }}{% endif %} · {{ local(c.processed_at) }}</p>{% endif %}
+{% else %}<p class="empty">Trascrizione non ancora disponibile.</p>{% endif %}
 <dl>
   <dt>Registrata</dt><dd>{{ local(c.recorded_at) }}{% if c.date_estimated %} <span class="badge">stimata: ora di ricezione</span>{% endif %}</dd>
   <dt>Ricevuta</dt><dd>{{ local(c.received_at) }}</dd>
@@ -13,13 +19,14 @@
 <div class="actions">
 {% if not c.trashed_at %}
   <form hx-post="/captures/{{ c.id }}/title" hx-target="#row-{{ c.id }}" hx-swap="outerHTML">
-    <input name="title" value="{{ c.title or '' }}" placeholder="{{ default_title(c.recorded_at, tz) }}" maxlength="200" aria-label="Titolo">
+    <input name="title" value="{{ c.title or '' }}" placeholder="{{ c.title_auto or default_title(c.recorded_at, tz) }}" maxlength="{{ MAX_TITLE_LEN }}" aria-label="Titolo">
     <button type="submit" aria-label="Salva titolo" title="Salva titolo">{{ icon("save") }}<span class="label">Salva titolo</span></button>
   </form>
   <form hx-post="/captures/{{ c.id }}/recorded-at">
     <input type="datetime-local" name="recorded_at" step="1" required aria-label="Data e ora" value="{{ c.recorded_at.astimezone(tz).strftime('%Y-%m-%dT%H:%M:%S') }}">
     <button type="submit" aria-label="Correggi data/ora" title="Correggi data/ora">{{ icon("calendar") }}<span class="label">Correggi data/ora</span></button>
   </form>
+  {% if not (job and job.status == "running") %}<button type="button" hx-post="/captures/{{ c.id }}/reprocess" hx-target="#detail-{{ c.id }}" hx-confirm="{{ reprocess_confirm(c) }}" aria-label="Rielabora" title="Rielabora">{{ icon("refresh") }}<span class="label">Rielabora</span></button>{% endif %}
   <button type="button" hx-post="/captures/{{ c.id }}/trash" hx-target="#row-{{ c.id }}" hx-swap="outerHTML" hx-confirm="Spostare la registrazione nel cestino?" aria-label="Cestino" title="Cestino">{{ icon("trash") }}<span class="label">Cestino</span></button>
 {% endif %}
   <button type="button" onclick="this.closest('.detail').innerHTML=''" aria-label="Chiudi" title="Chiudi">{{ icon("close") }}<span class="label">Chiudi</span></button>
