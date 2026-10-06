@@ -228,7 +228,7 @@ di default per fascia del giorno, icone.
 
 **2026-10-06 — Stile della UI web.** Scelta tra tre direzioni con mockup (pannello alla
 Teenage Engineering, dot matrix alla Nothing, 1-bit come il device): vinta la prima,
-dose moderata di arancione. CSS scritto a mano su variabili, JetBrains Mono vendorizzato,
+dose moderata di arancione. CSS scritto a mano su variabili, font squadrati vendorizzati (Space Grotesk, Space Mono, Doto),
 LED di stato, voce di menu attiva. Linee guida in `docs/stile-ui.md`. Branch
 `backend-stile-pannello`, in attesa di merge.
 

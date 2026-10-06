@@ -238,5 +238,5 @@ def test_format_size(size, text):
 
 
 def test_font_served_with_its_media_type(client):
-    r = client.get("/static/jetbrains-mono.woff2")
+    r = client.get("/static/space-grotesk.woff2")
     assert (r.status_code, r.headers["content-type"]) == (200, "font/woff2")

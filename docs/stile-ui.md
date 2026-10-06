@@ -18,10 +18,12 @@ una pagina nuova nasce coerente senza dover leggere tutto il CSS.
 3. **Pannelli su fondo grigio.** La pagina è un fondo grigio caldo su cui poggiano
    pannelli chiari con bordo sottile e angoli di 2 px: intestazione, albero, contenuto.
    Dentro un pannello, le sezioni si separano con hairline, non con altri riquadri.
-4. **Etichette in maiuscoletto, numeri in monospazio.** Tutto ciò che è etichetta
-   (menu, briciole, intestazioni di tabella e di sezione, termini delle definizioni) è
-   piccolo, maiuscolo e spaziato. Tutto ciò che è numero o identificativo (orari,
-   contatori, dimensioni, id, hash, modelli) è in JetBrains Mono con cifre tabulari.
+4. **Etichette in maiuscoletto, numeri in monospazio, orari a matrice di punti.** Tutto
+   ciò che è etichetta (menu, briciole, intestazioni di tabella e di sezione, termini
+   delle definizioni) è piccolo, maiuscolo e spaziato. Tutto ciò che è identificativo
+   (contatori, dimensioni, id, hash, modelli) è in Space Mono con cifre tabulari. Gli
+   orari delle righe, il marchio e le tessere della griglia sono in Doto, il font a
+   matrice di punti: è il "display" dell'interfaccia, come quello del device.
 5. **Tema chiaro e scuro dalla preferenza del sistema.** Nessun interruttore in pagina.
    Ogni colore passa da una variabile: se una regola nuova usa un colore letterale, nel
    tema scuro si rompe.
@@ -45,24 +47,29 @@ Definiti in `:root` e ridefiniti in `@media (prefers-color-scheme: dark)`.
 | `--acc-edge` | `#b53600` | `#9e3300` | bordo inferiore del pulsante principale |
 | `--acc-bg` | `#ffe8dd` | `#3a2315` | fondo degli avvisi |
 | `--mark-bg` | `#ffd3bd` | `#5a2a10` | evidenziazione dei risultati di ricerca |
-| `--sans` | Helvetica Neue, Helvetica, Arial, system-ui | | testo |
-| `--mono` | JetBrains Mono, ui-monospace, Menlo | | numeri e identificativi |
+| `--sans` | Space Grotesk, poi Helvetica Neue, Arial, system-ui | | testo |
+| `--mono` | Space Mono, poi ui-monospace, Menlo | | identificativi e numeri secondari |
+| `--dot` | Doto, poi `--mono` | | orari delle righe, marchio, tessere della griglia |
 
-Il grotesk è quello di sistema (Helvetica su Mac e iPhone, Roboto su Android): non si
-scarica nulla. JetBrains Mono è un font variabile (pesi 100–800, solo sottoinsieme
-latino, 31 KB) in `web/static/jetbrains-mono.woff2`, licenza OFL nel file accanto. Se
-servono altri glifi si rigenera il sottoinsieme, non si aggiunge un secondo file per peso.
+I tre font sono squadrati, nello spirito di Nothing, e tutti con licenza OFL (file
+`*-OFL.txt` accanto a ciascuno in `web/static/`): Space Grotesk variabile 300–700
+(22 KB), Space Mono 400 (9 KB), Doto variabile 100–900 (5 KB), tutti solo sottoinsieme
+latino. Se servono altri glifi si rigenera il sottoinsieme, non si aggiunge un secondo
+file per peso. Il tipo `font/woff2` è registrato in `app.py` perché l'immagine slim non lo
+conosce.
 
 ## Tipografia
 
-- Corpo: 14 px, interlinea 1,5.
+- Corpo: 14 px, interlinea 1,5, Space Grotesk.
 - Etichetta (classe `.lab`, applicata anche a menu, briciole, `th`, `h2` delle card,
   `h3` dei campi AI, `dt` del dettaglio, tag): 10,5 px, maiuscolo, spaziatura 0,14 em,
   peso 600, colore `--mute`. Le `h2` delle card sono a 12 px e in `--fg`.
 - Titolo di una riga: peso 500. Voce corrente dell'albero: peso 600 e `--acc`.
-- Monospazio (`.mono`, `.time`, `.count`, `.meta`, `.provenance`, `td.mono`): dimensione
-  del contesto o 0,85–0,9 em quando è secondario, sempre `font-variant-numeric:
-  tabular-nums`.
+- Monospazio (`.mono`, `.count`, `.meta`, `.provenance`, `td.mono`): Space Mono è largo,
+  quindi 0,75–0,85 em quando è secondario, sempre `font-variant-numeric: tabular-nums`.
+- Matrice di punti (`--dot`): orari delle righe a 18 px peso 800, marchio a 19 px peso
+  800, tessere della griglia a 17 px peso 700. Mai sotto i 16 px: a dimensioni piccole
+  i punti non si leggono, per contatori e id si usa il monospazio.
 - Niente titoli grandi: la gerarchia la fanno le etichette, gli spazi e le hairline.
 
 ## Dove va l'arancione
@@ -106,7 +113,7 @@ campi passano a `--panel`. Il focus è un anello di 2 px d'accento.
 
 **Righe della lista** (`_row.html`). `.row` con hairline sotto; `.row-main` è un
 `<button>` a tutta larghezza che apre il dettaglio via htmx in `.detail`. Ordine:
-orario (`--mute`, monospazio), titolo, tag, LED di stato, meta a destra (dispositivo,
+orario (`--mute`, Doto), titolo, tag, LED di stato, meta a destra (dispositivo,
 durata, dimensione in monospazio). La riga aperta si riconosce dall'orario arancione:
 non servono classi aggiunte via JavaScript.
 

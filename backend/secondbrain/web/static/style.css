@@ -1,20 +1,37 @@
 /* Stile "pannello": fondo grigio caldo, pannelli chiari con bordi sottili, etichette in
    maiuscoletto, numeri in monospazio e un solo colore d'accento (arancione) riservato a
-   "qui" e "attenzione": voce attiva, nota aperta, azione principale, stati in corso. */
+   "qui" e "attenzione": voce attiva, nota aperta, azione principale, stati in corso.
+   Font squadrati: Space Grotesk per il testo, Space Mono per gli identificativi, Doto
+   (matrice di punti) per gli orari, il marchio e le tessere della griglia. */
 
 @font-face {
-  font-family: "JetBrains Mono";
+  font-family: "Space Grotesk";
   font-style: normal;
-  font-weight: 100 800;
+  font-weight: 300 700;
   font-display: swap;
-  src: url("/static/jetbrains-mono.woff2") format("woff2");
+  src: url("/static/space-grotesk.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/static/space-mono.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Doto";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/static/doto.woff2") format("woff2");
 }
 
 :root {
   --bg: #e3e3df; --panel: #f6f6f3; --fg: #1a1a1a; --mute: #74746f; --line: #c9c9c3;
   --acc: #ff4d00; --acc-fg: #fff; --acc-edge: #b53600; --acc-bg: #ffe8dd; --mark-bg: #ffd3bd;
-  --sans: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --sans: "Space Grotesk", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --mono: "Space Mono", ui-monospace, Menlo, monospace;
+  --dot: "Doto", var(--mono);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -36,7 +53,8 @@ code { font-family: var(--mono); font-size: .9em; }
 .lab, .top nav a, .top nav button, .crumbs, .tree-toggle, th, .ai-field h3, .card h2, .detail dt, .settings-form > label > span:first-child, .tags .tag {
   font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: var(--mute);
 }
-.mono, .count, .time, .row .meta, .hit .day, .provenance, .detail dd.mono, td.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.mono, .count, .row .meta, .hit .day, .provenance, .detail dd.mono, td.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.mono, td.mono { font-size: .85em; }
 
 /* Controlli: tasti piatti con bordo inferiore, campi incassati. */
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -76,7 +94,7 @@ mark { background: var(--mark-bg); color: inherit; border-radius: 2px; padding: 
 
 /* Accesso */
 .login { max-width: 22rem; margin: 15vh auto; padding: 1.4rem 1.4rem 1.6rem; background: var(--panel); border: 1px solid var(--line); border-radius: 2px; }
-.login h1 { margin: 0 0 1.2rem; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; display: flex; align-items: center; gap: .5rem; }
+.login h1 { margin: 0 0 1.2rem; font-family: var(--dot); font-size: 22px; line-height: 1; letter-spacing: .04em; text-transform: uppercase; font-weight: 800; display: flex; align-items: center; gap: .55rem; }
 .login h1::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--acc); }
 .login label { display: block; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: var(--mute); }
 .login input { width: 100%; margin: .4rem 0 .8rem; }
@@ -85,7 +103,7 @@ mark { background: var(--mark-bg); color: inherit; border-radius: 2px; padding: 
 
 /* Intestazione */
 .top { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; padding: .55rem 1rem; background: var(--panel); border-bottom: 1px solid var(--line); }
-.top .brand { display: inline-flex; align-items: center; gap: .5rem; margin-right: auto; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; font-weight: 600; color: var(--fg); }
+.top .brand { display: inline-flex; align-items: center; gap: .55rem; margin-right: auto; font-family: var(--dot); font-size: 19px; line-height: 1; letter-spacing: .04em; text-transform: uppercase; font-weight: 800; color: var(--fg); }
 .top .brand::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--acc); flex-shrink: 0; }
 .top .dots { display: inline-flex; gap: 5px; }
 .top .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
@@ -119,7 +137,7 @@ main { flex: 1; min-width: 0; padding: 1rem 1.2rem; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .6rem; }
 .grid a { display: block; background: var(--bg); border: 1px solid var(--line); border-radius: 2px; padding: .8rem; }
 .grid a:hover { border-color: var(--fg); color: inherit; }
-.grid .label { display: block; font-weight: 600; }
+.grid .label { display: block; font-family: var(--dot); font-weight: 700; font-size: 17px; line-height: 1.2; }
 
 /* Righe del giorno */
 .row { border-bottom: 1px solid var(--line); }
@@ -127,9 +145,9 @@ main { flex: 1; min-width: 0; padding: 1rem 1.2rem; }
   font: inherit; letter-spacing: 0; text-transform: none; font-weight: 400; cursor: pointer; }
 .row-main:hover { box-shadow: none; transform: none; }
 .row-main:hover .title { color: var(--acc); }
-.row .time { color: var(--mute); }
+.row .time { color: var(--mute); font-family: var(--dot); font-weight: 800; font-size: 18px; line-height: 1.2; letter-spacing: .02em; }
 .row .title { font-weight: 500; }
-.row .meta { color: var(--mute); margin-left: auto; font-size: .9em; }
+.row .meta { color: var(--mute); margin-left: auto; font-size: .8em; }
 .row:has(> .detail:not(:empty)) .time { color: var(--acc); }
 .head { display: flex; flex-wrap: wrap; gap: .3rem .5rem; align-items: center; }
 .head .tags { flex-basis: 100%; }
@@ -166,7 +184,7 @@ a.tag:hover { border-color: var(--acc); color: var(--acc); }
 .pencil:hover { border-color: var(--line); box-shadow: none; }
 .edited { color: var(--acc); }
 .transcript { white-space: pre-wrap; }
-.provenance { color: var(--mute); font-size: .8em; }
+.provenance { color: var(--mute); font-size: .75em; }
 
 /* Tabelle: cestino, dispositivi */
 .table-wrap { overflow-x: auto; }
