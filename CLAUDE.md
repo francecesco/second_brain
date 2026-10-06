@@ -47,6 +47,9 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   aggiorna lo "Stato" della spec con data di verifica e deviazioni emerse.
 - Le checkbox nei piani **non** vengono spuntate: lo stato si legge dai commit e dallo
   "Stato" della spec.
+- La UI web del backend segue `docs/stile-ui.md` (stile "pannello": token, componenti,
+  dove va l'arancione, verifica con screenshot). Una pagina o un componente nuovo si
+  controlla contro quella guida prima del commit.
 
 ## Come si lavora con l'hardware
 
@@ -222,6 +225,12 @@ che cancellava righe con sidecar rotto, pubblicazione IPv6 che allargava la rego
 Su Docker Desktop l'app vede l'IP del gateway, non quello del device. Verificato col
 device vero: upload, finder, OTA 0.6.2 → 0.6.3. Poi leggibilità: nomi dei giorni, titolo
 di default per fascia del giorno, icone.
+
+**2026-10-06 — Stile della UI web.** Scelta tra tre direzioni con mockup (pannello alla
+Teenage Engineering, dot matrix alla Nothing, 1-bit come il device): vinta la prima,
+dose moderata di arancione. CSS scritto a mano su variabili, JetBrains Mono vendorizzato,
+LED di stato, voce di menu attiva. Linee guida in `docs/stile-ui.md`. Branch
+`backend-stile-pannello`, in attesa di merge.
 
 ## Idee future e cose rimandate
 

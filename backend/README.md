@@ -250,3 +250,6 @@ uv sync
 docker compose -f docker-compose.test.yml up -d   # Postgres usa-e-getta per i test, porta 55432
 uv run pytest -q
 ```
+
+Le pagine web seguono le linee guida di stile in `../docs/stile-ui.md` (token, componenti,
+dove va il colore d'accento, come si verifica una modifica con gli screenshot).
