@@ -1,6 +1,7 @@
 """Applicazione FastAPI: stato condiviso, router, ciclo di vita (spec §5)."""
 import asyncio
 import logging
+import mimetypes
 from collections.abc import Callable
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime
@@ -97,6 +98,7 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
     app.include_router(ingest.router)
     app.include_router(ota.router)
 
+    mimetypes.add_type("font/woff2", ".woff2")  # l'immagine slim non lo conosce: senza, il font esce come octet-stream
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(web_login.router)
     app.include_router(web_browse.router)

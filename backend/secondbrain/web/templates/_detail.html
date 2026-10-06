@@ -21,7 +21,7 @@
 {% if not c.trashed_at %}
   <form hx-post="/captures/{{ c.id }}/title" hx-target="#row-{{ c.id }}" hx-swap="outerHTML">
     <input name="title" value="{{ c.title or '' }}" placeholder="{{ c.title_auto or default_title(c.recorded_at, tz) }}" maxlength="{{ MAX_TITLE_LEN }}" aria-label="Titolo">
-    <button type="submit" aria-label="Salva titolo" title="Salva titolo">{{ icon("save") }}<span class="label">Salva titolo</span></button>
+    <button type="submit" class="pri" aria-label="Salva titolo" title="Salva titolo">{{ icon("save") }}<span class="label">Salva titolo</span></button>
   </form>
   <form hx-post="/captures/{{ c.id }}/recorded-at">
     <input type="datetime-local" name="recorded_at" step="1" required aria-label="Data e ora" value="{{ c.recorded_at.astimezone(tz).strftime('%Y-%m-%dT%H:%M:%S') }}">

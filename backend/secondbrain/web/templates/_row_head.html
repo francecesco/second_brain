@@ -4,8 +4,8 @@
 {% set tag_preview = (c.tags or [])[:ROW_TAG_PREVIEW] %}
 <span class="head" id="head-{{ c.id }}"{% if pending %} hx-get="/captures/{{ c.id }}/head" hx-trigger="every {{ ROW_POLL_S }}s" hx-swap="outerHTML"{% endif %}{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
   <span class="title">{{ display_title(c, tz) }}</span>
-  {% if job and job.status == "queued" %}<span class="status" role="img" aria-label="In coda" title="In coda">{{ icon("clock") }}</span>
-  {% elif job and job.status == "running" %}<span class="status spin" role="img" aria-label="In elaborazione" title="In elaborazione">{{ icon("spinner") }}</span>
+  {% if job and job.status == "queued" %}<span class="status led queue" role="img" aria-label="In coda" title="In coda"></span>
+  {% elif job and job.status == "running" %}<span class="status led run" role="img" aria-label="In elaborazione" title="In elaborazione"></span>
   {% elif job and job.status == "failed" %}<span class="status failed" role="img" aria-label="Elaborazione non riuscita" title="Elaborazione non riuscita">{{ icon("fix") }}</span>{% endif %}
   {% if tag_preview %}<span class="tags">{% for t in tag_preview %}<span class="tag">{{ t }}</span>{% endfor %}</span>{% endif %}
 </span>

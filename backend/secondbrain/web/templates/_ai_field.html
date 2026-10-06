@@ -9,7 +9,7 @@
     {% if field == "transcript" %}<textarea name="value" rows="8" aria-label="{{ label }}">{{ c.transcript or '' }}</textarea>
     {% elif field == "summary" %}<textarea name="value" rows="3" maxlength="{{ MAX_SUMMARY_LEN }}" aria-label="{{ label }}">{{ c.summary or '' }}</textarea>
     {% else %}<input name="value" value="{{ (c.tags or [])|join(', ') }}" placeholder="lavoro, casa" aria-label="Tag separati da virgole">{% endif %}
-    <button type="submit" aria-label="Salva" title="Salva">{{ icon("save") }}<span class="label">Salva</span></button>
+    <button type="submit" class="pri" aria-label="Salva" title="Salva">{{ icon("save") }}<span class="label">Salva</span></button>
     <button type="button" hx-get="/captures/{{ c.id }}/field/{{ field }}" hx-target="#field-{{ field }}-{{ c.id }}" hx-swap="outerHTML" aria-label="Annulla" title="Annulla">{{ icon("close") }}<span class="label">Annulla</span></button>
   </form>
   {% elif field == "tags" %}

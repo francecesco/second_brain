@@ -160,3 +160,10 @@ def test_audio_missing_on_disk_is_404(recordings, db, settings):
 
 def test_unknown_capture(recordings):
     assert get(recordings, f"/captures/{uuid.uuid4()}").status_code == 404
+
+
+def test_nav_marks_current_page(recordings):
+    r = get(recordings, "/browse")
+    assert 'class="on" href="/browse' in r.text and 'class="on" href="/trash"' not in r.text
+    r = get(recordings, "/trash")
+    assert 'class="on" href="/trash"' in r.text and 'class="on" href="/browse' not in r.text

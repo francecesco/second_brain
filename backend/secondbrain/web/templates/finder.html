@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
+{% set section = "browse" if request.url.path.startswith("/browse") else request.url.path.strip("/").split("/")[0] %}
 {% block body %}
 <header class="top">
-  <a class="brand" href="/browse{{ qs }}" aria-label="Second Brain" title="Second Brain">{{ icon("archive") }}<span class="label">Second Brain</span></a>
+  <a class="brand" href="/browse{{ qs }}" aria-label="Second Brain" title="Second Brain"><span class="label">Second Brain</span></a>
+  <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
   <form method="get">
     <select name="device" aria-label="Dispositivo" onchange="this.form.submit()">
       <option value="">Tutti i dispositivi</option>
@@ -17,18 +19,19 @@
   </form>
   {% set fix_label = "Da sistemare (" ~ estimated_count ~ ")" if estimated_count else "Da sistemare" %}
   <nav>
-    <a href="/search" aria-label="Ricerca" title="Ricerca">{{ icon("search") }}<span class="label">Ricerca</span></a>
-    <a href="/fix" aria-label="{{ fix_label }}" title="{{ fix_label }}">{{ icon("fix") }}<span class="label">{{ fix_label }}</span></a>
-    <a href="/trash" aria-label="Cestino" title="Cestino">{{ icon("trash") }}<span class="label">Cestino</span></a>
-    <a href="/devices" aria-label="Dispositivi" title="Dispositivi">{{ icon("devices") }}<span class="label">Dispositivi</span></a>
-    <a href="/settings" aria-label="Impostazioni" title="Impostazioni">{{ icon("settings") }}<span class="label">Impostazioni</span></a>
+    <a{% if section == "browse" %} class="on"{% endif %} href="/browse{{ qs }}" aria-label="Archivio" title="Archivio">{{ icon("archive") }}<span class="label">Archivio</span></a>
+    <a{% if section == "search" %} class="on"{% endif %} href="/search" aria-label="Ricerca" title="Ricerca">{{ icon("search") }}<span class="label">Ricerca</span></a>
+    <a{% if section == "fix" %} class="on"{% endif %} href="/fix" aria-label="{{ fix_label }}" title="{{ fix_label }}">{{ icon("fix") }}<span class="label">{{ fix_label }}</span></a>
+    <a{% if section == "trash" %} class="on"{% endif %} href="/trash" aria-label="Cestino" title="Cestino">{{ icon("trash") }}<span class="label">Cestino</span></a>
+    <a{% if section == "devices" %} class="on"{% endif %} href="/devices" aria-label="Dispositivi" title="Dispositivi">{{ icon("devices") }}<span class="label">Dispositivi</span></a>
+    <a{% if section == "settings" %} class="on"{% endif %} href="/settings" aria-label="Impostazioni" title="Impostazioni">{{ icon("settings") }}<span class="label">Impostazioni</span></a>
     <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" aria-label="Esci" title="Esci">{{ icon("logout") }}<span class="label">Esci</span></button></form>
   </nav>
 </header>
 <div class="layout">
   <aside class="tree">
     <input type="checkbox" id="tree-toggle" hidden>
-    <label for="tree-toggle" class="tree-toggle">Archivio ▾</label>
+    <label for="tree-toggle" class="tree-toggle">Archivio</label>
     <ul>
     {% for y, n in tree.years %}
       <li><a href="/browse/{{ y }}{{ qs }}"{% if y == year %} class="current"{% endif %}>{{ y }}</a> <span class="count">{{ n }}</span>

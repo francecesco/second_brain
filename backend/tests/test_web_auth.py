@@ -235,3 +235,8 @@ def test_format_duration(seconds, text):
 @pytest.mark.parametrize("size,text", [(10, "1 KB"), (32044, "31 KB"), (int(19.4 * 1024 * 1024), "19,4 MB")])
 def test_format_size(size, text):
     assert format_size(size) == text
+
+
+def test_font_served_with_its_media_type(client):
+    r = client.get("/static/jetbrains-mono.woff2")
+    assert (r.status_code, r.headers["content-type"]) == (200, "font/woff2")
