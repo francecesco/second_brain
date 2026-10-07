@@ -38,7 +38,7 @@ PURGE_INTERVAL_S = 24 * 3600
 def _purge_once(app: FastAPI) -> int:
     with app.state.sessionmaker() as s:
         return library.purge_trash(s, app.state.archive, app.state.clock(),
-                                   app.state.settings.trash_retention_days)
+                                   app.state.settings.trash_retention_days, vault=app.state.vault)
 
 
 async def _purge(app: FastAPI) -> None:

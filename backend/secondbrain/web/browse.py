@@ -79,7 +79,21 @@ def capture_detail(request: Request, capture_id: uuid.UUID, db: Session = Depend
     capture = _capture(db, capture_id)
     files = request.app.state.archive.related_files(capture.rel_path)
     return templates.TemplateResponse(request, "_detail.html",
-                                      base_context(request, db, session) | {"c": capture, "files": files})
+                                      base_context(request, db, session) | {"c": capture, "files": files,
+                                                                            "note_path": capture.note_path})
+
+
+@router.get("/captures/{capture_id}/note")
+def capture_note(request: Request, capture_id: uuid.UUID, db: Session = Depends(get_db),
+                 session: WebSession = Depends(require_login)):
+    """La nota nel vault Obsidian (spec vault §8): resta scaricabile dal dettaglio."""
+    capture = _capture(db, capture_id)
+    if not capture.note_path:
+        raise HTTPException(404, "nota non presente nel vault")
+    path = request.app.state.vault.abs(capture.note_path)
+    if not path.is_file():
+        raise HTTPException(404, "nota non trovata sul disco")
+    return FileResponse(path, media_type="text/markdown; charset=utf-8", filename=path.name)
 
 
 @router.get("/captures/{capture_id}/audio")

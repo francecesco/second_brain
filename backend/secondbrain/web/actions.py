@@ -22,11 +22,17 @@ def _archive(request: Request):
     return request.app.state.archive
 
 
+def _vault_kw(request: Request) -> dict:
+    """Vault, fuso e URL pubblico per le operazioni che toccano la nota nel vault."""
+    state = request.app.state
+    return {"vault": state.vault, "tz": state.settings.tz_archive, "public_url": state.settings.public_url}
+
+
 @router.post("/captures/{capture_id}/title")
 def set_title_route(request: Request, capture_id: uuid.UUID, title: str = Form(""),
                     db: Session = Depends(get_db), session: WebSession = Depends(require_csrf)):
     try:
-        capture = library.set_title(db, _archive(request), capture_id, title)
+        capture = library.set_title(db, _archive(request), capture_id, title, **_vault_kw(request))
     except library.NotFound:
         raise HTTPException(404, "registrazione sconosciuta") from None
     return templates.TemplateResponse(request, "_row.html",
@@ -45,7 +51,8 @@ def correct_date_route(request: Request, capture_id: uuid.UUID, recorded_at: str
     try:
         capture = library.correct_recorded_at(db, _archive(request),
                                               request.app.state.settings.tz_archive,
-                                              capture_id, local)
+                                              capture_id, local, vault=request.app.state.vault,
+                                              public_url=request.app.state.settings.public_url)
     except library.NotFound:
         raise HTTPException(404, "registrazione sconosciuta") from None
     except library.InTrash as exc:
@@ -57,7 +64,8 @@ def correct_date_route(request: Request, capture_id: uuid.UUID, recorded_at: str
 def trash_route(request: Request, capture_id: uuid.UUID, db: Session = Depends(get_db),
                 session: WebSession = Depends(require_csrf)):
     try:
-        library.trash_capture(db, _archive(request), capture_id, request.app.state.clock())
+        library.trash_capture(db, _archive(request), capture_id, request.app.state.clock(),
+                              **_vault_kw(request))
     except library.NotFound:
         raise HTTPException(404, "registrazione sconosciuta") from None
     return HTMLResponse("")  # htmx sostituisce la riga con niente
@@ -75,7 +83,7 @@ def trash_page(request: Request, db: Session = Depends(get_db),
 def restore_route(request: Request, capture_id: uuid.UUID, db: Session = Depends(get_db),
                   session: WebSession = Depends(require_csrf)):
     try:
-        library.restore_capture(db, _archive(request), capture_id)
+        library.restore_capture(db, _archive(request), capture_id, **_vault_kw(request))
     except library.NotFound:
         raise HTTPException(404, "registrazione sconosciuta") from None
     return RedirectResponse("/trash", status_code=303)
@@ -85,7 +93,7 @@ def restore_route(request: Request, capture_id: uuid.UUID, db: Session = Depends
 def delete_route(request: Request, capture_id: uuid.UUID, db: Session = Depends(get_db),
                  session: WebSession = Depends(require_csrf)):
     try:
-        library.delete_capture(db, _archive(request), capture_id)
+        library.delete_capture(db, _archive(request), capture_id, vault=request.app.state.vault)
     except library.NotFound:
         raise HTTPException(404, "registrazione sconosciuta") from None
     except library.NotInTrash as exc:

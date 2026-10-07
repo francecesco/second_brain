@@ -2,6 +2,7 @@ import uuid
 
 import pytest
 
+from tests.ai_fakes import processed
 from tests.helpers import DEV2, NOW, capture_by
 
 
@@ -167,3 +168,12 @@ def test_nav_marks_current_page(recordings):
     assert 'class="on" href="/browse' in r.text and 'class="on" href="/trash"' not in r.text
     r = get(recordings, "/trash")
     assert 'class="on" href="/trash"' in r.text and 'class="on" href="/browse' not in r.text
+
+
+def test_detail_lists_the_vault_note_and_serves_it(recordings, db, settings):
+    cid = capture_by(db, "cap_20260923_191530").id
+    processed(db, settings, cid, title="Auto")
+    text = recordings.client.get(f"/captures/{cid}").text
+    assert "Captures/2026/2026-09-23 21.15 Auto.md" in text and f'href="/captures/{cid}/note"' in text
+    r = recordings.client.get(f"/captures/{cid}/note")
+    assert r.status_code == 200 and "id: cap_20260923_191530" in r.text

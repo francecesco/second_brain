@@ -14,6 +14,7 @@ from .archive import NOTE_SUFFIX, Archive
 from .models import Capture
 from .notefile import Note, NoteMeta, render_note
 from .search import refresh_search_vector
+from .vault import Vault, note_dir, vault_note_name
 
 MATTINO_START_HOUR = 5
 POMERIGGIO_START_HOUR = 12
@@ -85,9 +86,40 @@ def note_fields(note: Note) -> dict:
     }
 
 
-def write_note(s: Session, archive: Archive, capture: Capture, note: Note, tz: ZoneInfo) -> None:
-    """Prima il `.md` (atomico), poi catalogo e indice di ricerca; il commit lo fa chi chiama."""
-    archive.write_text(capture.rel_path, NOTE_SUFFIX, render_note(note, tz))
+def expected_note_rel(vault: Vault, capture: Capture, tz: ZoneInfo) -> str:
+    """Percorso atteso della nota nel vault (spec vault §5); nuovo nome solo se libero."""
+    local = capture.recorded_at.astimezone(tz)
+    name = vault_note_name(local, effective_title(capture, tz))
+    wanted = f"{note_dir(local)}/{name}"
+    if capture.note_path == wanted:
+        return wanted
+    return vault.unique_rel(note_dir(local), name)
+
+
+def _place(vault: Vault, capture: Capture, note: Note, tz: ZoneInfo, public_url: str | None) -> None:
+    wanted = expected_note_rel(vault, capture, tz)
+    if capture.note_path and capture.note_path != wanted and vault.mtime(capture.note_path) is not None:
+        vault.rename(capture.note_path, wanted)
+    capture.note_path = wanted
+    capture.note_mtime = vault.write_text(wanted, render_note(note, tz, note_meta(capture, tz, public_url)))
+
+
+def write_note(s: Session, archive: Archive, capture: Capture, note: Note, tz: ZoneInfo, *,
+               vault: Vault | None = None, public_url: str | None = None) -> None:
+    """Prima il `.md` (atomico: nel vault, rinominato se il titolo e' cambiato; senza vault
+    accanto al WAV come prima), poi catalogo e indice di ricerca; il commit lo fa chi chiama."""
     for key, value in note_fields(note).items():
         setattr(capture, key, value)
+    if vault is not None:
+        _place(vault, capture, note, tz, public_url)
+    else:
+        archive.write_text(capture.rel_path, NOTE_SUFFIX, render_note(note, tz))
     refresh_search_vector(s, capture)
+
+
+def place_note(vault: Vault, capture: Capture, tz: ZoneInfo, public_url: str | None) -> None:
+    """Titolo manuale o data cambiati: stesso contenuto AI, nome e frontmatter aggiornati.
+    Una nota mai elaborata e senza correzioni non ha file: non se ne crea uno vuoto."""
+    if capture.trashed_at is not None or (capture.transcript is None and not capture.note_path):
+        return
+    _place(vault, capture, note_from_capture(capture), tz, public_url)

@@ -35,6 +35,7 @@ from .archive import AI_SUFFIX, Archive
 from .clock import utcnow
 from .models import Capture, Job
 from .usage import month_start, record_usage
+from .vault import Vault
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +79,8 @@ class Worker:
     box: store.SecretBox
     factory: chain.ProviderFactory
     clock: Callable[[], datetime] = utcnow
+    vault: Vault | None = None          # None solo nei test vecchi: la nota resta accanto al WAV
+    public_url: str | None = None
     _idle_reason: str | None = field(default=None, init=False)
 
     def run_once(self) -> bool:
@@ -198,7 +201,8 @@ class Worker:
             record = {"schema_version": AI_SCHEMA_VERSION,  # "Rielabora" lo sostituisce
                       "transcribe": _ai_record(config.name, transcript.model, now, transcript.raw)}
             self.archive.write_text(capture.rel_path, AI_SUFFIX, _dump(record))
-            notes.write_note(s, self.archive, capture, note, self.tz)
+            notes.write_note(s, self.archive, capture, note, self.tz, vault=self.vault,
+                             public_url=self.public_url)
             until = None
             if note.transcript:
                 until = jobs.advance(s, lease.capture_id, jobs.STAGE_ENRICH, now).locked_until
@@ -231,7 +235,8 @@ class Worker:
                 enrichment.tags, provider=config.name, model=enrichment.model, at=now)
             self._write_ai_section(capture.rel_path, "enrich",
                                    _ai_record(config.name, enrichment.model, now, enrichment.raw))
-            notes.write_note(s, self.archive, capture, note, self.tz)
+            notes.write_note(s, self.archive, capture, note, self.tz, vault=self.vault,
+                             public_url=self.public_url)
             jobs.mark_done(s, lease.capture_id, now)
             s.commit()
             rel_path = capture.rel_path

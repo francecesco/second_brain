@@ -10,6 +10,7 @@ from secondbrain.archive import Archive
 from secondbrain.catalog import make_sessionmaker
 from secondbrain.models import Capture
 from secondbrain.notefile import Note, parse_note
+from secondbrain.vault import Vault
 from secondbrain.notes import empty_ai_fields, lock_capture, note_from_capture, write_note
 from tests.helpers import NOW, capture_by, is_searchable
 
@@ -118,3 +119,25 @@ def test_empty_ai_fields_are_fresh_every_time():
     first, second = empty_ai_fields(), empty_ai_fields()
     assert first == second and first["transcript"] is None
     assert first["tags"] is not second["tags"] and first["edited"] is not second["edited"]
+
+
+def test_write_note_puts_the_file_in_the_vault_and_tracks_it(recordings, db, settings, arch):
+    capture = capture_by(db, CID)
+    vault = Vault(settings.vault_dir)
+    note = Note(transcript="Ciao.", title="Chiamare Marco", tags=("lavoro",))
+    write_note(db, arch, capture, note, ROME, vault=vault, public_url="https://b.it")
+    db.commit()
+    assert capture.note_path == "Captures/2026/2026-09-23 21.15 Chiamare Marco.md"
+    text = vault.read_text(capture.note_path)
+    assert "id: cap_20260923_191530" in text and "url: https://b.it/captures/" in text and text.endswith("Ciao.\n")
+    assert capture.note_mtime == vault.mtime(capture.note_path)
+    assert not arch.derived_path(capture.rel_path, ".md").exists()
+
+
+def test_write_note_renames_when_the_title_changes(recordings, db, settings, arch):
+    capture = capture_by(db, CID)
+    vault = Vault(settings.vault_dir)
+    write_note(db, arch, capture, Note(transcript="x", title="Prima"), ROME, vault=vault)
+    write_note(db, arch, capture, Note(transcript="x", title="Dopo"), ROME, vault=vault)
+    assert capture.note_path == "Captures/2026/2026-09-23 21.15 Dopo.md"
+    assert len(vault.list_notes()) == 1

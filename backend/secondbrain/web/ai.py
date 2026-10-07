@@ -55,7 +55,8 @@ def field_save(request: Request, capture_id: uuid.UUID, field: str, value: str =
     state = request.app.state
     try:
         capture = library.edit_ai_field(db, state.archive, state.settings.tz_archive, capture_id,
-                                        field, value)
+                                        field, value, vault=state.vault,
+                                        public_url=state.settings.public_url)
     except library.NotFound:
         raise HTTPException(404, "registrazione sconosciuta") from None
     except library.InTrash as exc:

@@ -15,7 +15,7 @@
   <dt>Alimentazione</dt><dd>{% if c.power_source == 'usb' %}USB{% elif c.power_source == 'battery' %}batteria{% if c.battery_pct is not none %} {{ c.battery_pct }} %{% endif %}{% else %}—{% endif %}{% if c.battery_v %} · {{ '%.2f'|format(c.battery_v) }} V{% endif %}</dd>
   <dt>ID cattura</dt><dd class="mono">{{ c.capture_id }}</dd>
   <dt>SHA-256</dt><dd class="mono">{{ c.sha256 }}</dd>
-  <dt>File</dt><dd><ul class="files">{% for name in files %}<li><a href="/captures/{{ c.id }}/files/{{ name }}" aria-label="Scarica {{ name }}" title="Scarica {{ name }}">{{ icon("download") }}{{ name }}</a></li>{% endfor %}</ul></dd>
+  <dt>File</dt><dd><ul class="files">{% if note_path %}<li><a href="/captures/{{ c.id }}/note" aria-label="Scarica la nota" title="Scarica la nota dal vault">{{ icon("download") }}{{ note_path }}</a></li>{% endif %}{% for name in files %}<li><a href="/captures/{{ c.id }}/files/{{ name }}" aria-label="Scarica {{ name }}" title="Scarica {{ name }}">{{ icon("download") }}{{ name }}</a></li>{% endfor %}</ul></dd>
 </dl>
 <div class="actions">
 {% if not c.trashed_at %}

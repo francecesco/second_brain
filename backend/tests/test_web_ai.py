@@ -73,7 +73,7 @@ def test_detail_shows_summary_tags_transcript_and_provenance(recordings, db, set
     assert 'href="/search?tag=lavoro"' in text
     assert "Elaborata con groq · whisper-large-v3-turbo · 28/09/2026 14:00:00" in text
     assert 'placeholder="Chiamare Marco"' in text
-    assert f"{capture_by(db, CID).rel_path.rsplit('/', 1)[1][:-4]}.md" in text
+    assert capture_by(db, CID).note_path in text   # la nota nel vault, tra i file scaricabili
 
 
 def test_detail_before_processing(recordings, db):

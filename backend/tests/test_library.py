@@ -7,6 +7,8 @@ import pytest
 from secondbrain import library
 from secondbrain.archive import Archive
 from secondbrain.models import Capture
+from secondbrain.vault import Vault
+from tests.ai_fakes import processed
 from tests.helpers import NOW, capture_by, make_wav, upload
 
 ROME = ZoneInfo("Europe/Rome")
@@ -94,3 +96,32 @@ def test_unknown_capture(db, arch):
 def test_device_retry_after_trash_is_still_a_duplicate(recordings, db, arch):
     library.trash_capture(db, arch, capture_by(db, CID).id, NOW)
     assert upload(recordings.client, make_wav(fill=b"\x01\x00")).status_code == 409
+
+
+def test_manual_title_and_date_rename_the_vault_note(recordings, db, settings, arch):
+    cid = capture_by(db, CID).id
+    processed(db, settings, cid, title="Auto")
+    vault = Vault(settings.vault_dir)
+    library.set_title(db, arch, cid, "Mio titolo", vault=vault, tz=ROME)
+    assert capture_by(db, CID).note_path == "Captures/2026/2026-09-23 21.15 Mio titolo.md"
+    library.correct_recorded_at(db, arch, ROME, cid, datetime(2025, 12, 31, 8, 30), vault=vault)
+    c = capture_by(db, CID)
+    assert c.note_path == "Captures/2025/2025-12-31 08.30 Mio titolo.md"
+    assert "created: '2025-12-31T08:30:00+01:00'" in vault.read_text(c.note_path)
+
+
+def test_trash_restore_and_delete_move_the_note(recordings, db, settings, arch):
+    cid = capture_by(db, CID).id
+    processed(db, settings, cid, title="Auto")
+    vault = Vault(settings.vault_dir)
+    library.trash_capture(db, arch, cid, NOW, vault=vault, tz=ROME)
+    c = capture_by(db, CID)
+    assert c.note_path is None and vault.list_notes() == []
+    assert arch.derived_path(c.rel_path, ".md").exists()        # nel cestino dell'archivio, accanto al WAV
+    library.restore_capture(db, arch, cid, vault=vault, tz=ROME)
+    c = capture_by(db, CID)
+    assert c.note_path == "Captures/2026/2026-09-23 21.15 Auto.md"
+    assert not arch.derived_path(c.rel_path, ".md").exists()
+    library.trash_capture(db, arch, cid, NOW, vault=vault, tz=ROME)
+    library.delete_capture(db, arch, cid, vault=vault)
+    assert vault.list_notes() == [] and not list((settings.archive_dir / ".trash").rglob("*.md"))

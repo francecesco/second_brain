@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from . import catalog, devices, jobs, library, ota, settings_store
 from .ai.registry import build_provider
 from .archive import Archive
+from .vault import Vault
 from .clock import utcnow
 from .config import BAD_SETTINGS_KEY, ConfigError, Settings, load_settings
 from .naming import DEFAULT_DEVICE_TYPE
@@ -246,7 +247,8 @@ def _worker(args: argparse.Namespace) -> None:
     install_signal_handlers(stop)
     worker = Worker(sessionmaker=catalog.make_sessionmaker(engine),
                     archive=Archive(settings.archive_dir), tz=settings.tz_archive, box=box,
-                    factory=lambda config: build_provider(config, client))
+                    factory=lambda config: build_provider(config, client),
+                    vault=Vault(settings.vault_dir), public_url=settings.public_url)
     try:
         run_forever(worker, stop)
     finally:

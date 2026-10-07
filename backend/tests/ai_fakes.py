@@ -8,6 +8,7 @@ from secondbrain.ai.audio import AudioSource
 from secondbrain.ai.base import CheckResult, Enrichment, Transcript
 from secondbrain.ai.registry import PROVIDER_SPECS
 from secondbrain.archive import Archive
+from secondbrain.vault import Vault
 from secondbrain.notefile import Note
 
 from .helpers import NOW, make_wav
@@ -108,7 +109,7 @@ def processed(db, settings, capture_id, **over):
     fields.update(over)
     capture = notes.lock_capture(db, capture_id)
     notes.write_note(db, Archive(settings.archive_dir), capture, Note(**fields),
-                     settings.tz_archive)
+                     settings.tz_archive, vault=Vault(settings.vault_dir))
     jobs.mark_done(db, capture_id, NOW)
     db.commit()
     return capture
