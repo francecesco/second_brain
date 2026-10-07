@@ -69,6 +69,10 @@ bool power_pwr_pressed(void)
 
 boot_mode_t power_boot_mode(void)
 {
+    if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
+        ESP_LOGI(TAG, "boot-mode: wake dal timer di sync -> TIMER");
+        return BOOT_TIMER_SYNC;
+    }
     // Fase 1: 6 campioni x 50 ms su entrambi i tasti.
     bool pwr_held_all = true;
     bool user_seen = false;
@@ -101,6 +105,7 @@ const char *power_boot_mode_name(boot_mode_t m)
 {
     switch (m) {
     case BOOT_DEV:     return "DEV";
+    case BOOT_TIMER_SYNC: return "TIMER";
     case BOOT_CAPTURE: return "CAPTURE";
     default:           return "SYNC_ONLY";
     }
@@ -113,7 +118,7 @@ static void deadline_cb(void *arg)
 {
     (void)arg;
     ESP_LOGE(TAG, "scadenza di ciclo raggiunta: deep sleep forzato");
-    power_deep_sleep();
+    power_deep_sleep(0); // senza timer: un ciclo bloccato non va ripetuto da soli
 }
 
 void power_cycle_deadline_start(uint32_t ms)
@@ -143,7 +148,7 @@ void power_cycle_deadline_cancel(void)
 // romperebbe quindi il boot normale. BOARD_BTN_PWR (GPIO18) e' RTC-capable
 // sulla ESP32-S3 (RTC GPIO 0-21) e non e' un pin di strapping: e' la scelta
 // sicura per un wake-source EXT1.
-void power_deep_sleep(void)
+void power_deep_sleep(uint32_t timer_ms)
 {
     // In deep sleep il dominio digitale (e con esso la pull-up impostata da
     // gpio_config in power_init) e' spento: per mantenere il pin in idle alto
@@ -154,6 +159,10 @@ void power_deep_sleep(void)
     // Tasto attivo-basso -> wake quando il livello scende (EXT1, ANY_LOW).
     ESP_ERROR_CHECK(esp_sleep_enable_ext1_wakeup(1ULL << BOARD_BTN_PWR,
                                                   ESP_EXT1_WAKEUP_ANY_LOW));
+    if (timer_ms > 0) {
+        esp_sleep_enable_timer_wakeup((uint64_t)timer_ms * 1000ULL);
+        ESP_LOGI(TAG, "wake dal timer tra %lu s", (unsigned long)(timer_ms / 1000));
+    }
 
     // Il mantenimento batteria deve restare alto anche durante il sonno, altrimenti a
     // batteria il deep sleep diventerebbe uno spegnimento fisico.

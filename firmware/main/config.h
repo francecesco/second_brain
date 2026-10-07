@@ -35,6 +35,9 @@
 #define SB_OTA_MANIFEST_TIMEOUT_MS 10000  // GET del manifest (pochi byte)
 #define SB_OTA_DOWNLOAD_TIMEOUT_MS 15000  // inattivita' socket durante il download del binario
 #define SB_SYNC_WINDOW_MS          (3 * 60 * 1000)
+// Timer di sync (spec timer §3-4): con file in coda il device si risveglia da solo.
+#define SB_SYNC_RETRY_MIN_MS       (15 * 60 * 1000)      // primo tentativo
+#define SB_SYNC_RETRY_MAX_MS       (4 * 60 * 60 * 1000)  // tetto del raddoppio
 
 // Scadenza di ciclo (§4): deep sleep forzato se il ciclo si blocca.
 #define SB_CYCLE_DEADLINE_MS       (5 * 60 * 1000)
