@@ -109,12 +109,16 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Tutto su `master`, compreso il backend (`backend-fase1b` e `backend-elaborazione-ai` uniti).
   `origin` (`github.com/francecesco/second_brain`, pubblico) è fermo alla Fase 1a: il
   push lo fa l'autore.
-- **Hardware e firmware: chiusi**, in attesa della batteria. Firmware sul device: 0.7.5
+- **Hardware e firmware: chiusi**, in attesa della batteria. Firmware sul device: 0.7.7
   (build del codice corrente di `master`, installata via OTA dal backend; `version.txt`
   in git resta 0.1.0), con `SERVER_BASE_URL` del Mac in ufficio (HTTP) e `DEVICE_TOKEN`
   vero. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
   (spec `docs/specs/2026-10-07-firmware-https-token-design.md`): un solo URL per tutte le
-  reti, 401/403 non svuotano più la coda.
+  reti, 401/403 non svuotano più la coda. Dal 2026-10-07 anche il **timer di sync**
+  (spec `docs/specs/2026-10-07-firmware-timer-sync-design.md`): con file in coda il device si
+  risveglia da solo (15 min, raddoppio fino a 4 h), a coda vuota solo da tasto; lo schermo
+  si aggiorna ai wake da timer solo se cambia qualcosa. Numeri in `config.h`, da rivedere
+  con le misure di consumo a batteria.
 - Batteria: da acquistare con connettore MX1.25 2 pin (polarità da verificare). All'arrivo:
   prova di mantenimento (acceso dopo il rilascio di PWR e dopo il deep sleep), poi misure
   e taratura (vedi Idee future).
@@ -246,6 +250,15 @@ upload e OTA pull in HTTPS col token, LAN in HTTP invariata; heap libero minimo 
 124 KB (niente PSRAM). Il device si trova in LAN con `curl http://192.168.0.x/status` su
 tutto il /24 (DEV MODE).
 
+**2026-10-07 — Timer di sync.** Wake dal timer di deep sleep armato solo con coda non vuota
+(15 min, raddoppio fino a 4 h tra wake da timer consecutivi, azzerato dal tasto), modalità
+`BOOT_TIMER_SYNC` senza campionamento dei tasti, esito mostrato tenuto in memoria RTC e
+refresh dell'e-Paper solo se cambia qualcosa, `retry_attempt` e `next_wake_s` in `/status`.
+Verificato: wake automatico a +15 min con upload e un solo refresh, nessun wake a coda vuota,
+primo raddoppio osservato. Lezioni: `docker compose up --build` per un altro branch riaccende
+l'app e rovina una prova con "server fermo"; il DHCP dell'ufficio cambia gli IP di Mac e
+device (il device si ritrova scansionando `/status` sul /24).
+
 **2026-10-06 — Stile della UI web.** Scelta tra tre direzioni con mockup (pannello alla
 Teenage Engineering, dot matrix alla Nothing, 1-bit come il device): vinta la prima,
 dose moderata di arancione. CSS scritto a mano su variabili, font squadrati vendorizzati (Space Grotesk, Space Mono, Doto),
@@ -269,7 +282,8 @@ LED di stato, voce di menu attiva. Linee guida in `docs/stile-ui.md`. Branch
 - **Spegnimento vero** (GPIO17 a 0) come alternativa al deep sleep per lunghi periodi.
 - **Latenza di avvio**: beep a ~1,7 s dalla pressione. Il resto è bootloader (~0,4 s) e
   init; sotto il secondo solo con light sleep, da valutare dopo le misure di consumo.
-- **Timer periodico di sync** senza cattura (oggi il wake è solo da tasto).
+- **Wake giornaliero a coda vuota** per OTA e ora (il timer di sync oggi si arma solo con
+  file in coda), da valutare con le misure di consumo.
 - Provisioning Wi-Fi, URL e token senza ricompilare (NVS/BLE); service token di Cloudflare
   Access come seconda barriera.
 - **Doppia pressione di PWR** come trigger DEV alternativo a USER, se il gesto con GPIO0

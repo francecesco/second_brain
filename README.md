@@ -92,6 +92,9 @@ scrive l'audio dall'I2S alla SD mentre il task principale aggiorna il display.
 - **HTTPS e token**: gli URL `https://` sono verificati col bundle di certificati di
   ESP-IDF; ogni richiesta al backend porta `Authorization: Bearer <DEVICE_TOKEN>` se il
   token è impostato.
+- **Timer di sync**: con file in coda il device si risveglia da solo dopo 15 min (poi 30,
+  60, 120, 240 min) per riprovare l'upload; a coda vuota dorme finché non si preme PWR.
+  Dopo un wake da timer lo schermo si aggiorna solo se qualcosa è cambiato.
 
 Contratto di upload, che il backend dovrà implementare:
 
