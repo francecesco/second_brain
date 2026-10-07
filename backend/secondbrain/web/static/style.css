@@ -120,24 +120,34 @@ mark { background: var(--mark-bg); color: inherit; border-radius: 2px; padding: 
 
 /* Pannelli: albero a sinistra, contenuto a destra. */
 .layout { display: flex; gap: 8px; padding: 8px; min-height: calc(100vh - 3rem); }
-.tree, main { background: var(--panel); border: 1px solid var(--line); border-radius: 2px; }
-.tree { width: 14rem; flex-shrink: 0; padding: .9rem 1rem; }
-.tree ul { list-style: none; margin: 0; padding-left: .9rem; }
-.tree > ul { padding-left: 0; }
-.tree li { margin: .2rem 0; }
-.tree a { color: var(--fg); }
-.tree .current { color: var(--acc); font-weight: 600; }
+main { background: var(--panel); border: 1px solid var(--line); border-radius: 2px; }
+/* Albero: una colonna di tessere sul fondo grigio, come un menu a schede. Etichetta in
+   monospazio maiuscolo a sinistra, contatore a matrice di punti a destra. */
+.tree { width: 15rem; flex-shrink: 0; padding: .9rem 0 0 .4rem; }
+.tree ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.tree li { margin: 0; display: grid; gap: 4px; }
+.tree li ul { margin-left: 12px; }
+.tree li.empty { color: var(--mute); padding: .4rem .2rem; }
+.tree a { display: flex; align-items: center; justify-content: space-between; gap: .6rem; min-height: 2.6rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .9rem;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--fg); }
+.tree a:hover { border-color: var(--fg); color: var(--fg); }
+.tree a .count { font-family: var(--dot); font-weight: 700; font-size: 16px; line-height: 1; color: var(--mute); }
+.tree a.current { color: var(--acc); border-color: var(--acc); }
+.tree li:has(ul .current) > a.current { border-color: var(--line); }  /* il bordo solo sulla voce più profonda, gli antenati solo il testo */
+.tree a.current .count { color: var(--acc); }
 .tree-toggle { display: none; cursor: pointer; }
-.tree > .tree-toggle { display: block; margin-bottom: .6rem; }
+.tree > .tree-toggle { display: block; margin: 0 0 .6rem .5rem; }
 main { flex: 1; min-width: 0; padding: 1rem 1.2rem; }
 .crumbs { margin-bottom: 1rem; }
 .crumbs a { color: var(--fg); }
 
 /* Griglia di anni, mesi, giorni */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .6rem; }
-.grid a { display: block; background: var(--bg); border: 1px solid var(--line); border-radius: 2px; padding: .8rem; }
+.grid a { display: flex; align-items: center; justify-content: space-between; gap: .6rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: .7rem .9rem; }
 .grid a:hover { border-color: var(--fg); color: inherit; }
-.grid .label { display: block; font-family: var(--dot); font-weight: 700; font-size: 17px; line-height: 1.2; }
+.grid .label { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+.grid .count { font-family: var(--dot); font-weight: 700; font-size: 16px; line-height: 1; }
 
 /* Righe del giorno */
 .row { border-bottom: 1px solid var(--line); }
@@ -222,11 +232,11 @@ td .actions { margin: 0; }
 
 @media (max-width: 700px) {
   .layout { display: block; padding: 6px; }
-  .tree { width: auto; margin-bottom: 6px; padding: .7rem .9rem; }
-  .tree > .tree-toggle { margin-bottom: 0; }
+  .tree { width: auto; margin-bottom: 6px; padding: .5rem .2rem 0; }
+  .tree > .tree-toggle { margin: 0 0 0 .5rem; }
   .tree > .tree-toggle::after { content: " ▾"; }
   .tree > ul { display: none; margin-top: .6rem; }
-  #tree-toggle:checked ~ ul { display: block; }
+  #tree-toggle:checked ~ ul { display: grid; }
   main { padding: .9rem; }
   .row .meta { margin-left: 0; width: 100%; }
   .top .brand .label, .top nav .label, .actions .label, .top .dots { display: none; }

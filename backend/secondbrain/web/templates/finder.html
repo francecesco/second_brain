@@ -34,15 +34,15 @@
     <label for="tree-toggle" class="tree-toggle">Archivio</label>
     <ul>
     {% for y, n in tree.years %}
-      <li><a href="/browse/{{ y }}{{ qs }}"{% if y == year %} class="current"{% endif %}>{{ y }}</a> <span class="count">{{ n }}</span>
+      <li><a href="/browse/{{ y }}{{ qs }}"{% if y == year %} class="current"{% endif %}>{{ y }}<span class="count">{{ n }}</span></a>
       {% if y == year and tree.months %}
         <ul>
         {% for m, mn in tree.months %}
-          <li><a href="/browse/{{ y }}/{{ '%02d' % m }}{{ qs }}"{% if m == month %} class="current"{% endif %}>{{ MONTHS[m - 1] }}</a> <span class="count">{{ mn }}</span>
+          <li><a href="/browse/{{ y }}/{{ '%02d' % m }}{{ qs }}"{% if m == month %} class="current"{% endif %}>{{ MONTHS[m - 1] }}<span class="count">{{ mn }}</span></a>
           {% if m == month and tree.days %}
             <ul>
             {% for d, dn in tree.days %}
-              <li><a href="/browse/{{ y }}/{{ '%02d' % m }}/{{ '%02d' % d }}{{ qs }}"{% if d == day_num %} class="current"{% endif %}>{{ weekday_short(date(y, m, d)) }}</a> <span class="count">{{ dn }}</span></li>
+              <li><a href="/browse/{{ y }}/{{ '%02d' % m }}/{{ '%02d' % d }}{{ qs }}"{% if d == day_num %} class="current"{% endif %}>{{ weekday_short(date(y, m, d)) }}<span class="count">{{ dn }}</span></a></li>
             {% endfor %}
             </ul>
           {% endif %}

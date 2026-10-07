@@ -16,8 +16,10 @@ una pagina nuova nasce coerente senza dover leggere tutto il CSS.
    Non è decorazione: se un elemento arancione non comunica una di queste due cose, va
    tolto.
 3. **Pannelli su fondo grigio.** La pagina è un fondo grigio caldo su cui poggiano
-   pannelli chiari con bordo sottile e angoli di 2 px: intestazione, albero, contenuto.
-   Dentro un pannello, le sezioni si separano con hairline, non con altri riquadri.
+   pannelli chiari con bordo sottile e angoli di 2 px: intestazione e contenuto. Dentro
+   un pannello, le sezioni si separano con hairline, non con altri riquadri. L'albero a
+   sinistra non è un pannello ma una colonna di tessere, una per voce, con angoli di
+   6 px: la stessa forma delle tessere di anni, mesi e giorni nel contenuto.
 4. **Etichette in maiuscoletto, numeri in monospazio, orari a matrice di punti.** Tutto
    ciò che è etichetta (menu, briciole, intestazioni di tabella e di sezione, termini
    delle definizioni) è piccolo, maiuscolo e spaziato. Tutto ciò che è identificativo
@@ -77,7 +79,8 @@ conosce.
 Sì, e solo qui:
 
 - voce di menu attiva (classe `on`: testo e sottolineatura di 2 px);
-- voce corrente dell'albero (classe `current`) e punto del marchio;
+- voce corrente dell'albero (classe `current`: testo e contatore; il bordo solo sulla
+  voce più profonda, non sugli antenati) e punto del marchio;
 - orario della riga di cui è aperto il dettaglio (`.row:has(> .detail:not(:empty)) .time`);
 - titolo di una riga o di un risultato al passaggio del mouse;
 - pulsante principale (`button.pri`), uno per modulo: salva, entra;
@@ -96,9 +99,17 @@ No:
 ## Componenti
 
 **Pannelli e layout.** `header.top` (intestazione, bordo inferiore), `.layout` con
-`aside.tree` (14 rem) e `main`, separati da 8 px di fondo grigio. Una pagina nuova
+`aside.tree` (15 rem) e `main`, separati da 8 px di fondo grigio. Una pagina nuova
 estende `finder.html` e riempie `{% block main %}`: eredita intestazione, albero e
 briciole. Le briciole sono etichette con `›` tra una e l'altra.
+
+**Albero** (`aside.tree`). Ispirato ai menu a schede di Nothing: liste annidate di
+tessere, ogni voce è un `<a>` con l'etichetta a sinistra (Space Mono, 11 px, maiuscolo,
+spaziatura 0,1 em) e il contatore a destra dentro lo stesso link (`.count`, Doto 16 px).
+Tessera: fondo `--panel`, bordo 1 px, angoli 6 px, altezza minima 2,6 rem, 4 px di
+spazio tra una e l'altra, ogni livello rientrato di 12 px. La voce corrente ha testo e
+contatore d'accento; il bordo d'accento solo sulla voce più profonda. Le tessere della
+griglia nel contenuto (`.grid a`) hanno la stessa forma.
 
 **Pulsanti.** `<button>` ha già lo stile: fondo `--panel`, bordo 1 px, raggio 2 px,
 ombra `0 2px 0 var(--line)` che fa da bordo inferiore, testo in etichetta. Al passaggio
