@@ -16,6 +16,8 @@ typedef struct {
     int32_t  last_http;         // status HTTP dell'ultimo upload (0 = nessuno/errore rete)
     uint32_t free_heap_min;     // heap libero minimo dal boot (byte, 0 = mai letto): include l'handshake TLS
     uint32_t stack_min;         // stack libero minimo del task main dopo l'upload (byte, 0 = mai letto)
+    uint32_t retry_attempt;     // tentativi consecutivi da timer (0 = ultimo wake da tasto o coda vuota)
+    uint32_t next_wake_s;       // secondi al prossimo wake da timer (0 = non armato)
 } diag_t;
 
 diag_t *diag_begin(const char *mode);   // azzera e apre il record del ciclo corrente

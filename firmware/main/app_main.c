@@ -27,6 +27,8 @@
 #include "sensors.h"
 #include "wifi.h"
 #include "secrets.h"
+#include "sync_retry_policy.h"
+#include "retry_state.h"
 #include "ota.h"
 #include "capture.h"
 #include "queue.h"
@@ -260,6 +262,16 @@ static void show_status(const cycle_state_t *st)
     display_lines_n(lines, 4);
 }
 
+// Esito della riga 4 come categoria, per decidere se un wake da timer deve aggiornare lo schermo.
+static status_outcome_t cycle_outcome(const cycle_state_t *st)
+{
+    if (!st->wifi_ok) return STATUS_OUTCOME_NO_WIFI;
+    if (st->auth_error) return STATUS_OUTCOME_AUTH_KO;
+    if (st->server_error) return STATUS_OUTCOME_SERVER_KO;
+    if (st->sent > 0) return STATUS_OUTCOME_SENT;
+    return STATUS_OUTCOME_OK;
+}
+
 static void dev_mode(void)
 {
     power_cycle_deadline_cancel();
@@ -327,11 +339,24 @@ void app_main(void)
     if (mode == BOOT_CAPTURE) do_capture(&st);
 
 
+    if (mode == BOOT_TIMER_SYNC) ESP_LOGI(TAG, "wake dal timer: tentativo %u", retry_state_attempt());
     do_sync(&st);
     if (st.sd_ok) st.remaining = queue_count(NULL);
 
-    show_status(&st);
+    status_outcome_t outcome = cycle_outcome(&st);
+    bool refresh = (mode != BOOT_TIMER_SYNC) || status_should_refresh(st.sent, outcome, retry_state_shown());
+    if (refresh) { show_status(&st); retry_state_set_shown(outcome); }
+    else ESP_LOGI(TAG, "wake dal timer senza novita' (esito %d, coda %d): display non aggiornato", (int)outcome, st.remaining);
+
+    // Timer di sync (spec timer §3): tentativi contati solo tra wake da timer consecutivi.
+    if (mode == BOOT_TIMER_SYNC && st.remaining > 0) retry_state_bump(); else retry_state_reset();
+    const power_state_t *ps = battery_last();
+    uint32_t timer_ms = 0;
+    if (sync_retry_should_arm(st.remaining, ps->valid && ps->source == POWER_SRC_BATTERY, ps->pct))
+        timer_ms = sync_retry_delay_ms(retry_state_attempt());
+    diag_get()->retry_attempt = retry_state_attempt();
+    diag_get()->next_wake_s = timer_ms / 1000;
     diag_get()->t_cycle_end = diag_now_ms();
     vTaskDelay(pdMS_TO_TICKS(300));
-    power_deep_sleep(0);
+    power_deep_sleep(timer_ms);
 }
