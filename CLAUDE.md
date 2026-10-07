@@ -132,6 +132,12 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   separato nel compose, ricerca full-text. Verificata sul Mac il 2026-09-30 e, per gli
   scenari rimandati, il 2026-10-07 (vedi "Stato" della spec). Unita in `master` il
   2026-09-30.
+- **Note nel vault Obsidian** (spec `docs/specs/2026-10-07-backend-vault-obsidian-design.md`):
+  dal 2026-10-07 il `.md` di ogni registrazione sta in `data/vault/Captures/<anno>/<data>
+  <ora> <titolo>.md` (una sola copia, chiave `id` nel frontmatter), il worker riprende ogni
+  minuto le modifiche fatte in Obsidian, `secondbrain vault migrate` ha spostato le note
+  esistenti sul Mac. Da provare con Obsidian vero (installazione dell'8 ottobre) e con
+  Syncthing sulla ZimaBoard.
 - Le catture di prova di `capture_server.py` sono state cancellate il 2026-09-29.
 
 ## Prossima sessione
@@ -146,6 +152,8 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
    Con l'elaborazione AI: sulla ZimaBoard va generata una `SETTINGS_KEY` nuova
    (`secondbrain gen-key`) e le chiavi API vanno reinserite dalla pagina Impostazioni; l'archivio
    va su `/mnt/Storage1` (l'eMMC di sistema ha 7 GB liberi).
+   Col vault: `VAULT_DIR` su `/mnt/Storage1/.../vault` condiviso con Syncthing, `PUBLIC_URL`
+   nel `.env` per i link nelle note, `secondbrain vault migrate` dopo il ripristino dell'archivio.
    Col firmware HTTPS + token: `secrets.h` → `SERVER_BASE_URL "https://ingest.<dominio>"` e
    `DEVICE_TOKEN` generato sulla ZimaBoard (`secondbrain device add 70041dd8263c`), poi
    `ALLOW_UNAUTHENTICATED_LAN=false`; Bot Fight Mode spento sull'hostname dei dispositivi
@@ -250,6 +258,14 @@ upload e OTA pull in HTTPS col token, LAN in HTTP invariata; heap libero minimo 
 124 KB (niente PSRAM). Il device si trova in LAN con `curl http://192.168.0.x/status` su
 tutto il /24 (DEV MODE).
 
+**2026-10-07 — Vista per tag e note nel vault Obsidian.** Pagina `/tags` con le tessere dei tag.
+Poi la spec del vault: una sola copia della nota in `vault/Captures/`, nome con data, ora e
+titolo (rinominato dal backend quando il titolo cambia), frontmatter con `id`, `aliases`,
+`url`; `vault_sync` nel worker (mtime, ogni minuto) che applica le modifiche come correzioni
+a mano; cestino che porta la nota accanto al WAV; `vault migrate` e `rescan` per `id`.
+Emerso in esecuzione: il titolo di default non va nel frontmatter; un file rinominato vince
+sul `title`; i test vecchi tengono la nota accanto al WAV passando `vault=None`.
+
 **2026-10-07 — Timer di sync.** Wake dal timer di deep sleep armato solo con coda non vuota
 (15 min, raddoppio fino a 4 h tra wake da timer consecutivi, azzerato dal tasto), modalità
 `BOOT_TIMER_SYNC` senza campionamento dei tasti, esito mostrato tenuto in memoria RTC e
@@ -268,9 +284,8 @@ LED di stato, voce di menu attiva. Linee guida in `docs/stile-ui.md`. Branch
 ## Idee future e cose rimandate
 
 - **Backend dopo l'elaborazione AI**: adattatore locale (faster-whisper o altro) passando a
-  un NAS più potente; divisione in pezzi dell'audio oltre i limiti dei provider; vista per
-  tag; note nel vault Obsidian (i `.md` sono già nel formato giusto); arricchimento con il
-  PiAgent.
+  un NAS più potente; divisione in pezzi dell'audio oltre i limiti dei provider (serve solo
+  alzando la durata massima); Daily notes e arricchimento con il PiAgent nel vault.
 - **Fase 2 — display glanceable**: `GET /digest.bmp` 200×200 1-bit renderizzato dal
   server, cache su SD, mostrato al posto della schermata di stato.
 - **Refresh parziale e-Paper**: contatore che scorre durante la registrazione, meno

@@ -1,8 +1,21 @@
 # Backend — Note nel vault Obsidian — Design / Spec
 
 **Data:** 2026-10-07
-**Stato:** approvata a sezioni in chat il 2026-10-07; da implementare (piano in
-`docs/plans/2026-10-07-backend-vault-obsidian.md`).
+**Stato:** implementato e **verificato sul Mac il 2026-10-07** (branch `backend-vault`, piano
+`docs/plans/2026-10-07-backend-vault-obsidian.md`, 524 test). `vault migrate` ha spostato le 13
+note esistenti; sullo stack vero: nota scritta dal worker in `Captures/2026/<data> <ora>
+<titolo>.md` con `id`, `aliases`, tag; modifica di corpo e tag sul file ripresa dal worker in
+45 s (`edited`), rinomina del file → titolo manuale, correzione dalla UI riscritta nel file,
+cestino → nota fuori dal vault accanto al WAV, ripristino → di nuovo nel vault, `rescan`
+senza problemi. **Da fare**: la prova con Obsidian vero (l'autore lo installa l'8 ottobre:
+le modifiche sono state simulate scrivendo i file, come fa Obsidian) e Syncthing al deploy.
+Deviazioni: `vault`, `tz` e `public_url` sono parametri a chiave di `write_note` e delle
+funzioni di `library` (senza `vault` la nota resta accanto al WAV: lo usano solo i test
+vecchi); `title`/`aliases` nel frontmatter solo se la nota ha un titolo manuale o automatico
+(il titolo di default per fascia sta solo nel nome del file, altrimenti `rescan` lo
+rileggerebbe come automatico); un file rinominato in Obsidian vince sul `title` del
+frontmatter; lo stato del vault in Impostazioni è una sezione (note, ultimo controllo,
+problemi).
 
 ## 1. Obiettivo
 
