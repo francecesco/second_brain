@@ -83,6 +83,25 @@ def test_blocked_audio_is_a_content_error(audio):
         make(Recorder(answer("x", finish="RECITATION"))).transcribe(audio, "it")
 
 
+def test_silence_is_an_empty_transcript(audio):
+    t = make(Recorder(answer(""))).transcribe(audio, "it")
+    assert t.text == ""
+
+
+def test_candidate_without_parts_goes_to_the_next_provider(audio):
+    # Visto il 2026-10-07 su un WAV gia' trascritto due volte: candidato con `content: {}`,
+    # finishReason STOP e quasi 2000 token di "thoughts". Non e' silenzio: e' il servizio.
+    empty = httpx.Response(200, json={"candidates": [{"content": {}, "finishReason": "STOP"}]})
+    with pytest.raises(ServiceError, match="senza testo"):
+        make(Recorder(empty)).transcribe(audio, "it")
+    with pytest.raises(ServiceError, match="senza testo"):
+        make(Recorder(empty)).enrich("testo", "it")
+    truncated = httpx.Response(200, json={"candidates": [{"content": {"parts": [
+        {"text": "penso", "thought": True}]}, "finishReason": "MAX_TOKENS"}]})
+    with pytest.raises(ServiceError, match="senza testo"):
+        make(Recorder(truncated)).transcribe(audio, "it")
+
+
 def test_enrich_request_and_parsing():
     rec = Recorder(answer(json.dumps({"title": "Chiamare Marco", "summary": "Entro venerdì.",
                                       "tags": ["Lavoro"]})))

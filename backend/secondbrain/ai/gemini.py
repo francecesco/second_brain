@@ -73,8 +73,13 @@ class Gemini(ProviderBase):
         if finish in BLOCKED_FINISH_REASONS:
             raise blocked(self.name, f"risposta interrotta: {finish}")
         parts = (first.get("content") or {}).get("parts") or []
-        return "".join(p.get("text", "") for p in parts
-                       if isinstance(p, dict) and not p.get("thought"))
+        texts = [p.get("text", "") for p in parts if isinstance(p, dict) and not p.get("thought")]
+        if not texts:
+            # Candidato senza parti di testo (`content: {}` con STOP, oppure solo "thoughts"
+            # e MAX_TOKENS): non e' silenzio, e' il servizio che non ha risposto. Il silenzio
+            # vero arriva come parte con testo vuoto.
+            raise ServiceError(self.name, f"risposta senza testo (finishReason: {finish})")
+        return "".join(texts)
 
     def transcribe(self, audio: AudioSource, language: str) -> Transcript:
         path, mime = prepare_audio(self.name, audio, self.audio_formats)
