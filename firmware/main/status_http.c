@@ -59,6 +59,8 @@ static esp_err_t status_get(httpd_req_t *req)
     cJSON_AddNumberToObject(lc, "peak", d->peak);
     cJSON_AddNumberToObject(lc, "upload_bytes", d->upload_bytes);
     cJSON_AddNumberToObject(lc, "upload_ms", d->upload_ms);
+    cJSON_AddNumberToObject(lc, "last_http", d->last_http);
+    cJSON_AddNumberToObject(lc, "free_heap_min", d->free_heap_min);
     if (d->upload_ms > 0) cJSON_AddNumberToObject(lc, "upload_kbps", (double)d->upload_bytes / d->upload_ms);
 
     char *txt = cJSON_PrintUnformatted(root);

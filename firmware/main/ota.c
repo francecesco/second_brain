@@ -16,6 +16,10 @@
 #include "esp_app_desc.h"
 #include "esp_ota_ops.h"
 #include "mbedtls/sha256.h"
+#include "http_client.h"
+#include "sync_policy.h"
+#include "diag.h"
+#include "esp_system.h"
 
 static const char *TAG = "ota";
 
@@ -55,14 +59,12 @@ static esp_err_t http_get_to_buffer(const char *url, char **out_buf, int *out_le
     *out_len = 0;
     *out_content_length = 0;
 
-    esp_http_client_config_t config = {
-        .url = url,
-        .timeout_ms = 10000,
-    };
+    esp_http_client_config_t config = http_client_config(url, HTTP_METHOD_GET, 10000);
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
         return ESP_FAIL;
     }
+    http_client_set_auth(client);
 
     esp_err_t err = esp_http_client_open(client, 0);
     if (err != ESP_OK) {
@@ -80,7 +82,8 @@ static esp_err_t http_get_to_buffer(const char *url, char **out_buf, int *out_le
     int64_t content_length = esp_http_client_fetch_headers(client);
     int status = esp_http_client_get_status_code(client);
     if (status != 200) {
-        ESP_LOGE(TAG, "manifest GET status %d", status);
+        if (http_status_is_auth_error(status)) ESP_LOGE(TAG, "manifest: token rifiutato (HTTP %d), controlla DEVICE_TOKEN", status);
+        else ESP_LOGE(TAG, "manifest GET status %d", status);
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         return ESP_FAIL;
@@ -186,14 +189,12 @@ static esp_err_t ota_download_and_apply(const ota_manifest_t *m)
     ESP_LOGI(TAG, "scrivo su partizione '%s' @0x%08" PRIx32,
              update_partition->label, update_partition->address);
 
-    esp_http_client_config_t config = {
-        .url = m->url,
-        .timeout_ms = 15000,
-    };
+    esp_http_client_config_t config = http_client_config(m->url, HTTP_METHOD_GET, 15000);
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
         return ESP_FAIL;
     }
+    http_client_set_auth(client);
 
     esp_err_t err = esp_http_client_open(client, 0);
     if (err != ESP_OK) {
@@ -205,7 +206,8 @@ static esp_err_t ota_download_and_apply(const ota_manifest_t *m)
     int64_t content_length = esp_http_client_fetch_headers(client);
     int status = esp_http_client_get_status_code(client);
     if (status != 200) {
-        ESP_LOGE(TAG, "firmware GET status %d", status);
+        if (http_status_is_auth_error(status)) ESP_LOGE(TAG, "firmware: token rifiutato (HTTP %d), controlla DEVICE_TOKEN", status);
+        else ESP_LOGE(TAG, "firmware GET status %d", status);
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
         return ESP_FAIL;
@@ -279,6 +281,8 @@ static esp_err_t ota_download_and_apply(const ota_manifest_t *m)
     char digest_hex[65];
     sha256_to_hex(digest, digest_hex);
     ESP_LOGI(TAG, "download completo: %d byte, sha256=%s", total_written, digest_hex);
+    diag_note_heap();
+    ESP_LOGI(TAG, "heap libero dopo il download: %lu", (unsigned long)esp_get_free_heap_size());
 
     if (strcasecmp(digest_hex, m->sha256) != 0) {
         ESP_LOGE(TAG, "sha256 mismatch! atteso=%s calcolato=%s -> OTA abortita", m->sha256, digest_hex);

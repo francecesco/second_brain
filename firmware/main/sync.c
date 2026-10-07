@@ -7,6 +7,8 @@
 #include "battery.h"
 #include "wifi.h"
 #include "secrets.h"
+#include "http_client.h"
+#include "esp_system.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,11 +43,12 @@ static int upload_one(const char *name, const char *device_id, const char *bat_p
 
     char url[192];
     snprintf(url, sizeof(url), "%s/captures", SERVER_BASE_URL);
-    esp_http_client_config_t cfg = { .url = url, .method = HTTP_METHOD_POST, .timeout_ms = SB_HTTP_IDLE_TIMEOUT_MS };
+    esp_http_client_config_t cfg = http_client_config(url, HTTP_METHOD_POST, SB_HTTP_IDLE_TIMEOUT_MS);
     esp_http_client_handle_t c = esp_http_client_init(&cfg);
     if (!c) { fclose(f); return 0; }
 
     esp_http_client_set_header(c, "Content-Type", "audio/wav");
+    http_client_set_auth(c);
     esp_http_client_set_header(c, "X-Capture-Id", id);
     if (strncmp(id, "cap_unsynced_", 13) != 0 && strlen(id) >= 19) {
         // cap_YYYYMMDD_HHMMSS[...] -> YYYY-MM-DDTHH:MM:SSZ
@@ -61,6 +64,8 @@ static int upload_one(const char *name, const char *device_id, const char *bat_p
 
     int status = 0;
     uint8_t *buf = NULL;
+    diag_note_heap();
+    ESP_LOGI(TAG, "heap libero prima dell'upload: %lu", (unsigned long)esp_get_free_heap_size());
     esp_err_t err = esp_http_client_open(c, (int)st.st_size);
     if (err != ESP_OK) { ESP_LOGE(TAG, "open %s: %s", url, esp_err_to_name(err)); goto out; }
 
@@ -73,6 +78,9 @@ static int upload_one(const char *name, const char *device_id, const char *bat_p
     if (!write_ok) { ESP_LOGE(TAG, "write interrotta su %s", name); goto out; }
     if (esp_http_client_fetch_headers(c) < 0) { ESP_LOGE(TAG, "fetch_headers fallita su %s", name); goto out; }
     status = esp_http_client_get_status_code(c);
+    diag_get()->last_http = status;
+    diag_note_heap();
+    ESP_LOGI(TAG, "heap libero dopo la risposta: %lu", (unsigned long)esp_get_free_heap_size());
     // consuma il corpo (piccolo JSON) per chiudere pulito
     while (esp_http_client_read(c, (char *)buf, SYNC_CHUNK) > 0) {}
 out:

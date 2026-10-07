@@ -33,6 +33,15 @@ void test_sync_decide(void) {
     TEST_ASSERT_EQUAL_INT(SYNC_ACTION_STOP, sync_decide(302)); // redirect: non gestito -> stop
 }
 
+void test_http_status_is_auth_error(void) {
+    TEST_ASSERT_TRUE(http_status_is_auth_error(401));
+    TEST_ASSERT_TRUE(http_status_is_auth_error(403));
+    TEST_ASSERT_FALSE(http_status_is_auth_error(429));
+    TEST_ASSERT_FALSE(http_status_is_auth_error(400));
+    TEST_ASSERT_FALSE(http_status_is_auth_error(200));
+    TEST_ASSERT_FALSE(http_status_is_auth_error(0));
+}
+
 void test_timesync_needed(void) {
     const int64_t now = 1800000000;
     TEST_ASSERT_TRUE(timesync_needed(2000, now - 10, now));        // RTC non valido
