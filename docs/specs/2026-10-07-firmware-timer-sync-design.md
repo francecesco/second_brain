@@ -8,8 +8,11 @@ Verificati: con backend fermo e un file in coda il device si è svegliato da sol
 tornato (`201`), con un solo refresh a `1 inviate`; a coda vuota nessuna richiesta per
 35 min e `next_wake_s: 0`; con backend fermo per più tempo il primo wake fallito ha portato
 `retry_attempt` a 1 e `next_wake_s` a 1800 con lo schermo immutato (`server ko`, `coda: 1`).
-Non osservato il secondo raddoppio (3600): coperto dal test host. Deviazioni: nessuna;
-emerso che il DHCP dell'ufficio ha cambiato l'IP del Mac durante la prova (`server ko` fino
+Non osservato il secondo raddoppio (3600) né lo scenario 4 di §8 (azzeramento dopo un wake
+da tasto): coperti dal test host. Dalla revisione finale: il raddoppio scatta solo se il
+wake da timer non ha inviato nulla (`sync_retry_counts_as_failure`), altrimenti si riparte
+dal primo gradino. Deviazioni: nel ramo senza refresh il log stampa esito e coda come
+numeri, non le quattro righe; emerso che il DHCP dell'ufficio ha cambiato l'IP del Mac durante la prova (`server ko` fino
 alla build 0.7.7 con il nuovo `SERVER_BASE_URL`), un caso che il tunnel renderà irrilevante.
 
 ## 1. Obiettivo
@@ -38,9 +41,10 @@ da inviare e senza lampeggiare lo schermo a ogni tentativo.
 1. **Timer solo con coda non vuota.** Al momento di dormire, se restano file in coda e la
    batteria non è sotto la soglia di sync, si arma anche il wake da timer. Coda vuota:
    nessun timer, nessun consumo in più. DEV MODE: nessun timer.
-2. **Backoff.** Primo tentativo dopo 15 min, poi raddoppio a ogni wake da timer che lascia
-   la coda non vuota, fino a 4 h; il contatore si azzera a ogni wake da tasto e quando la
-   coda si svuota.
+2. **Backoff.** Primo tentativo dopo 15 min, poi raddoppio a ogni wake da timer che non
+   invia nulla e lascia la coda non vuota, fino a 4 h; il contatore si azzera a ogni wake
+   da tasto, quando la coda si svuota e quando un wake da timer ha inviato almeno un file
+   (arretrato lungo o finestra di sync esaurita: si riprova presto).
 3. **Display solo se cambia qualcosa.** A un wake da timer lo schermo si aggiorna solo se è
    stato inviato almeno un file o se l'esito è diverso da quello mostrato l'ultima volta;
    altrimenti il device torna a dormire senza toccare l'e-Paper.

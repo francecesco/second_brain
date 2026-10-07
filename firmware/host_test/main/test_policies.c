@@ -74,6 +74,16 @@ void test_sync_retry_should_arm(void) {
     TEST_ASSERT_FALSE(sync_retry_should_arm(1, true, SB_BATTERY_MIN_RECORD_PCT - 1)); // sotto soglia: niente Wi-Fi, niente timer
 }
 
+void test_sync_retry_counts_as_failure(void) {
+    // Un wake da timer "fallisce" (e il ritardo raddoppia) solo se non ha inviato niente e
+    // lascia file in coda: se ha fatto progressi (finestra esaurita, 5xx dopo qualche 201)
+    // si riprova presto, al primo gradino.
+    TEST_ASSERT_TRUE(sync_retry_counts_as_failure(0, 3));
+    TEST_ASSERT_FALSE(sync_retry_counts_as_failure(2, 3));
+    TEST_ASSERT_FALSE(sync_retry_counts_as_failure(0, 0));
+    TEST_ASSERT_FALSE(sync_retry_counts_as_failure(5, 0));
+}
+
 void test_status_should_refresh(void) {
     TEST_ASSERT_TRUE(status_should_refresh(2, STATUS_OUTCOME_SENT, STATUS_OUTCOME_SENT));      // inviati: sempre
     TEST_ASSERT_FALSE(status_should_refresh(0, STATUS_OUTCOME_SERVER_KO, STATUS_OUTCOME_SERVER_KO)); // stesso esito

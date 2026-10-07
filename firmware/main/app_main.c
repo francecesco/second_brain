@@ -348,8 +348,10 @@ void app_main(void)
     if (refresh) { show_status(&st); retry_state_set_shown(outcome); }
     else ESP_LOGI(TAG, "wake dal timer senza novita' (esito %d, coda %d): display non aggiornato", (int)outcome, st.remaining);
 
-    // Timer di sync (spec timer §3): tentativi contati solo tra wake da timer consecutivi.
-    if (mode == BOOT_TIMER_SYNC && st.remaining > 0) retry_state_bump(); else retry_state_reset();
+    // Timer di sync (spec timer §3): il ritardo raddoppia solo tra wake da timer consecutivi
+    // che non hanno inviato niente; un wake che ha fatto progressi riparte dal primo gradino.
+    if (mode == BOOT_TIMER_SYNC && sync_retry_counts_as_failure(st.sent, st.remaining)) retry_state_bump();
+    else retry_state_reset();
     const power_state_t *ps = battery_last();
     uint32_t timer_ms = 0;
     if (sync_retry_should_arm(st.remaining, ps->valid && ps->source == POWER_SRC_BATTERY, ps->pct))

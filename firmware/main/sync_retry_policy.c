@@ -15,6 +15,11 @@ bool sync_retry_should_arm(int remaining, bool on_battery, int battery_pct)
     return true;
 }
 
+bool sync_retry_counts_as_failure(int sent, int remaining)
+{
+    return sent == 0 && remaining > 0;
+}
+
 bool status_should_refresh(int sent, status_outcome_t outcome, status_outcome_t shown)
 {
     return sent > 0 || outcome != shown;

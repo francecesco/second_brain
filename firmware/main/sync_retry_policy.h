@@ -11,6 +11,10 @@ uint32_t sync_retry_delay_ms(unsigned attempt);
 // di sync (SB_BATTERY_MIN_RECORD_PCT). A USB la percentuale non conta.
 bool sync_retry_should_arm(int remaining, bool on_battery, int battery_pct);
 
+// Vero se un wake da timer conta come tentativo fallito (il ritardo raddoppia): non ha
+// inviato niente e lascia file in coda. Se ha fatto progressi si riprova al primo gradino.
+bool sync_retry_counts_as_failure(int sent, int remaining);
+
 // Esito del ciclo come lo mostra la riga 4 del display.
 typedef enum {
     STATUS_OUTCOME_NONE,       // mai mostrato (memoria RTC azzerata)
