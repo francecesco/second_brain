@@ -7,6 +7,7 @@ rinominato in Obsidian da' il titolo manuale. File senza `id`, con `id` sconosci
 illeggibili o di conflitto di Syncthing: segnalati e lasciati stare.
 """
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -14,13 +15,15 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .archive import Archive
 from .models import Capture
-from .notefile import NoteError, apply_edit, parse_note, parse_note_id
+from .notefile import MAX_TITLE_LEN, NoteError, merge_edits, parse_note, parse_note_id, parse_note_title
 from .notes import effective_title, lock_capture, note_from_capture, write_note
+from .sidecar import capture_to_sidecar
 from .vault import NOTE_SUFFIX, Vault, clean_title_for_name
 
 log = logging.getLogger(__name__)
-NAME_PREFIX_LEN = len("2026-10-07 11.58 ")
+NAME_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}\.\d{2} (.+)$")
 _reported: dict[str, float] = {}   # problemi gia' nel log: {percorso: mtime}
 
 
@@ -38,8 +41,11 @@ def _problem(report: VaultReport, rel: str, mtime: float, what: str) -> None:
 
 
 def _title_in_name(rel: str) -> str:
-    name = rel.rsplit("/", 1)[-1].removesuffix(NOTE_SUFFIX)
-    return name[NAME_PREFIX_LEN:].strip()
+    """La parte titolo del nome del file: dopo "AAAA-MM-GG HH.MM " se c'e', altrimenti tutto."""
+    stem = rel.rsplit("/", 1)[-1].removesuffix(NOTE_SUFFIX)
+    m = NAME_RE.match(stem)
+    title = (m.group(1) if m else stem).strip()
+    return title[:MAX_TITLE_LEN].strip()
 
 
 def _find(s: Session, capture_id: str, rel: str) -> Capture | None:
@@ -51,12 +57,15 @@ def _find(s: Session, capture_id: str, rel: str) -> Capture | None:
     return live[0] if len(live) == 1 else None
 
 
-def _apply(s: Session, vault: Vault, rel: str, mtime: float, tz: ZoneInfo,
-           public_url: str | None, report: VaultReport) -> None:
+def _read(vault: Vault, rel: str):
+    text = vault.read_text(rel)
+    return parse_note_id(text), parse_note(text), parse_note_title(text)
+
+
+def _apply(s: Session, vault: Vault, archive: Archive | None, rel: str, mtime: float,
+           tz: ZoneInfo, public_url: str | None, report: VaultReport) -> None:
     try:
-        text = vault.read_text(rel)
-        capture_id = parse_note_id(text)
-        parsed = parse_note(text)
+        capture_id, parsed, file_title = _read(vault, rel)
     except (OSError, UnicodeDecodeError, NoteError) as exc:
         _problem(report, rel, mtime, f"nota non leggibile ({exc})")
         return
@@ -73,6 +82,19 @@ def _apply(s: Session, vault: Vault, rel: str, mtime: float, tz: ZoneInfo,
     if capture.trashed_at is not None:
         _problem(report, rel, mtime, "la registrazione e' nel cestino: file ignorato")
         return
+    # Sotto il lock il file puo' essere cambiato (UI o worker): si riparte dal suo stato attuale.
+    current = vault.mtime(rel)
+    if current is None:
+        return
+    if current != mtime:
+        try:
+            capture_id, parsed, file_title = _read(vault, rel)
+        except (OSError, UnicodeDecodeError, NoteError) as exc:
+            _problem(report, rel, current, f"nota non leggibile ({exc})")
+            return
+        mtime = current
+    if rel == capture.note_path and mtime == capture.note_mtime:
+        return   # gia' allineato (lo ha scritto il backend nel frattempo)
     changed = False
     shown = capture.title or capture.title_auto
     renamed = False
@@ -87,21 +109,17 @@ def _apply(s: Session, vault: Vault, rel: str, mtime: float, tz: ZoneInfo,
             renamed = True   # il nome scelto a mano vale piu' del title nel frontmatter
         capture.note_path = rel
         changed = True
-    note = note_from_capture(capture)
-    if parsed.title and parsed.title != shown and not renamed:
-        capture.title = parsed.title
-        changed = True
-    if parsed.transcript != (capture.transcript or "").strip():
-        note = apply_edit(note, "transcript", parsed.transcript)
-        changed = True
-    if (parsed.summary or None) != (capture.summary or None):
-        note = apply_edit(note, "summary", parsed.summary or "")
-        changed = True
-    if tuple(parsed.tags) != tuple(capture.tags or ()):
-        note = apply_edit(note, "tags", ", ".join(parsed.tags))
-        changed = True
+    note, new_title, edits = merge_edits(parsed, None if renamed else file_title,
+                                         note_from_capture(capture), shown)
+    title_changed = renamed
+    if new_title:
+        capture.title = new_title
+        title_changed = True
+    changed = changed or edits
     if changed:
-        write_note(s, None, capture, note, tz, vault=vault, public_url=public_url)
+        write_note(s, archive, capture, note, tz, vault=vault, public_url=public_url)
+        if title_changed and archive is not None:
+            archive.write_sidecar(capture.rel_path, capture_to_sidecar(capture))   # il titolo manuale vive anche li' (rescan)
         report.changed += 1
         log.info("vault: %s: modifiche riprese da Obsidian", capture.note_path)
     else:
@@ -109,7 +127,7 @@ def _apply(s: Session, vault: Vault, rel: str, mtime: float, tz: ZoneInfo,
 
 
 def check(sessionmaker, vault: Vault, tz: ZoneInfo, public_url: str | None,
-          now: datetime) -> VaultReport:
+          now: datetime, archive: Archive | None = None) -> VaultReport:
     report = VaultReport()
     for rel in vault.conflicts():
         _problem(report, rel, vault.mtime(rel) or 0.0, "file di conflitto di Syncthing: ignorato")
@@ -119,6 +137,10 @@ def check(sessionmaker, vault: Vault, tz: ZoneInfo, public_url: str | None,
         for rel, mtime in vault.list_notes():
             if rel in known and known[rel] == mtime:
                 continue
-            _apply(s, vault, rel, mtime, tz, public_url, report)
-            s.commit()
+            try:
+                _apply(s, vault, archive, rel, mtime, tz, public_url, report)
+                s.commit()
+            except Exception as exc:  # noqa: BLE001 - un file non deve fermare gli altri
+                s.rollback()
+                _problem(report, rel, mtime, f"errore nel riprendere la nota ({type(exc).__name__}: {exc})")
     return report

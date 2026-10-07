@@ -404,3 +404,18 @@ def test_relinks_vault_notes_by_id_and_reports_notes_left_in_the_archive(archive
     assert (cap.transcript, cap.title_auto) == (PROCESSED.transcript, "Chiamare Marco")
     assert any("da migrare" in p for p in report.problems)
     assert db.scalars(select(Capture).where(Capture.device_id == DEV2)).one().transcript == "Ancora qui."
+
+
+def test_rescan_refuses_to_run_when_the_vault_is_missing_but_the_catalog_has_notes(archive, db, settings):
+    import shutil
+    from secondbrain.vault import Vault
+    from secondbrain.rescan import VaultMissing
+    vault = Vault(settings.vault_dir)
+    cap = first(db)
+    write_note(db, archive, cap, PROCESSED, ROME, vault=vault)
+    db.commit()
+    shutil.rmtree(settings.vault_dir)
+    with pytest.raises(VaultMissing):
+        rescan(db, archive, NOW, vault=vault)
+    db.rollback()
+    assert first(db).transcript == PROCESSED.transcript   # niente azzerato

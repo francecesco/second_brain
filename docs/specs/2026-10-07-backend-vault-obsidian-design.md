@@ -15,7 +15,16 @@ vecchi); `title`/`aliases` nel frontmatter solo se la nota ha un titolo manuale 
 (il titolo di default per fascia sta solo nel nome del file, altrimenti `rescan` lo
 rileggerebbe come automatico); un file rinominato in Obsidian vince sul `title` del
 frontmatter; lo stato del vault in Impostazioni è una sezione (note, ultimo controllo,
-problemi).
+problemi). Dalla revisione finale: il nome con suffisso di collisione `(k)` resta stabile
+tra le scritture; prima di sovrascrivere una nota il backend fonde le modifiche del file non
+ancora viste (confrontandole con quanto aveva scritto l'ultima volta) e non riscrive un file
+identico; il titolo dal nome del file si prende con un'espressione regolare (senza prefisso
+vale tutto il nome, troncato a 200); il titolo impostato da Obsidian finisce anche nel sidecar
+e il frontmatter tiene `title_auto` distinto, così `rescan` conserva entrambi; un file che
+fa fallire la ripresa non ferma gli altri; il ripristino scrive nel vault prima di togliere la
+copia dal cestino; `rescan` si rifiuta di girare se il catalogo ha note nel vault ma la
+cartella `Captures/` manca; `vault_sync` rilegge il file sotto il lock; `trash purge` da CLI
+passa il vault.
 
 ## 1. Obiettivo
 

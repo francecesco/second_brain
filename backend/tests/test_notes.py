@@ -141,3 +141,41 @@ def test_write_note_renames_when_the_title_changes(recordings, db, settings, arc
     write_note(db, arch, capture, Note(transcript="x", title="Dopo"), ROME, vault=vault)
     assert capture.note_path == "Captures/2026/2026-09-23 21.15 Dopo.md"
     assert len(vault.list_notes()) == 1
+
+
+def test_colliding_note_keeps_its_suffixed_name_across_writes(recordings, db, settings, arch):
+    # Due registrazioni nello stesso minuto con lo stesso titolo: la seconda nasce "(2)" e
+    # resta "(2)" a ogni scrittura successiva (niente rinomine a vuoto).
+    vault = Vault(settings.vault_dir)
+    first = capture_by(db, CID)
+    second = capture_by(db, "cap_20260923_080000")
+    second.recorded_at = first.recorded_at
+    write_note(db, arch, first, Note(transcript="a", title="Stesso titolo"), ROME, vault=vault)
+    for i in range(3):
+        write_note(db, arch, second, Note(transcript=f"b{i}", title="Stesso titolo"), ROME, vault=vault)
+        assert second.note_path == "Captures/2026/2026-09-23 21.15 Stesso titolo (2).md"
+    assert len(vault.list_notes()) == 2
+
+
+def test_write_merges_an_unseen_edit_from_obsidian_instead_of_overwriting_it(recordings, db, settings, arch):
+    import os
+    vault = Vault(settings.vault_dir)
+    capture = capture_by(db, CID)
+    write_note(db, arch, capture, Note(transcript="Dal provider.", title="Auto", tags=("casa",)), ROME, vault=vault)
+    path = vault.abs(capture.note_path)
+    path.write_text(path.read_text().replace("Dal provider.", "Corretto in Obsidian."))
+    os.utime(path, (path.stat().st_atime, path.stat().st_mtime + 5))
+    # il worker scrive senza che vault_sync sia passato: la modifica va fusa, non persa
+    write_note(db, arch, capture, Note(transcript="Di nuovo dal provider.", title="Auto", tags=("casa", "nuovo")), ROME, vault=vault)
+    assert capture.transcript == "Corretto in Obsidian." and "transcript" in capture.edited
+    assert capture.tags == ["casa", "nuovo"] and "Corretto in Obsidian." in vault.read_text(capture.note_path)
+
+
+def test_write_skips_the_file_when_nothing_changes(recordings, db, settings, arch):
+    vault = Vault(settings.vault_dir)
+    capture = capture_by(db, CID)
+    write_note(db, arch, capture, Note(transcript="x", title="T"), ROME, vault=vault)
+    before = vault.mtime(capture.note_path)
+    import time; time.sleep(0.02)
+    write_note(db, arch, capture, Note(transcript="x", title="T"), ROME, vault=vault)
+    assert vault.mtime(capture.note_path) == before == capture.note_mtime

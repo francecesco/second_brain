@@ -23,7 +23,7 @@ from .vault import Vault
 from .clock import utcnow
 from .config import BAD_SETTINGS_KEY, ConfigError, Settings, load_settings
 from .naming import DEFAULT_DEVICE_TYPE
-from .rescan import rescan
+from .rescan import VaultMissing, rescan
 from .settings_store import SecretBox
 from .web.auth import BadPassword, clear_lockouts, set_password
 from .worker import LOG_FORMAT, Worker, install_signal_handlers, run_forever
@@ -91,7 +91,10 @@ def _add_device_commands(sub) -> None:
 
 def _rescan(args: argparse.Namespace) -> None:
     with open_session() as (s, settings):
-        report = rescan(s, Archive(settings.archive_dir), utcnow(), vault=Vault(settings.vault_dir))
+        try:
+            report = rescan(s, Archive(settings.archive_dir), utcnow(), vault=Vault(settings.vault_dir))
+        except VaultMissing as exc:
+            raise SystemExit(f"errore: {exc}") from None
         s.commit()
     print(f"Registrazioni: aggiunte {report.added}, aggiornate {report.updated}, "
           f"rimosse dal catalogo {report.removed}, messe in coda da elaborare {report.queued}.")
@@ -202,7 +205,7 @@ def _add_unlock_command(sub) -> None:
 def _trash_purge(args: argparse.Namespace) -> None:
     with open_session() as (s, settings):
         removed = library.purge_trash(s, Archive(settings.archive_dir), utcnow(),
-                                      settings.trash_retention_days)
+                                      settings.trash_retention_days, vault=Vault(settings.vault_dir))
     print(f"Eliminate definitivamente {removed} registrazioni scadute nel cestino.")
 
 

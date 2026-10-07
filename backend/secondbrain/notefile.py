@@ -107,6 +107,8 @@ def render_note(note: Note, tz: ZoneInfo, meta: NoteMeta | None = None) -> str:
         if meta.title:
             front["title"] = meta.title
             front["aliases"] = [meta.title]
+        if note.title and note.title != meta.title:
+            front["title_auto"] = note.title   # l'automatico resta distinto dal manuale mostrato
     elif note.title:
         front["title"] = note.title
     if note.summary:
@@ -194,6 +196,41 @@ def _datetime(value: object) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
+def parse_note_title(text: str) -> str | None:
+    """Il `title` mostrato nel frontmatter (manuale o automatico), None se manca."""
+    front, _ = _split(text)
+    try:
+        data = yaml.safe_load(front) if front.strip() else {}
+    except yaml.YAMLError:
+        raise NoteError("frontmatter YAML non valido") from None
+    if not isinstance(data, dict):
+        raise NoteError("il frontmatter non è una mappa chiave: valore")
+    title = _opt_str(data, "title")
+    return clean_title(title) if title is not None else None
+
+
+def merge_edits(file_note: Note, file_title: str | None, note: Note,
+                shown_title: str | None) -> tuple[Note, str | None, bool]:
+    """Differenze tra la nota letta dal file (modificato in Obsidian) e quella del catalogo,
+    applicate come correzioni a mano. Ritorna (nota aggiornata, nuovo titolo manuale o None,
+    qualcosa e' cambiato). Pura (spec vault §7)."""
+    changed = False
+    new_title = None
+    if file_title and file_title != shown_title:
+        new_title = file_title
+        changed = True
+    if file_note.transcript != note.transcript.strip():
+        note = apply_edit(note, "transcript", file_note.transcript)
+        changed = True
+    if (file_note.summary or None) != (note.summary or None):
+        note = apply_edit(note, "summary", file_note.summary or "")
+        changed = True
+    if tuple(file_note.tags) != tuple(note.tags):
+        note = replace(note, tags=tuple(file_note.tags), edited=_edited((*note.edited, "tags")))
+        changed = True
+    return note, new_title, changed
+
+
 def parse_note_id(text: str) -> str | None:
     """`id` del frontmatter (il capture_id della registrazione), None se manca."""
     front, _ = _split(text)
@@ -218,7 +255,7 @@ def parse_note(text: str) -> Note:
     models = data.get("models") or {}
     if not isinstance(models, dict):
         raise NoteError("models: attesa una mappa")
-    title = _opt_str(data, "title")
+    title = _opt_str(data, "title_auto") if data.get("title_auto") is not None else _opt_str(data, "title")
     summary = _opt_str(data, "summary")
     provider = _bounded(data, "provider", MAX_PROVIDER_LEN)
     enrich_model = _bounded(models, "enrich", MAX_MODEL_LEN)

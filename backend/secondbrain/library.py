@@ -98,10 +98,10 @@ def _note_to_vault(vault: Vault, archive: Archive, capture: Capture, tz: ZoneInf
                    public_url: str | None) -> None:
     """Dal cestino al vault: il contenuto viene dal catalogo (allineato al file), il file
     accanto al WAV viene tolto."""
+    place_note(vault, capture, tz, public_url)   # prima la copia nuova, poi via quella vecchia
     stale = archive.derived_path(capture.rel_path, NOTE_SUFFIX)
     if stale.exists():
         stale.unlink()
-    place_note(vault, capture, tz, public_url)
 
 
 def trash_capture(s: Session, archive: Archive, capture_id: uuid.UUID, now: datetime, *,

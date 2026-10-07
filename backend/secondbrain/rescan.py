@@ -20,7 +20,12 @@ from .notefile import NoteError, parse_note, parse_note_id
 from .notes import empty_ai_fields, lock_capture, note_fields
 from .search import refresh_search_vector
 from .sidecar import sidecar_to_fields, capture_to_sidecar
-from .vault import Vault
+from .vault import CAPTURES_DIR, Vault
+
+
+class VaultMissing(RuntimeError):
+    """Il catalogo ha note nel vault ma la cartella Captures/ non c'e' (volume non montato):
+    procedere azzererebbe i campi AI di tutte le note e le rimetterebbe in coda."""
 
 
 @dataclass
@@ -141,6 +146,10 @@ def _link_vault(s: Session, vault: Vault, entries: dict, report: RescanReport) -
 
 
 def rescan(s: Session, archive: Archive, now: datetime, *, vault: Vault | None = None) -> RescanReport:
+    if vault is not None and not vault.abs(CAPTURES_DIR).is_dir() \
+            and s.scalar(select(Capture.id).where(Capture.note_path.is_not(None)).limit(1)) is not None:
+        raise VaultMissing(f"{vault.abs(CAPTURES_DIR)} non esiste ma il catalogo ha note nel vault: "
+                           "montare il vault prima di rescan")
     report = RescanReport()
     entries: dict[uuid.UUID, dict] = {}
     for rel_wav in archive.iter_sidecar_rels():

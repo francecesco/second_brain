@@ -112,7 +112,8 @@ class Worker:
             return False
         self._last_vault_check = now
         try:
-            report = vault_sync.check(self.sessionmaker, self.vault, self.tz, self.public_url, now)
+            report = vault_sync.check(self.sessionmaker, self.vault, self.tz, self.public_url, now,
+                                      archive=self.archive)
             notes_count = len(self.vault.list_notes())
         except OSError as exc:   # volume assente o in sola lettura: lo si vede in Impostazioni
             log.error("vault non leggibile (%s): %s", self.vault.root, exc)

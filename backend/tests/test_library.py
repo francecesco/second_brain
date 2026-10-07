@@ -125,3 +125,18 @@ def test_trash_restore_and_delete_move_the_note(recordings, db, settings, arch):
     library.trash_capture(db, arch, cid, NOW, vault=vault, tz=ROME)
     library.delete_capture(db, arch, cid, vault=vault)
     assert vault.list_notes() == [] and not list((settings.archive_dir / ".trash").rglob("*.md"))
+
+
+def test_restore_keeps_the_trashed_note_if_the_vault_write_fails(recordings, db, settings, arch, monkeypatch):
+    cid = capture_by(db, CID).id
+    processed(db, settings, cid, title="Auto")
+    vault = Vault(settings.vault_dir)
+    library.trash_capture(db, arch, cid, NOW, vault=vault, tz=ROME)
+    def boom(*a, **k):
+        raise OSError("vault in sola lettura")
+    monkeypatch.setattr(Vault, "write_text", boom)
+    with pytest.raises(OSError):
+        library.restore_capture(db, arch, cid, vault=vault, tz=ROME)
+    db.rollback()
+    c = capture_by(db, CID)
+    assert list(settings.archive_dir.rglob("*.md"))   # il .md non e' sparito: e' ancora nell'archivio

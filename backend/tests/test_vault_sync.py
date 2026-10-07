@@ -19,7 +19,7 @@ def touch(vault, rel, old, new):
 
 def check(db, settings):
     return vault_sync.check(make_sessionmaker(db.get_bind()), Vault(settings.vault_dir),
-                            settings.tz_archive, None, NOW)
+                            settings.tz_archive, None, NOW, archive=Archive(settings.archive_dir))
 
 
 def test_changed_body_and_tags_become_manual_edits(recordings, db, settings):
@@ -98,3 +98,74 @@ def test_edit_from_obsidian_survives_a_running_transcription(recordings, db, set
     db.expire_all()
     c = capture_by(db, CID)
     assert c.transcript == "Corretto in Obsidian." and "Corretto in Obsidian." in vault.read_text(c.note_path)
+
+
+def test_title_from_file_name_with_and_without_prefix(recordings, db, settings):
+    cid = capture_by(db, CID).id
+    processed(db, settings, cid, title="Auto")
+    vault = Vault(settings.vault_dir)
+    vault.rename(capture_by(db, CID).note_path, "Captures/2026/Spesa settimanale al mercato.md")
+    check(db, settings)
+    db.expire_all()
+    c = capture_by(db, CID)
+    assert c.title == "Spesa settimanale al mercato"
+    assert c.note_path == "Captures/2026/2026-09-23 21.15 Spesa settimanale al mercato.md"   # nome normalizzato
+
+
+def test_title_from_obsidian_survives_rescan_and_keeps_the_auto_title(recordings, db, settings):
+    from secondbrain.rescan import rescan
+    cid = capture_by(db, CID).id
+    processed(db, settings, cid, title="Auto")
+    vault = Vault(settings.vault_dir)
+    rel = capture_by(db, CID).note_path
+    touch(vault, rel, "title: Auto", "title: Da Obsidian")
+    check(db, settings)
+    rescan(db, Archive(settings.archive_dir), NOW, vault=vault)
+    db.commit()
+    db.expire_all()
+    c = capture_by(db, CID)
+    assert (c.title, c.title_auto) == ("Da Obsidian", "Auto")
+    assert Archive(settings.archive_dir).read_sidecar(c.rel_path)["title"] == "Da Obsidian"
+
+
+def test_one_bad_file_does_not_stop_the_others(recordings, db, settings, monkeypatch):
+    cid = capture_by(db, CID).id
+    processed(db, settings, cid, title="Auto", transcript="Vecchio.")
+    vault = Vault(settings.vault_dir)
+    rel = capture_by(db, CID).note_path
+    other = capture_by(db, "cap_20260923_080000")
+    processed(db, settings, other.id, title="Prima")
+    first_rel = capture_by(db, "cap_20260923_080000").note_path   # ordinato prima di rel (08.00 < 21.15)
+    touch(vault, first_rel, "title: Prima", "title: Esplosiva")
+    touch(vault, rel, "Vecchio.", "Nuovo.")
+    real_write = vault_sync.write_note
+
+    def exploding_write(s, archive, capture, note, tz, **kw):
+        if capture.note_path == first_rel:
+            raise RuntimeError("bug simulato su questa nota")
+        return real_write(s, archive, capture, note, tz, **kw)
+
+    monkeypatch.setattr(vault_sync, "write_note", exploding_write)
+    report = check(db, settings)
+    db.expire_all()
+    assert capture_by(db, CID).transcript == "Nuovo." and report.changed == 1
+    assert any("bug simulato" in p for p in report.problems)
+
+
+def test_file_is_reread_under_the_lock(recordings, db, settings, monkeypatch):
+    # Se il file cambia tra la prima lettura e il lock, si rilegge: nessun campo torna indietro.
+    cid = capture_by(db, CID).id
+    processed(db, settings, cid, title="Auto", transcript="Vecchio.")
+    vault = Vault(settings.vault_dir)
+    rel = capture_by(db, CID).note_path
+    touch(vault, rel, "Vecchio.", "Prima lettura.")
+    real_lock = vault_sync.lock_capture
+
+    def lock_then_edit(s, capture_id):
+        touch(vault, rel, "Prima lettura.", "Seconda lettura.")
+        return real_lock(s, capture_id)
+
+    monkeypatch.setattr(vault_sync, "lock_capture", lock_then_edit)
+    check(db, settings)
+    db.expire_all()
+    assert capture_by(db, CID).transcript == "Seconda lettura."
