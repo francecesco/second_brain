@@ -16,7 +16,7 @@ from pathlib import Path
 import httpx
 from sqlalchemy.orm import Session
 
-from . import catalog, devices, jobs, library, ota, settings_store
+from . import catalog, devices, jobs, library, ota, settings_store, vault_migrate
 from .ai.registry import build_provider
 from .archive import Archive
 from .vault import Vault
@@ -91,7 +91,7 @@ def _add_device_commands(sub) -> None:
 
 def _rescan(args: argparse.Namespace) -> None:
     with open_session() as (s, settings):
-        report = rescan(s, Archive(settings.archive_dir), utcnow())
+        report = rescan(s, Archive(settings.archive_dir), utcnow(), vault=Vault(settings.vault_dir))
         s.commit()
     print(f"Registrazioni: aggiunte {report.added}, aggiornate {report.updated}, "
           f"rimosse dal catalogo {report.removed}, messe in coda da elaborare {report.queued}.")
@@ -100,6 +100,20 @@ def _rescan(args: argparse.Namespace) -> None:
               + " (usa 'secondbrain device token <id>')")
     for problem in report.problems:
         print(f"attenzione: {problem}")
+
+
+def _vault_migrate(args: argparse.Namespace) -> None:
+    with open_session() as (s, settings):
+        moved = vault_migrate.migrate(s, Archive(settings.archive_dir), Vault(settings.vault_dir),
+                                      settings.tz_archive, settings.public_url)
+    print(f"Spostate {moved} note nel vault ({settings.vault_dir}/Captures).")
+
+
+def _add_vault_commands(sub) -> None:
+    group = sub.add_parser("vault", help="note nel vault Obsidian")
+    actions = group.add_subparsers(dest="vault_action", required=True)
+    actions.add_parser("migrate", help="sposta nel vault le note .md rimaste nell'archivio") \
+        .set_defaults(func=_vault_migrate)
 
 
 def _add_rescan_command(sub) -> None:
@@ -270,7 +284,7 @@ def _add_gen_key_command(sub) -> None:
         .set_defaults(func=_gen_key)
 
 
-COMMAND_GROUPS: tuple[Callable, ...] = (_add_device_commands, _add_rescan_command,
+COMMAND_GROUPS: tuple[Callable, ...] = (_add_device_commands, _add_rescan_command, _add_vault_commands,
                                         _add_firmware_commands, _add_password_command,
                                         _add_unlock_command, _add_trash_commands,
                                         _add_gen_key_command, _add_process_command,

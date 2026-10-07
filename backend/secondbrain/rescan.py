@@ -16,10 +16,11 @@ from . import jobs
 from .archive import NOTE_SUFFIX, TRASH, Archive
 from .models import Capture, Device
 from .naming import DEFAULT_DEVICE_TYPE, parse_day_dir
-from .notefile import NoteError, parse_note
+from .notefile import NoteError, parse_note, parse_note_id
 from .notes import empty_ai_fields, lock_capture, note_fields
 from .search import refresh_search_vector
 from .sidecar import sidecar_to_fields, capture_to_sidecar
+from .vault import Vault
 
 
 @dataclass
@@ -94,7 +95,52 @@ def _restore_from_catalog(archive: Archive, capture: Capture, report: RescanRepo
     return sidecar_to_fields(data) | {"rel_path": capture.rel_path, "day": capture.day}
 
 
-def rescan(s: Session, archive: Archive, now: datetime) -> RescanReport:
+def _vault_index(vault: Vault, report: RescanReport) -> dict[str, tuple[str, float]]:
+    """capture_id -> (percorso nel vault, mtime) per le note leggibili con un `id`."""
+    index: dict[str, tuple[str, float]] = {}
+    for rel, mtime in vault.list_notes():
+        try:
+            capture_id = parse_note_id(vault.read_text(rel))
+        except (OSError, UnicodeDecodeError, NoteError) as exc:
+            report.problems.append(f"{rel}: nota del vault non leggibile ({exc})")
+            continue
+        if not capture_id:
+            continue   # nota dell'utente, non del backend
+        if capture_id in index:
+            report.problems.append(f"{rel}: id {capture_id} gia' usato da {index[capture_id][0]}")
+            continue
+        index[capture_id] = (rel, mtime)
+    return index
+
+
+def _link_vault(s: Session, vault: Vault, entries: dict, report: RescanReport) -> set[uuid.UUID]:
+    """Ricollega le note del vault per `id` (spec vault §9): note_path, note_mtime e campi AI
+    dal file. Ritorna gli id delle registrazioni che hanno una nota nel vault."""
+    index = _vault_index(vault, report)
+    linked: set[uuid.UUID] = set()
+    for values in entries.values():
+        if values["trashed_at"] is not None:
+            values["note_path"] = None
+            values["note_mtime"] = None
+            continue
+        hit = index.get(values["capture_id"])
+        if hit is None:
+            values["note_path"] = None
+            values["note_mtime"] = None
+            continue
+        rel, mtime = hit
+        try:
+            values.update(note_fields(parse_note(vault.read_text(rel))))
+        except (OSError, UnicodeDecodeError, NoteError) as exc:
+            report.problems.append(f"{rel}: nota del vault non leggibile ({exc})")
+            continue
+        values["note_path"] = rel
+        values["note_mtime"] = mtime
+        linked.add(values["id"])
+    return linked
+
+
+def rescan(s: Session, archive: Archive, now: datetime, *, vault: Vault | None = None) -> RescanReport:
     report = RescanReport()
     entries: dict[uuid.UUID, dict] = {}
     for rel_wav in archive.iter_sidecar_rels():
@@ -131,6 +177,7 @@ def rescan(s: Session, archive: Archive, now: datetime) -> RescanReport:
     for rel_wav in archive.iter_wavs_without_sidecar():
         report.problems.append(f"{rel_wav}: WAV senza sidecar, non importato")
 
+    linked = _link_vault(s, vault, entries, report) if vault is not None else set()
     to_queue: list[uuid.UUID] = []
     for values in entries.values():
         _ensure_device(s, values["device_id"], now, report)
@@ -138,11 +185,17 @@ def rescan(s: Session, archive: Archive, now: datetime) -> RescanReport:
         # worker mentre scrivono i campi AI), poi la lettura del `.md`. Letto prima, un `.md`
         # scritto dal worker nel frattempo verrebbe sovrascritto con i campi vuoti.
         capture = lock_capture(s, values["id"])
-        ai_fields, missing_note = _note_fields(archive, values["rel_path"], report)
-        if ai_fields is not None:
-            values.update(ai_fields)
-        if missing_note and values["trashed_at"] is None:
-            to_queue.append(values["id"])
+        if values["id"] in linked:
+            if archive.derived_path(values["rel_path"], NOTE_SUFFIX).exists():
+                report.problems.append(f"{values['rel_path']}: nota anche nell'archivio, da migrare con 'secondbrain vault migrate'")
+        else:
+            ai_fields, missing_note = _note_fields(archive, values["rel_path"], report)
+            if ai_fields is not None:
+                values.update(ai_fields)
+            if not missing_note and vault is not None and values["trashed_at"] is None:
+                report.problems.append(f"{values['rel_path']}: nota ancora nell'archivio, da migrare con 'secondbrain vault migrate'")
+            if missing_note and values["trashed_at"] is None:
+                to_queue.append(values["id"])
         if capture is None:
             s.add(Capture(**values))
             report.added += 1

@@ -383,3 +383,24 @@ def test_note_with_values_too_long_for_the_catalog_is_reported(archive, db, old,
     cap = first(db)
     assert (cap.language, cap.ai_provider, cap.ai_transcribe_model) == (
         "it", "groq", "whisper-large-v3-turbo")
+
+
+def test_relinks_vault_notes_by_id_and_reports_notes_left_in_the_archive(archive, db, settings):
+    from secondbrain.vault import Vault
+    from sqlalchemy import update
+    vault = Vault(settings.vault_dir)
+    cap = first(db)
+    write_note(db, archive, cap, PROCESSED, ROME, vault=vault)
+    db.commit()
+    rel = first(db).note_path
+    db.execute(update(Capture).values(note_path=None, note_mtime=None, transcript=None, title_auto=None))
+    db.commit()
+    other = db.scalars(select(Capture).where(Capture.device_id == DEV2)).one()
+    archive.write_text(other.rel_path, ".md", render_note(Note(transcript="Ancora qui."), ROME))
+    report = rescan(db, archive, NOW, vault=vault)
+    db.commit()
+    cap = first(db)
+    assert cap.note_path == rel and cap.note_mtime == vault.mtime(rel)
+    assert (cap.transcript, cap.title_auto) == (PROCESSED.transcript, "Chiamare Marco")
+    assert any("da migrare" in p for p in report.problems)
+    assert db.scalars(select(Capture).where(Capture.device_id == DEV2)).one().transcript == "Ancora qui."
