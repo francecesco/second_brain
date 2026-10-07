@@ -187,12 +187,6 @@ esp_err_t wifi_get_ip(char *out, size_t len)
     return ESP_OK;
 }
 
-const char *wifi_server_base_url(void)
-{
-    if (!s_got_ip || s_selected < 0) return NULL;
-    return s_nets[s_selected].server;
-}
-
 const char *wifi_current_ssid(void)
 {
     if (!s_got_ip || s_selected < 0) return NULL;

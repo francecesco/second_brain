@@ -6,6 +6,7 @@
 #include "fw_version.h"
 #include "battery.h"
 #include "wifi.h"
+#include "secrets.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,10 +39,8 @@ static int upload_one(const char *name, const char *device_id, const char *bat_p
     strlcpy(id, name, sizeof(id));
     char *dot = strstr(id, ".wav"); if (dot) *dot = '\0';
 
-    const char *base = wifi_server_base_url();
-    if (!base) { fclose(f); return 0; }
     char url[192];
-    snprintf(url, sizeof(url), "%s/captures", base);
+    snprintf(url, sizeof(url), "%s/captures", SERVER_BASE_URL);
     esp_http_client_config_t cfg = { .url = url, .method = HTTP_METHOD_POST, .timeout_ms = SB_HTTP_IDLE_TIMEOUT_MS };
     esp_http_client_handle_t c = esp_http_client_init(&cfg);
     if (!c) { fclose(f); return 0; }

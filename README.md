@@ -78,8 +78,8 @@ scrive l'audio dall'I2S alla SD mentre il task principale aggiorna il display.
 - **Nomi file** `cap_YYYYMMDD_HHMMSS.wav` in UTC dall'RTC; se l'RTC non è mai stato
   sincronizzato, `cap_unsynced_NNNNNN.wav` con contatore in NVS.
 - **Wi-Fi**: scansione, poi connessione alla rete configurata presente con il segnale
-  migliore. Ogni rete ha il proprio server. È possibile forzare il BSSID di un access
-  point (utile se più AP condividono lo stesso SSID e uno non inoltra il traffico).
+  migliore. È possibile forzare il BSSID di un access point (utile se più AP condividono
+  lo stesso SSID e uno non inoltra il traffico).
 - **Ora**: l'ora di sistema viene caricata dall'RTC al boot; con la rete, SNTP aggiorna
   l'RTC se l'anno non è valido o l'ultima sincronizzazione ha più di 24 ore. Senza
   batteria l'RTC si azzera quando si toglie l'alimentazione.
@@ -123,13 +123,16 @@ compila la lista delle reti:
 
 ```c
 #define WIFI_NETWORKS { \
-    { "ssid-casa",    "password", "aa:bb:cc:dd:ee:ff", "http://192.168.1.28:8000" }, \
-    { "ssid-ufficio", "password", NULL,                "http://192.168.0.157:8000" }, \
+    { "ssid-casa",    "password", "aa:bb:cc:dd:ee:ff" }, \
+    { "ssid-ufficio", "password", NULL }, \
 }
+#define SERVER_BASE_URL "https://ingest.esempio.it"   // o http://192.168.1.28:8000 in LAN
+#define DEVICE_TOKEN    "<token di secondbrain device add>"  // "" = senza token (solo LAN)
 ```
 
-Il quarto campo è il base URL del server raggiungibile su quella rete (backend, o il
-server di test qui sotto). Il terzo è il BSSID da forzare, oppure `NULL`.
+Il terzo campo di ogni rete è il BSSID da forzare, oppure `NULL`. Il server è uno solo
+per tutte le reti (`SERVER_BASE_URL`, `http://` o `https://`); il token è quello stampato
+da `secondbrain device add <mac>` sul backend (vedi `backend/README.md`).
 
 Le costanti di comportamento (durata massima, soglie batteria, budget Wi-Fi, fuso
 orario per il display, ...) sono tutte in `firmware/main/config.h`.

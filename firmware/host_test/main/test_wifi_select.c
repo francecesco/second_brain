@@ -11,8 +11,8 @@ static wifi_scan_entry_t ap(const char *ssid, const char *bssid_txt, int rssi) {
 }
 
 static const wifi_network_t NETS[] = {
-    { "Casa",    "pw1", "54:78:f0:bd:65:eb", "http://192.168.1.28:8000" },
-    { "Ufficio", "pw2", NULL,                "http://192.168.0.157:8000" },
+    { "Casa",    "pw1", "54:78:f0:bd:65:eb" },
+    { "Ufficio", "pw2", NULL },
 };
 
 void test_wifi_select_none_visible(void) {

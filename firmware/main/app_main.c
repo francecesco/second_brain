@@ -26,6 +26,7 @@
 #include "audio.h"
 #include "sensors.h"
 #include "wifi.h"
+#include "secrets.h"
 #include "ota.h"
 #include "capture.h"
 #include "queue.h"
@@ -199,7 +200,7 @@ static void do_sync(cycle_state_t *st)
     if (wifi_connect(SB_WIFI_BUDGET_MS) != ESP_OK) { ESP_LOGW(TAG, "no wifi"); return; }
     st->wifi_ok = true;
     diag_get()->t_wifi_connected = diag_now_ms();
-    ESP_LOGI(TAG, "rete: %s, server: %s", wifi_current_ssid(), wifi_server_base_url());
+    ESP_LOGI(TAG, "rete: %s, server: %s", wifi_current_ssid(), SERVER_BASE_URL);
 
     timesync_run();
 
@@ -211,7 +212,7 @@ static void do_sync(cycle_state_t *st)
 
     if (!battery_below(SB_BATTERY_MIN_OTA_PCT)) {
         char manifest_url[192];
-        snprintf(manifest_url, sizeof(manifest_url), "%s/firmware/manifest.json", wifi_server_base_url());
+        snprintf(manifest_url, sizeof(manifest_url), "%s/firmware/manifest.json", SERVER_BASE_URL);
         esp_err_t r = ota_pull(manifest_url);   // non ritorna se aggiorna
         ESP_LOGI(TAG, "ota_pull -> %s", esp_err_to_name(r));
     }

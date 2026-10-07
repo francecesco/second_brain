@@ -12,9 +12,5 @@ esp_err_t wifi_connect(int timeout_ms);
 // come stringa "a.b.c.d". Ritorna ESP_ERR_INVALID_STATE se non ancora connesso.
 esp_err_t wifi_get_ip(char *out, size_t len);
 
-// Base URL del server per la rete a cui si e' connessi (campo server di WIFI_NETWORKS),
-// es. "http://192.168.1.28:8000". NULL se non connessi.
-const char *wifi_server_base_url(void);
-
 // SSID della rete scelta (per i log). NULL se non connessi.
 const char *wifi_current_ssid(void);

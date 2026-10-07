@@ -8,7 +8,6 @@ typedef struct {
     const char *ssid;
     const char *password;
     const char *bssid;    // "aa:bb:cc:dd:ee:ff" per forzare un AP, oppure NULL
-    const char *server;   // base URL del backend/server di test su quella rete, es. "http://192.168.1.28:8000"
 } wifi_network_t;
 
 typedef struct {
