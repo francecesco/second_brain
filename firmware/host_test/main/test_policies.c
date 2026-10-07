@@ -1,6 +1,8 @@
 #include "unity.h"
 #include "queue_policy.h"
 #include "sync_policy.h"
+#include "sync_retry_policy.h"
+#include "config.h"
 #include "timesync_policy.h"
 #include <string.h>
 
@@ -52,6 +54,32 @@ void test_http_url_has_base(void) {
     TEST_ASSERT_FALSE(http_url_has_base("https://altro.it/x.bin", "https://ingest.esempio.it"));
     TEST_ASSERT_FALSE(http_url_has_base("", "https://ingest.esempio.it"));
     TEST_ASSERT_FALSE(http_url_has_base("https://ingest.esempio.it/x.bin", ""));
+}
+
+void test_sync_retry_delay_doubles_to_cap(void) {
+    TEST_ASSERT_EQUAL_UINT32(15 * 60 * 1000, sync_retry_delay_ms(0));
+    TEST_ASSERT_EQUAL_UINT32(30 * 60 * 1000, sync_retry_delay_ms(1));
+    TEST_ASSERT_EQUAL_UINT32(60 * 60 * 1000, sync_retry_delay_ms(2));
+    TEST_ASSERT_EQUAL_UINT32(4 * 60 * 60 * 1000, sync_retry_delay_ms(4));
+    TEST_ASSERT_EQUAL_UINT32(4 * 60 * 60 * 1000, sync_retry_delay_ms(10));
+    TEST_ASSERT_EQUAL_UINT32(4 * 60 * 60 * 1000, sync_retry_delay_ms(40)); // niente overflow dello shift
+}
+
+void test_sync_retry_should_arm(void) {
+    TEST_ASSERT_FALSE(sync_retry_should_arm(0, false, -1));   // coda vuota, USB
+    TEST_ASSERT_FALSE(sync_retry_should_arm(0, true, 80));    // coda vuota, batteria
+    TEST_ASSERT_TRUE(sync_retry_should_arm(1, false, -1));    // USB: la percentuale non conta
+    TEST_ASSERT_TRUE(sync_retry_should_arm(3, true, 50));
+    TEST_ASSERT_TRUE(sync_retry_should_arm(1, true, SB_BATTERY_MIN_RECORD_PCT));
+    TEST_ASSERT_FALSE(sync_retry_should_arm(1, true, SB_BATTERY_MIN_RECORD_PCT - 1)); // sotto soglia: niente Wi-Fi, niente timer
+}
+
+void test_status_should_refresh(void) {
+    TEST_ASSERT_TRUE(status_should_refresh(2, STATUS_OUTCOME_SENT, STATUS_OUTCOME_SENT));      // inviati: sempre
+    TEST_ASSERT_FALSE(status_should_refresh(0, STATUS_OUTCOME_SERVER_KO, STATUS_OUTCOME_SERVER_KO)); // stesso esito
+    TEST_ASSERT_TRUE(status_should_refresh(0, STATUS_OUTCOME_AUTH_KO, STATUS_OUTCOME_SERVER_KO));   // esito diverso
+    TEST_ASSERT_TRUE(status_should_refresh(0, STATUS_OUTCOME_NO_WIFI, STATUS_OUTCOME_NONE));        // mai mostrato nulla
+    TEST_ASSERT_FALSE(status_should_refresh(0, STATUS_OUTCOME_NO_WIFI, STATUS_OUTCOME_NO_WIFI));
 }
 
 void test_timesync_needed(void) {
