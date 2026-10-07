@@ -79,3 +79,14 @@ def test_bad_settings_key_is_treated_as_missing(raw):
     assert (s.settings_key, s.settings_key_invalid) == (None, True)
     assert raw not in repr(s)
     assert load_settings(BASE).settings_key_invalid is False
+
+
+def test_vault_dir_and_public_url():
+    s = load_settings(BASE | {"VAULT_DIR": "/srv/v", "PUBLIC_URL": "https://brain.esempio.it/"})
+    assert s.vault_dir == Path("/srv/v")
+    assert s.public_url == "https://brain.esempio.it"   # senza barra finale
+
+
+def test_vault_defaults():
+    s = load_settings(BASE)
+    assert s.vault_dir == Path("/data/vault") and s.public_url is None

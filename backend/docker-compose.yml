@@ -6,6 +6,8 @@ x-app-environment: &app-environment
   DATABASE_URL: postgresql+psycopg://secondbrain:${POSTGRES_PASSWORD}@postgres:5432/secondbrain
   ARCHIVE_DIR: /data/archive
   FIRMWARE_DIR: /data/firmware
+  VAULT_DIR: /data/vault
+  PUBLIC_URL: ${PUBLIC_URL:-}
   TZ_ARCHIVE: ${TZ_ARCHIVE:-Europe/Rome}
   TRASH_RETENTION_DAYS: ${TRASH_RETENTION_DAYS:-30}
   ALLOW_UNAUTHENTICATED_LAN: ${ALLOW_UNAUTHENTICATED_LAN:-false}
@@ -39,6 +41,7 @@ services:
     volumes:
       - ${DATA_DIR:-./data}/archive:/data/archive
       - ${DATA_DIR:-./data}/firmware:/data/firmware
+      - ${DATA_DIR:-./data}/vault:/data/vault
     ports:
       # Solo IPv4: pubblicare anche su IPv6 farebbe passare quelle connessioni dal
       # docker-proxy, che le presenta all'app con l'IP del gateway del bridge (172.x,
@@ -57,6 +60,7 @@ services:
     environment: *app-environment
     volumes:
       - ${DATA_DIR:-./data}/archive:/data/archive
+      - ${DATA_DIR:-./data}/vault:/data/vault
     healthcheck:
       disable: true  # il controllo dell'immagine interroga la porta 8000, che il worker non apre
 

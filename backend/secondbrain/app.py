@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import ingest, library, ota
 from .archive import Archive
+from .vault import Vault
 from .catalog import make_engine, make_sessionmaker
 from .clock import utcnow
 from .config import BAD_SETTINGS_KEY, Settings, load_settings
@@ -63,6 +64,10 @@ def _is_device_path(path: str) -> bool:
 def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        try:
+            app.state.vault.ensure()
+        except OSError as exc:  # volume assente o in sola lettura: il resto funziona
+            log.error("vault non scrivibile (%s): %s", app.state.vault.root, exc)
         removed = app.state.archive.clean_incoming()
         if removed:
             log.warning("rimossi %d upload incompleti da .incoming", removed)
@@ -80,6 +85,7 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
     app.state.settings = settings
     app.state.clock = clock
     app.state.archive = Archive(settings.archive_dir)
+    app.state.vault = Vault(settings.vault_dir)
     app.state.engine = make_engine(settings.database_url)
     app.state.sessionmaker = make_sessionmaker(app.state.engine)
     app.state.box = SecretBox(settings.settings_key, invalid=settings.settings_key_invalid)

@@ -68,6 +68,7 @@ def clock():
 def settings(tmp_path):
     return Settings(database_url=TEST_DB, archive_dir=tmp_path / "archive",
                     firmware_dir=tmp_path / "firmware", tz_archive=ZoneInfo("Europe/Rome"),
+                    vault_dir=tmp_path / "vault",
                     settings_key=TEST_SETTINGS_KEY)
 
 

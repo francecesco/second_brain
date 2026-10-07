@@ -30,6 +30,9 @@ class Settings:
     archive_dir: Path
     firmware_dir: Path
     tz_archive: ZoneInfo
+    # Vault Obsidian (spec vault §4): cartella delle note e base del link alla UI nel frontmatter.
+    vault_dir: Path = Path("/data/vault")
+    public_url: str | None = None
     max_upload_bytes: int = DEFAULT_MAX_UPLOAD_BYTES
     trash_retention_days: int = DEFAULT_TRASH_RETENTION_DAYS
     allow_unauthenticated_lan: bool = False
@@ -95,6 +98,8 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         archive_dir=Path(env.get("ARCHIVE_DIR", "/data/archive")),
         firmware_dir=Path(env.get("FIRMWARE_DIR", "/data/firmware")),
         tz_archive=tz,
+        vault_dir=Path(env.get("VAULT_DIR", "/data/vault")),
+        public_url=env.get("PUBLIC_URL", "").strip().rstrip("/") or None,
         max_upload_bytes=_int(env, "MAX_UPLOAD_BYTES", DEFAULT_MAX_UPLOAD_BYTES,
                               MIN_MAX_UPLOAD_BYTES),
         trash_retention_days=_int(env, "TRASH_RETENTION_DAYS",
