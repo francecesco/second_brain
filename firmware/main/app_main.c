@@ -333,5 +333,5 @@ void app_main(void)
     show_status(&st);
     diag_get()->t_cycle_end = diag_now_ms();
     vTaskDelay(pdMS_TO_TICKS(300));
-    power_deep_sleep();
+    power_deep_sleep(0);
 }
