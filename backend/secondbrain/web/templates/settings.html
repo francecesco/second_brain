@@ -22,6 +22,14 @@
   </form>
 </section>
 
+<section class="card" id="vault">
+  <h2>Vault Obsidian</h2>
+  <p>Le note stanno in <code>{{ vault_dir }}/Captures/</code>: modificale in Obsidian, il worker le riprende entro un minuto.</p>
+  {% if vault_check %}<p>{{ vault_check.notes }} note · ultimo controllo alle {{ local(vault_check.at) }}{% if vault_check.changed %} · {{ vault_check.changed }} riprese{% endif %}</p>
+  {% if vault_check.problems %}<ul class="problems">{% for problem in vault_check.problems %}<li>{{ problem }}</li>{% endfor %}</ul>{% endif %}
+  {% else %}<p>Nessun controllo ancora: il worker non e' partito o non ha mai trovato il vault.</p>{% endif %}
+</section>
+
 {% for p in providers %}
 {% set name = p.row.name %}
 <section class="card" id="provider-{{ name }}">

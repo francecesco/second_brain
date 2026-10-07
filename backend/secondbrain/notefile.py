@@ -194,6 +194,19 @@ def _datetime(value: object) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
+def parse_note_id(text: str) -> str | None:
+    """`id` del frontmatter (il capture_id della registrazione), None se manca."""
+    front, _ = _split(text)
+    try:
+        data = yaml.safe_load(front) if front.strip() else {}
+    except yaml.YAMLError:
+        raise NoteError("frontmatter YAML non valido") from None
+    if not isinstance(data, dict):
+        raise NoteError("il frontmatter non è una mappa chiave: valore")
+    value = data.get("id")
+    return str(value).strip() if value is not None and str(value).strip() else None
+
+
 def parse_note(text: str) -> Note:
     front, body = _split(text)
     try:

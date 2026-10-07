@@ -5,6 +5,8 @@ solo mascherata, e non arriva mai al browser in nessuna risposta.
 """
 from dataclasses import dataclass
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from markupsafe import escape
@@ -49,6 +51,17 @@ def _back() -> RedirectResponse:
     return RedirectResponse("/settings", status_code=303)
 
 
+def _vault_check(db: Session) -> dict | None:
+    """Esito dell'ultimo controllo del vault fatto dal worker, con `at` come datetime."""
+    data = store.get_setting(db, "vault_check", None)
+    if not isinstance(data, dict) or not data.get("at"):
+        return None
+    try:
+        return data | {"at": datetime.fromisoformat(str(data["at"]))}
+    except ValueError:
+        return None
+
+
 @router.get("/settings")
 def settings_page(request: Request, queued: int | None = None, db: Session = Depends(get_db),
                   session: WebSession = Depends(require_login)):
@@ -73,7 +86,8 @@ def settings_page(request: Request, queued: int | None = None, db: Session = Dep
         "box_invalid": state.box.invalid,
         "paused": store.is_paused(db), "language": store.get_language(db), "languages": LANGUAGES,
         "counts": jobs.queue_counts(db), "backfill_count": jobs.count_backfill(db),
-        "queued_now": queued})
+        "queued_now": queued,
+        "vault_dir": str(state.settings.vault_dir), "vault_check": _vault_check(db)})
 
 
 @router.post("/settings/general")

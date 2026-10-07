@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
-from . import jobs, notefile, notes
+from . import jobs, notefile, notes, vault_sync
 from . import settings_store as store
 from .ai import chain
 from .ai.audio import AudioError, AudioSource
@@ -41,6 +41,8 @@ log = logging.getLogger(__name__)
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 POLL_INTERVAL_S = 5.0
+VAULT_CHECK_INTERVAL_S = 60.0   # modifiche da Obsidian (spec vault §7)
+VAULT_CHECK_KEY = "vault_check"
 AI_SCHEMA_VERSION = 1
 TEMP_PREFIX = "secondbrain-audio-"
 IDLE_NO_KEY = "SETTINGS_KEY non impostata"
@@ -82,6 +84,7 @@ class Worker:
     vault: Vault | None = None          # None solo nei test vecchi: la nota resta accanto al WAV
     public_url: str | None = None
     _idle_reason: str | None = field(default=None, init=False)
+    _last_vault_check: datetime | None = field(default=None, init=False)
 
     def run_once(self) -> bool:
         """Elabora al più un lavoro; False se non c'era niente da fare o non si può."""
@@ -97,6 +100,28 @@ class Worker:
             capture_id, lease_until = job.capture_id, job.locked_until
         self._idle(None)
         self.process(capture_id, configs, language, lease_until=lease_until)
+        return True
+
+    def maybe_check_vault(self) -> bool:
+        """Quando e' libero, ogni VAULT_CHECK_INTERVAL_S: riprende le modifiche fatte in Obsidian."""
+        if self.vault is None:
+            return False
+        now = self.clock()
+        if (self._last_vault_check is not None
+                and (now - self._last_vault_check).total_seconds() < VAULT_CHECK_INTERVAL_S):
+            return False
+        self._last_vault_check = now
+        try:
+            report = vault_sync.check(self.sessionmaker, self.vault, self.tz, self.public_url, now)
+            notes_count = len(self.vault.list_notes())
+        except OSError as exc:   # volume assente o in sola lettura: lo si vede in Impostazioni
+            log.error("vault non leggibile (%s): %s", self.vault.root, exc)
+            report, notes_count = vault_sync.VaultReport(problems=[f"vault non leggibile: {exc}"]), 0
+        with self.sessionmaker() as s:
+            store.set_setting(s, VAULT_CHECK_KEY, {"at": now.isoformat(), "notes": notes_count,
+                                                   "changed": report.changed,
+                                                   "problems": report.problems[:20]})
+            s.commit()
         return True
 
     def _check(self, s: Session) -> tuple[str | None, list[ProviderConfig]]:
@@ -301,6 +326,10 @@ def run_forever(worker, stop: threading.Event, interval: float = POLL_INTERVAL_S
                 log.exception("database non raggiungibile, riprovo tra poco")
                 busy = False
             if not busy:
+                try:
+                    worker.maybe_check_vault()
+                except SQLAlchemyError:
+                    log.exception("database non raggiungibile durante il controllo del vault")
                 stop.wait(interval)
     except Shutdown:
         pass

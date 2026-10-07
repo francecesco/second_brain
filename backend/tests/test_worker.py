@@ -267,6 +267,9 @@ def test_run_forever_stops():
             stop.set()
             return False
 
+        def maybe_check_vault(self):
+            return False
+
     once = Once()
     run_forever(once, stop, interval=0)
     assert once.calls == 1
@@ -492,3 +495,19 @@ def test_cli_worker_with_a_bad_settings_key_idles(monkeypatch, settings, caplog)
     errors = [r.getMessage() for r in caplog.records if r.levelno == logging.ERROR]
     assert any("SETTINGS_KEY non valida" in m for m in errors)
     assert "corta-e-sbagliata" not in caplog.text
+
+
+def test_worker_checks_the_vault_once_per_interval(env, db, settings, monkeypatch):
+    from datetime import timedelta
+    from secondbrain import vault_sync
+    from secondbrain.vault import Vault
+    from secondbrain.worker import VAULT_CHECK_INTERVAL_S, VAULT_CHECK_KEY
+    calls = []
+    monkeypatch.setattr(vault_sync, "check", lambda *a, **k: calls.append(a) or vault_sync.VaultReport())
+    worker = Worker(sessionmaker=make_sessionmaker(db.get_bind()), archive=env.archive, tz=ROME,
+                    box=env.box, factory=FakeFactory(), clock=env.clock, vault=Vault(settings.vault_dir))
+    assert worker.maybe_check_vault() and not worker.maybe_check_vault()
+    worker._last_vault_check -= timedelta(seconds=VAULT_CHECK_INTERVAL_S + 1)   # e' passato un minuto
+    assert worker.maybe_check_vault() and len(calls) == 2
+    assert store.get_setting(db, VAULT_CHECK_KEY, None)["notes"] == 0
+    assert not env.worker.maybe_check_vault()   # senza vault configurato non fa niente

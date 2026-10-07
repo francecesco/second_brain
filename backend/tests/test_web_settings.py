@@ -175,3 +175,11 @@ def test_bad_settings_key_stops_only_the_ai(make_client, settings, db, caplog):
     client.post("/login", data={"password": PASSWORD}, follow_redirects=False)
     assert "SETTINGS_KEY non valida" in client.get("/settings").text
     assert "SETTINGS_KEY non valida" in client.get("/browse").text
+
+
+def test_page_shows_the_vault_section(ui, db, settings):
+    store.set_setting(db, "vault_check", {"at": NOW.isoformat(), "notes": 3, "changed": 0,
+                                          "problems": ["Captures/2026/x.md: senza id nel frontmatter"]})
+    db.commit()
+    text = ui.client.get("/settings").text
+    assert str(settings.vault_dir) in text and "3 note" in text and "senza id nel frontmatter" in text
