@@ -20,6 +20,8 @@
 #include "sync_policy.h"
 #include "diag.h"
 #include "esp_system.h"
+#include "config.h"
+#include "secrets.h"
 
 static const char *TAG = "ota";
 
@@ -59,7 +61,7 @@ static esp_err_t http_get_to_buffer(const char *url, char **out_buf, int *out_le
     *out_len = 0;
     *out_content_length = 0;
 
-    esp_http_client_config_t config = http_client_config(url, HTTP_METHOD_GET, 10000);
+    esp_http_client_config_t config = http_client_config(url, HTTP_METHOD_GET, SB_OTA_MANIFEST_TIMEOUT_MS);
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
         return ESP_FAIL;
@@ -190,12 +192,15 @@ static esp_err_t ota_download_and_apply(const ota_manifest_t *m)
     ESP_LOGI(TAG, "scrivo su partizione '%s' @0x%08" PRIx32,
              update_partition->label, update_partition->address);
 
-    esp_http_client_config_t config = http_client_config(m->url, HTTP_METHOD_GET, 15000);
+    esp_http_client_config_t config = http_client_config(m->url, HTTP_METHOD_GET, SB_OTA_DOWNLOAD_TIMEOUT_MS);
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
         return ESP_FAIL;
     }
-    http_client_set_auth(client);
+    // L'url viene dal manifest: il token va solo al server configurato (il backend lo
+    // compone sotto il proprio host, quindi normalmente coincide).
+    if (http_url_has_base(m->url, SERVER_BASE_URL)) http_client_set_auth(client);
+    else ESP_LOGW(TAG, "url del binario fuori da SERVER_BASE_URL: download senza token");
 
     esp_err_t err = esp_http_client_open(client, 0);
     if (err != ESP_OK) {

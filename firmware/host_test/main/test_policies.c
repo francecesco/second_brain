@@ -42,6 +42,18 @@ void test_http_status_is_auth_error(void) {
     TEST_ASSERT_FALSE(http_status_is_auth_error(0));
 }
 
+void test_http_url_has_base(void) {
+    // Il Bearer va solo agli URL sotto SERVER_BASE_URL: l'url del binario arriva dal manifest.
+    TEST_ASSERT_TRUE(http_url_has_base("https://ingest.esempio.it/firmware/x.bin", "https://ingest.esempio.it"));
+    TEST_ASSERT_TRUE(http_url_has_base("http://192.168.0.194:8000/firmware/x.bin", "http://192.168.0.194:8000"));
+    TEST_ASSERT_FALSE(http_url_has_base("https://ingest.esempio.it.evil.com/x.bin", "https://ingest.esempio.it"));
+    TEST_ASSERT_FALSE(http_url_has_base("https://ingest.esempio.it:8443/x.bin", "https://ingest.esempio.it"));
+    TEST_ASSERT_FALSE(http_url_has_base("http://ingest.esempio.it/x.bin", "https://ingest.esempio.it"));
+    TEST_ASSERT_FALSE(http_url_has_base("https://altro.it/x.bin", "https://ingest.esempio.it"));
+    TEST_ASSERT_FALSE(http_url_has_base("", "https://ingest.esempio.it"));
+    TEST_ASSERT_FALSE(http_url_has_base("https://ingest.esempio.it/x.bin", ""));
+}
+
 void test_timesync_needed(void) {
     const int64_t now = 1800000000;
     TEST_ASSERT_TRUE(timesync_needed(2000, now - 10, now));        // RTC non valido

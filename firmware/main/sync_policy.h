@@ -10,3 +10,5 @@ typedef enum {
 sync_action_t sync_decide(int http_status);
 // 401 o 403: il server ha rifiutato il token (o il device non corrisponde al token).
 bool http_status_is_auth_error(int http_status);
+// Vero se url sta sotto base ("<base>/..."): il token va solo al server configurato.
+bool http_url_has_base(const char *url, const char *base);

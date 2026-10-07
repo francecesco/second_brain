@@ -79,7 +79,8 @@ static int upload_one(const char *name, const char *device_id, const char *bat_p
     if (esp_http_client_fetch_headers(c) < 0) { ESP_LOGE(TAG, "fetch_headers fallita su %s", name); goto out; }
     status = esp_http_client_get_status_code(c);
     diag_note_heap();
-    ESP_LOGI(TAG, "heap libero dopo la risposta: %lu", (unsigned long)esp_get_free_heap_size());
+    diag_note_stack();
+    ESP_LOGI(TAG, "heap libero dopo la risposta: %lu, stack libero min del main: %lu", (unsigned long)esp_get_free_heap_size(), (unsigned long)diag_get()->stack_min);
     // consuma il corpo (piccolo JSON) per chiudere pulito
     while (esp_http_client_read(c, (char *)buf, SYNC_CHUNK) > 0) {}
 out:

@@ -32,6 +32,8 @@
 // Rete e sync (§6.3)
 #define SB_WIFI_BUDGET_MS          12000  // dopo la scansione; su AP affollati 8 s non bastano
 #define SB_HTTP_IDLE_TIMEOUT_MS    15000  // inattivita' socket, non totale
+#define SB_OTA_MANIFEST_TIMEOUT_MS 10000  // GET del manifest (pochi byte)
+#define SB_OTA_DOWNLOAD_TIMEOUT_MS 15000  // inattivita' socket durante il download del binario
 #define SB_SYNC_WINDOW_MS          (3 * 60 * 1000)
 
 // Scadenza di ciclo (§4): deep sleep forzato se il ciclo si blocca.

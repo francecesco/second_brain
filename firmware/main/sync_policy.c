@@ -1,8 +1,16 @@
 #include "sync_policy.h"
+#include <string.h>
 
 bool http_status_is_auth_error(int http_status)
 {
     return http_status == 401 || http_status == 403;
+}
+
+bool http_url_has_base(const char *url, const char *base)
+{
+    if (!url || !base || !base[0]) return false;
+    size_t n = strlen(base);
+    return strncmp(url, base, n) == 0 && url[n] == '/';
 }
 
 sync_action_t sync_decide(int http_status)

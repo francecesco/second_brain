@@ -3,6 +3,8 @@
 #include "esp_attr.h"
 #include "esp_timer.h"
 #include "esp_system.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 RTC_DATA_ATTR static diag_t s_diag;
 
@@ -18,6 +20,12 @@ diag_t *diag_begin(const char *mode)
 diag_t *diag_get(void) { return &s_diag; }
 
 uint32_t diag_now_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
+
+void diag_note_stack(void)
+{
+    uint32_t now = (uint32_t)uxTaskGetStackHighWaterMark(NULL) * sizeof(StackType_t);
+    if (s_diag.stack_min == 0 || now < s_diag.stack_min) s_diag.stack_min = now;
+}
 
 void diag_note_heap(void)
 {
