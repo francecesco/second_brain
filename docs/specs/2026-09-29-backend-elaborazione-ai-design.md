@@ -5,10 +5,14 @@
 `backend-elaborazione-ai`, piano `docs/plans/2026-09-29-backend-elaborazione-ai.md`, 15 task,
 494 test). Verificati con chiavi vere: Groq e Gemini (trascrizione, titolo, riassunto, tag),
 cambio del provider principale, arretrato delle note già in archivio, utilizzo mensile,
-nessuna chiave nei log. **Da verificare più avanti** (rimandati dall'autore): fallback con
-una chiave sbagliata sul principale, arresto del worker durante una trascrizione, pausa,
-correzione + Rielabora, ricerca dal telefono, cestino durante l'elaborazione, rescan dopo
-una modifica a mano del `.md`.
+nessuna chiave nei log. **Verificati il 2026-10-07** sul Mac col backend vero e le
+chiavi di Groq e Gemini: fallback con una chiave sbagliata sul principale; arresto del worker
+durante una trascrizione (SIGTERM: lavoro di nuovo in coda senza contare il tentativo;
+SIGKILL: ripreso allo scadere del lease con `attempts=1`); pausa; correzione + Rielabora
+(campi corretti conservati, trascrizione saltata); cestino durante l'elaborazione (risultato
+scartato; il ripristino non rimette in coda, ci pensa `rescan`); rescan dopo una modifica a
+mano del `.md` (e con un `.md` rotto: segnalato, catalogo intatto). La ricerca "dal
+telefono" è stata verificata a 390 px con Chrome headless, non su un telefono vero.
 Deviazioni emerse in esecuzione: il `.ai.json` si compone nelle due fasi di una stessa
 elaborazione (l'arricchimento aggiunge la sua parte), e "Rielabora" lo sostituisce; la
 ricerca usa la lingua delle impostazioni, mentre ogni nota è indicizzata nella propria;
@@ -17,7 +21,10 @@ elaborata (la trascrizione sempre); `enrich_provider` nel frontmatter solo quand
 da `provider`; una `SETTINGS_KEY` malformata equivale a una assente (errore nel log, avviso
 nella pagina, il resto del backend funziona); un file audio sparito durante l'elaborazione
 si riprova con il backoff invece di fallire subito; avviso quando nessun provider ha un
-modello di testo; tutte le operazioni di `library` prendono il lock sulla riga della nota.
+modello di testo; una risposta di Gemini senza parti di testo (`content: {}` con
+`finishReason: STOP`, vista il 2026-10-07 su un WAV già trascritto due volte) è un errore
+del servizio e passa al provider successivo, mentre il silenzio vero arriva come parte con
+testo vuoto; tutte le operazioni di `library` prendono il lock sulla riga della nota.
 **Dipende da:** `docs/specs/2026-09-28-backend-archivio-design.md` (archivio su disco,
 catalogo Postgres, UI finder), implementata e verificata col device.
 **Cambia rispetto alla spec di progetto** (`docs/specs/2026-09-14-second-brain-design.md`):
