@@ -5,14 +5,48 @@ valori riletti sotto quel lock: così una correzione a mano non viene mai sovras
 da un'elaborazione in corso.
 """
 import uuid
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
 from .archive import NOTE_SUFFIX, Archive
 from .models import Capture
-from .notefile import Note, render_note
+from .notefile import Note, NoteMeta, render_note
 from .search import refresh_search_vector
+
+MATTINO_START_HOUR = 5
+POMERIGGIO_START_HOUR = 12
+SERA_START_HOUR = 18
+NOTTE_START_HOUR = 23
+
+
+def default_title(recorded_at_utc: datetime, tz: ZoneInfo) -> str:
+    """Titolo mostrato quando la nota non ne ha uno: solo visualizzazione e nome del file, mai salvato."""
+    local = recorded_at_utc.astimezone(tz)
+    hour = local.hour
+    time_str = local.strftime("%H:%M")
+    if MATTINO_START_HOUR <= hour < POMERIGGIO_START_HOUR:
+        band = "del mattino"
+    elif POMERIGGIO_START_HOUR <= hour < SERA_START_HOUR:
+        band = "del pomeriggio"
+    elif SERA_START_HOUR <= hour < NOTTE_START_HOUR:
+        band = "della sera"
+    else:
+        band = "della notte"
+    return f"Nota {band}, {time_str}"
+
+
+def effective_title(capture: Capture, tz: ZoneInfo) -> str:
+    """Titolo mostrato: manuale, altrimenti automatico, altrimenti il default per fascia."""
+    return capture.title or capture.title_auto or default_title(capture.recorded_at, tz)
+
+
+def note_meta(capture: Capture, tz: ZoneInfo, public_url: str | None) -> NoteMeta:
+    return NoteMeta(capture_id=capture.capture_id, device_id=capture.device_id,
+                    created=capture.recorded_at, duration_s=capture.duration_s,
+                    title=capture.title or capture.title_auto,
+                    url=f"{public_url}/captures/{capture.id}" if public_url else None)
 
 def empty_ai_fields() -> dict:
     """Campi AI del catalogo di una nota senza `.md` (mai elaborata, o `.md` cancellato).

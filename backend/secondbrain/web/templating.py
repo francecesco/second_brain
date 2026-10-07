@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 
 from ..ai.base import redact
 from ..notefile import MAX_MODEL_LEN, MAX_SUMMARY_LEN, MAX_TITLE_LEN
+from ..notes import default_title, effective_title
 from ..search import MAX_QUERY_LEN
 
 WEB_DIR = Path(__file__).parent
@@ -20,10 +21,6 @@ KIB = 1024
 MIB = 1024 * 1024
 
 # Fasce orarie (ora locale, inizio incluso) per il titolo di default delle catture senza titolo.
-MATTINO_START_HOUR = 5
-POMERIGGIO_START_HOUR = 12
-SERA_START_HOUR = 18
-NOTTE_START_HOUR = 23
 
 ROW_POLL_S = 5  # righe in coda o in corso: htmx le ricarica ogni tanti secondi
 ROW_TAG_PREVIEW = 3  # tag mostrati nell'intestazione della riga, per non affollarla
@@ -57,25 +54,9 @@ def day_month_label(d: date) -> str:
     return f"{weekday_label(d)} {MONTHS_SHORT[d.month - 1]}"
 
 
-def default_title(recorded_at_utc: datetime, tz: ZoneInfo) -> str:
-    """Titolo mostrato quando la cattura non ne ha uno: solo visualizzazione, mai salvato."""
-    local = recorded_at_utc.astimezone(tz)
-    hour = local.hour
-    time_str = local.strftime("%H:%M")
-    if MATTINO_START_HOUR <= hour < POMERIGGIO_START_HOUR:
-        band = "del mattino"
-    elif POMERIGGIO_START_HOUR <= hour < SERA_START_HOUR:
-        band = "del pomeriggio"
-    elif SERA_START_HOUR <= hour < NOTTE_START_HOUR:
-        band = "della sera"
-    else:
-        band = "della notte"
-    return f"Nota {band}, {time_str}"
-
-
 def display_title(capture, tz: ZoneInfo) -> str:
     """Titolo mostrato: manuale, altrimenti automatico, altrimenti il default per fascia."""
-    return capture.title or capture.title_auto or default_title(capture.recorded_at, tz)
+    return effective_title(capture, tz)
 
 
 def reprocess_confirm(capture) -> str:

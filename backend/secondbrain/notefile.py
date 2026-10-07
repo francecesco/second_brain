@@ -50,6 +50,19 @@ class Note:
     edited: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class NoteMeta:
+    """Identita' della registrazione nel frontmatter della nota nel vault (spec vault §5):
+    scritta dal backend, mai riletta. `title` e' quello mostrato (manuale o automatico), None
+    se la nota non ne ha: il titolo di default per fascia sta solo nel nome del file."""
+    capture_id: str
+    device_id: str
+    created: datetime
+    duration_s: float
+    title: str | None
+    url: str | None
+
+
 def _one_line(value: str) -> str:
     return " ".join(value.split())
 
@@ -84,14 +97,24 @@ def _edited(fields: Iterable[str]) -> tuple[str, ...]:
     return tuple(name for name in EDITABLE_FIELDS if name in wanted)
 
 
-def render_note(note: Note, tz: ZoneInfo) -> str:
+def render_note(note: Note, tz: ZoneInfo, meta: NoteMeta | None = None) -> str:
     front: dict = {}
-    if note.title:
+    if meta is not None:
+        front["id"] = meta.capture_id
+        front["device"] = meta.device_id
+        front["created"] = meta.created.astimezone(tz).isoformat(timespec="seconds")
+        front["duration"] = int(round(meta.duration_s))
+        if meta.title:
+            front["title"] = meta.title
+            front["aliases"] = [meta.title]
+    elif note.title:
         front["title"] = note.title
     if note.summary:
         front["summary"] = note.summary
     if note.tags:
         front["tags"] = list(note.tags)
+    if meta is not None and meta.url:
+        front["url"] = meta.url
     if note.language:
         front["language"] = note.language
     if note.provider:

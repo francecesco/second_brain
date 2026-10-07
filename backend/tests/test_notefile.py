@@ -8,7 +8,8 @@ from secondbrain.notefile import (MAX_MODEL_LEN, MAX_PROVIDER_LEN, MAX_SUMMARY_L
                                   MAX_TAGS, MAX_TITLE_LEN,
                                   EnrichmentInvalid, Note, NoteError, apply_edit,
                                   apply_enrichment, apply_transcript, parse_note,
-                                  parse_tags_input, render_note, validate_enrichment)
+                                  parse_tags_input, render_note, validate_enrichment,
+                                  NoteMeta)
 
 ROME = ZoneInfo("Europe/Rome")
 AT = datetime(2026, 9, 29, 10, 51, 10, tzinfo=UTC)
@@ -183,3 +184,27 @@ def test_empty_transcript_clears_the_previous_enrichment():
     assert (note.enrich_provider, note.enrich_model) == (None, None)
     kept = apply_transcript(old, "nuovo", provider="groq", model="w", language="it", at=AT)
     assert (kept.title, kept.summary) == ("Vecchio", "vecchio")
+
+
+def test_render_with_meta_puts_identity_first_and_aliases():
+    meta = NoteMeta(capture_id="cap_20261007_095829", device_id="70041dd8263c",
+                    created=datetime(2026, 10, 7, 9, 58, 29, tzinfo=UTC), duration_s=6.4,
+                    title="Promemoria piante", url="https://brain.esempio.it/captures/abc")
+    note = Note(transcript="Testo.", title="Promemoria piante", summary="R.", tags=("piante",))
+    text = render_note(note, ROME, meta)
+    head = text.split("---")[1]
+    assert head.startswith("\nid: cap_20261007_095829\ndevice: 70041dd8263c\n"
+                           "created: '2026-10-07T11:58:29+02:00'\nduration: 6\n")
+    assert "title: Promemoria piante\naliases: [Promemoria piante]\nsummary: R.\ntags: [piante]\n" in head
+    assert "url: https://brain.esempio.it/captures/abc\n" in head
+    assert parse_note(text).title == "Promemoria piante"   # i campi in piu' non disturbano il parser
+
+
+def test_render_with_meta_without_url_or_title():
+    # Senza titolo (manuale o automatico) il titolo di default sta solo nel nome del file:
+    # scritto nel frontmatter, rescan lo rileggerebbe come titolo automatico.
+    meta = NoteMeta(capture_id="cap_x", device_id="d", created=datetime(2026, 10, 7, 9, 0, tzinfo=UTC),
+                    duration_s=0.4, title=None, url=None)
+    text = render_note(Note(), ROME, meta)
+    assert "url:" not in text and "title:" not in text and "aliases:" not in text
+    assert "duration: 0\n" in text and parse_note(text).title is None
