@@ -14,7 +14,7 @@ typedef struct {
     uint32_t upload_ms;         // tempo di upload totale
     int32_t  peak;              // picco audio della cattura (0..32767)
     int32_t  last_http;         // status HTTP dell'ultimo upload (0 = nessuno/errore rete)
-    uint32_t free_heap_min;     // heap libero minimo osservato nel ciclo (byte, 0 = mai letto)
+    uint32_t free_heap_min;     // heap libero minimo dal boot (byte, 0 = mai letto): include l'handshake TLS
 } diag_t;
 
 diag_t *diag_begin(const char *mode);   // azzera e apre il record del ciclo corrente

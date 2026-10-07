@@ -215,6 +215,7 @@ static void do_sync(cycle_state_t *st)
         snprintf(manifest_url, sizeof(manifest_url), "%s/firmware/manifest.json", SERVER_BASE_URL);
         esp_err_t r = ota_pull(manifest_url);   // non ritorna se aggiorna
         ESP_LOGI(TAG, "ota_pull -> %s", esp_err_to_name(r));
+        if (r == ESP_ERR_NOT_ALLOWED) st->auth_error = true; // token rifiutato anche a coda vuota: "token ko"
     }
 }
 

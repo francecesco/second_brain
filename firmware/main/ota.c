@@ -82,11 +82,12 @@ static esp_err_t http_get_to_buffer(const char *url, char **out_buf, int *out_le
     int64_t content_length = esp_http_client_fetch_headers(client);
     int status = esp_http_client_get_status_code(client);
     if (status != 200) {
-        if (http_status_is_auth_error(status)) ESP_LOGE(TAG, "manifest: token rifiutato (HTTP %d), controlla DEVICE_TOKEN", status);
+        bool auth = http_status_is_auth_error(status);
+        if (auth) ESP_LOGE(TAG, "manifest: token rifiutato (HTTP %d), controlla DEVICE_TOKEN", status);
         else ESP_LOGE(TAG, "manifest GET status %d", status);
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
-        return ESP_FAIL;
+        return auth ? ESP_ERR_NOT_ALLOWED : ESP_FAIL;
     }
 
     size_t capacity;
@@ -206,11 +207,12 @@ static esp_err_t ota_download_and_apply(const ota_manifest_t *m)
     int64_t content_length = esp_http_client_fetch_headers(client);
     int status = esp_http_client_get_status_code(client);
     if (status != 200) {
-        if (http_status_is_auth_error(status)) ESP_LOGE(TAG, "firmware: token rifiutato (HTTP %d), controlla DEVICE_TOKEN", status);
+        bool auth = http_status_is_auth_error(status);
+        if (auth) ESP_LOGE(TAG, "firmware: token rifiutato (HTTP %d), controlla DEVICE_TOKEN", status);
         else ESP_LOGE(TAG, "firmware GET status %d", status);
         esp_http_client_close(client);
         esp_http_client_cleanup(client);
-        return ESP_FAIL;
+        return auth ? ESP_ERR_NOT_ALLOWED : ESP_FAIL;
     }
     ESP_LOGI(TAG, "download avviato, content-length=%lld", (long long)content_length);
 

@@ -21,6 +21,6 @@ uint32_t diag_now_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
 
 void diag_note_heap(void)
 {
-    uint32_t now = esp_get_free_heap_size();
+    uint32_t now = esp_get_minimum_free_heap_size(); // low-watermark dal boot: vede anche il picco dell'handshake TLS
     if (s_diag.free_heap_min == 0 || now < s_diag.free_heap_min) s_diag.free_heap_min = now;
 }

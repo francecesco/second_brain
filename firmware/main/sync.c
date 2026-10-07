@@ -78,12 +78,12 @@ static int upload_one(const char *name, const char *device_id, const char *bat_p
     if (!write_ok) { ESP_LOGE(TAG, "write interrotta su %s", name); goto out; }
     if (esp_http_client_fetch_headers(c) < 0) { ESP_LOGE(TAG, "fetch_headers fallita su %s", name); goto out; }
     status = esp_http_client_get_status_code(c);
-    diag_get()->last_http = status;
     diag_note_heap();
     ESP_LOGI(TAG, "heap libero dopo la risposta: %lu", (unsigned long)esp_get_free_heap_size());
     // consuma il corpo (piccolo JSON) per chiudere pulito
     while (esp_http_client_read(c, (char *)buf, SYNC_CHUNK) > 0) {}
 out:
+    diag_get()->last_http = status; // 0 se l'open o la scrittura sono falliti
     free(buf);
     esp_http_client_close(c);
     esp_http_client_cleanup(c);
