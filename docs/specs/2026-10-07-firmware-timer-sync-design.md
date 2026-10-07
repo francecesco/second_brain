@@ -1,8 +1,16 @@
 # Firmware — Timer di sync (wake senza tasto) — Design / Spec
 
 **Data:** 2026-10-07
-**Stato:** approvata a sezioni in chat il 2026-10-07; da implementare (piano in
-`docs/plans/2026-10-07-firmware-timer-sync.md`).
+**Stato:** implementato e **verificato sull'hardware il 2026-10-07** via Wi-Fi (branch
+`firmware-timer-sync`, piano `docs/plans/2026-10-07-firmware-timer-sync.md`, 35 test host).
+Verificati: con backend fermo e un file in coda il device si è svegliato da solo a +15 min
+(due volte, 14,5 e 15 min dalla registrazione) e ha caricato il file appena il backend è
+tornato (`201`), con un solo refresh a `1 inviate`; a coda vuota nessuna richiesta per
+35 min e `next_wake_s: 0`; con backend fermo per più tempo il primo wake fallito ha portato
+`retry_attempt` a 1 e `next_wake_s` a 1800 con lo schermo immutato (`server ko`, `coda: 1`).
+Non osservato il secondo raddoppio (3600): coperto dal test host. Deviazioni: nessuna;
+emerso che il DHCP dell'ufficio ha cambiato l'IP del Mac durante la prova (`server ko` fino
+alla build 0.7.7 con il nuovo `SERVER_BASE_URL`), un caso che il tunnel renderà irrilevante.
 
 ## 1. Obiettivo
 
