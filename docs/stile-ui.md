@@ -23,9 +23,9 @@ una pagina nuova nasce coerente senza dover leggere tutto il CSS.
 4. **Etichette in maiuscoletto, numeri in monospazio, orari a matrice di punti.** Tutto
    ciò che è etichetta (menu, briciole, intestazioni di tabella e di sezione, termini
    delle definizioni) è piccolo, maiuscolo e spaziato. Tutto ciò che è identificativo
-   (contatori, dimensioni, id, hash, modelli) è in Space Mono con cifre tabulari. Gli
-   orari delle righe, il marchio e le tessere della griglia sono in Doto, il font a
-   matrice di punti: è il "display" dell'interfaccia, come quello del device.
+   (dimensioni, id, hash, modelli, etichette delle tessere) è in Space Mono con cifre
+   tabulari. Gli orari delle righe, il marchio e i contatori delle tessere sono in Doto,
+   il font a matrice di punti: è il "display" dell'interfaccia, come quello del device.
 5. **Tema chiaro e scuro dalla preferenza del sistema.** Nessun interruttore in pagina.
    Ogni colore passa da una variabile: se una regola nuova usa un colore letterale, nel
    tema scuro si rompe.
@@ -40,7 +40,7 @@ Definiti in `:root` e ridefiniti in `@media (prefers-color-scheme: dark)`.
 | Variabile | Chiaro | Scuro | Uso |
 |---|---|---|---|
 | `--bg` | `#e3e3df` | `#171716` | fondo pagina, campi di input, tessere della griglia |
-| `--panel` | `#f6f6f3` | `#232322` | pannelli, pulsanti, intestazione |
+| `--panel` | `#f6f6f3` | `#232322` | pannelli, pulsanti, intestazione, tessere dell'albero |
 | `--fg` | `#1a1a1a` | `#ececea` | testo |
 | `--mute` | `#74746f` | `#92928c` | testo secondario, etichette, orari, contatori |
 | `--line` | `#c9c9c3` | `#3b3b38` | bordi e hairline |
@@ -51,7 +51,7 @@ Definiti in `:root` e ridefiniti in `@media (prefers-color-scheme: dark)`.
 | `--mark-bg` | `#ffd3bd` | `#5a2a10` | evidenziazione dei risultati di ricerca |
 | `--sans` | Space Grotesk, poi Helvetica Neue, Arial, system-ui | | testo |
 | `--mono` | Space Mono, poi ui-monospace, Menlo | | identificativi e numeri secondari |
-| `--dot` | Doto, poi `--mono` | | orari delle righe, marchio, tessere della griglia |
+| `--dot` | Doto, poi `--mono` | | orari delle righe, marchio, contatori delle tessere |
 
 I tre font sono squadrati, nello spirito di Nothing, e tutti con licenza OFL (file
 `*-OFL.txt` accanto a ciascuno in `web/static/`): Space Grotesk variabile 300–700
@@ -66,12 +66,15 @@ conosce.
 - Etichetta (classe `.lab`, applicata anche a menu, briciole, `th`, `h2` delle card,
   `h3` dei campi AI, `dt` del dettaglio, tag): 10,5 px, maiuscolo, spaziatura 0,14 em,
   peso 600, colore `--mute`. Le `h2` delle card sono a 12 px e in `--fg`.
-- Titolo di una riga: peso 500. Voce corrente dell'albero: peso 600 e `--acc`.
+- Titolo di una riga: peso 500. Voce corrente dell'albero: stesso peso, colore `--acc`.
+- Etichetta delle tessere (albero e griglia): Space Mono 11 px, maiuscolo, spaziatura
+  0,1 em, peso 400.
 - Monospazio (`.mono`, `.count`, `.meta`, `.provenance`, `td.mono`): Space Mono è largo,
   quindi 0,75–0,85 em quando è secondario, sempre `font-variant-numeric: tabular-nums`.
 - Matrice di punti (`--dot`): orari delle righe a 18 px peso 800, marchio a 19 px peso
-  800, tessere della griglia a 17 px peso 700. Mai sotto i 16 px: a dimensioni piccole
-  i punti non si leggono, per contatori e id si usa il monospazio.
+  800, titolo del login a 22 px, contatori delle tessere a 16 px peso 700. Mai sotto i
+  16 px: a dimensioni piccole i punti non si leggono, per i numeri secondari (contatori
+  nel testo, durate, dimensioni) e gli id si usa il monospazio.
 - Niente titoli grandi: la gerarchia la fanno le etichette, gli spazi e le hairline.
 
 ## Dove va l'arancione
@@ -92,7 +95,8 @@ Sì, e solo qui:
 
 No:
 
-- tag, briciole, intestazioni di sezione, contatori, bordi dei pannelli;
+- tag, briciole, intestazioni di sezione, bordi dei pannelli;
+- contatori, salvo quello della voce corrente dell'albero, che segue il suo testo;
 - link normali: sono in `--fg` e passano a `--acc` solo al passaggio del mouse;
 - più di un pulsante pieno nella stessa vista.
 
@@ -186,3 +190,14 @@ Prima di chiudere una modifica di stile:
 3. Guardare gli screenshot davvero: intestazione su una riga, niente scroll
    orizzontale, LED e orario arancione dove previsto, contrasto nel tema scuro.
 4. `docker compose up -d --build` e controllo sul sito vero, ricaricando la pagina.
+
+## Storico delle decisioni
+
+- **2026-10-06** — Direzione scelta tra tre mockup (pannello alla Teenage Engineering,
+  dot matrix alla Nothing, 1-bit come il device): pannello, con dose "moderata" di
+  arancione (la lista "Dove va l'arancione"). Prima versione con Helvetica e JetBrains Mono.
+- **2026-10-06** — Font squadrati nello spirito di Nothing: Space Grotesk, Space Mono,
+  Doto per orari e marchio.
+- **2026-10-07** — Albero a tessere ispirato ai menu a schede di Nothing, contatori in
+  Doto, stessa forma per le tessere della griglia; bordo d'accento solo sulla voce più
+  profonda.
