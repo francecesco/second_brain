@@ -107,7 +107,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `origin` (`github.com/francecesco/second_brain`, pubblico) è fermo alla Fase 1a: il
   push lo fa l'autore.
 - **Hardware e firmware: chiusi**, in attesa della batteria. Firmware sul device: 0.7.4
-  (build del branch `firmware-https-token`, installata via OTA dal backend; `version.txt`
+  (build del codice corrente di `master`, installata via OTA dal backend; `version.txt`
   in git resta 0.1.0), con `SERVER_BASE_URL` del Mac in ufficio (HTTP) e `DEVICE_TOKEN`
   vero. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
   (spec `docs/specs/2026-10-07-firmware-https-token-design.md`): un solo URL per tutte le
@@ -143,7 +143,6 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
    `DEVICE_TOKEN` generato sulla ZimaBoard (`secondbrain device add 70041dd8263c`), poi
    `ALLOW_UNAUTHENTICATED_LAN=false`; Bot Fight Mode spento sull'hostname dei dispositivi
    (altrimenti 403/429: la coda resta, ma non parte niente).
-2. **Merge di `firmware-https-token` in `master`** (decisione dell'autore).
 
 ## Storico
 
