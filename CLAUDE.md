@@ -95,7 +95,10 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   casuali (2,9–4,18 V) per gli impulsi del caricabatterie; `battery_policy.c` deduce la
   sorgente da tensione minima, dispersione dei campioni, trend e link dati USB.
 - Diagnostica senza seriale: `GET /status` → `last_cycle` con i tempi dell'ultimo ciclo
-  reale (ms dall'avvio dell'app), picco audio, byte e tempo di upload.
+  reale (ms dall'avvio dell'app), picco audio, byte e tempo di upload, status HTTP, heap
+  e stack liberi minimi (il 2026-10-07 in HTTP: heap 138 KB, stack del main 7,2 KB su 10).
+  Il record sta in memoria RTC: si legge in DEV MODE solo se il ciclo è stato fatto prima
+  di entrarci e senza togliere l'alimentazione.
 - Il refresh completo dell'e-Paper "lampeggia" in nero per ~2 s: è il pannello, non un
   bug. Il refresh parziale non è implementato.
 - Per riavviare un device fermo in DEV MODE: pressione di PWR (dal firmware 0.4.0), oppure
@@ -106,7 +109,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Tutto su `master`, compreso il backend (`backend-fase1b` e `backend-elaborazione-ai` uniti).
   `origin` (`github.com/francecesco/second_brain`, pubblico) è fermo alla Fase 1a: il
   push lo fa l'autore.
-- **Hardware e firmware: chiusi**, in attesa della batteria. Firmware sul device: 0.7.4
+- **Hardware e firmware: chiusi**, in attesa della batteria. Firmware sul device: 0.7.5
   (build del codice corrente di `master`, installata via OTA dal backend; `version.txt`
   in git resta 0.1.0), con `SERVER_BASE_URL` del Mac in ufficio (HTTP) e `DEVICE_TOKEN`
   vero. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
