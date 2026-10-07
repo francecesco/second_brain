@@ -109,8 +109,9 @@ X-Power-Source: battery                   (oppure usb; X-Battery-Pct solo a batt
 ```
 
 Risposte: `200`/`201` accettata e `409` duplicato → il device cancella il file;
-altri `4xx` → file in `rejected/`; `5xx`, timeout o rete → il file resta e il sync si
-interrompe per quel ciclo.
+`401`/`403` → il file resta, il sync si interrompe e il display dice `token ko`; `429`,
+`5xx`, timeout o rete → il file resta e il sync si interrompe per quel ciclo; altri
+`4xx` → file in `rejected/`.
 
 ## Sviluppo
 

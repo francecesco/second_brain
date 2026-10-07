@@ -143,8 +143,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
    `DEVICE_TOKEN` generato sulla ZimaBoard (`secondbrain device add 70041dd8263c`), poi
    `ALLOW_UNAUTHENTICATED_LAN=false`; Bot Fight Mode spento sull'hostname dei dispositivi
    (altrimenti 403/429: la coda resta, ma non parte niente).
-2. **Merge di `firmware-https-token` in `master`** (decisione dell'autore), poi la
-   cancellazione del branch locale e remoto `backend-stile-pannello`, già fuso.
+2. **Merge di `firmware-https-token` in `master`** (decisione dell'autore).
 
 ## Storico
 
@@ -249,7 +248,7 @@ tutto il /24 (DEV MODE).
 Teenage Engineering, dot matrix alla Nothing, 1-bit come il device): vinta la prima,
 dose moderata di arancione. CSS scritto a mano su variabili, font squadrati vendorizzati (Space Grotesk, Space Mono, Doto),
 LED di stato, voce di menu attiva. Linee guida in `docs/stile-ui.md`. Branch
-`backend-stile-pannello`, in attesa di merge.
+`backend-stile-pannello`, fuso in `master` il 2026-10-07.
 
 ## Idee future e cose rimandate
 

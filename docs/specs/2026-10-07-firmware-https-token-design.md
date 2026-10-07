@@ -9,7 +9,10 @@ Verificati con un quick tunnel di Cloudflare (`*.trycloudflare.com`): token sbag
 con `url` `https://` composto dal backend dallo schema inoltrato); in LAN in HTTP senza
 token upload `201` come prima; OTA pull `0.7.2 → 0.7.3` in LAN con token. Heap libero
 minimo nel ciclo con upload HTTPS: 123 924 byte (nessun `NO_MEM`); il valore dopo il
-download HTTPS non è stato letto (`diag` si azzera al riavvio post-OTA). Deviazioni:
+download HTTPS non è stato letto (`diag` si azzera al riavvio post-OTA). Dalla revisione finale: `last_http` torna a `0` anche su errore di rete dopo un upload
+riuscito nello stesso ciclo; `free_heap_min` usa il low-watermark dal boot (il valore sopra
+era un campione prima e dopo la richiesta, quindi una stima per eccesso); un token
+rifiutato sul manifest a coda vuota mostra `token ko`. Deviazioni:
 `http_status_is_auth_error` sta in `sync_policy.c` (pura, test host) e non in
 `http_client.c`; il quick tunnel ha bisogno di circa un minuto dopo l'avvio prima di
 rispondere. Raccoglie i punti rimandati in §11 della spec `2026-09-28-backend-archivio-design.md`.
@@ -87,7 +90,7 @@ sbagliato o scaduto l'intera coda finirebbe lì al primo ciclo.
 - `wifi_network_t` perde il campo `server`; `wifi_server_base_url()` sparisce da `wifi.h`
   e dai chiamanti (`sync.c`, `app_main.c`). Il log di connessione stampa `SERVER_BASE_URL`.
 - Il test host `test_wifi_select.c` perde il quarto campo delle voci.
-- `secrets.h.example` e `firmware/README.md` aggiornati (sezione configurazione, "Ogni
+- `secrets.h.example` e `README.md` (radice) aggiornati (sezione configurazione, "Ogni
   rete ha il proprio server" sparisce).
 
 ## 5. Client HTTP (`http_client.c`, `http_client.h`)
@@ -124,16 +127,19 @@ bool http_status_is_auth_error(int status);
 
 - `sync_result_t` acquista `bool auth_error`; `sync_run` ritorna `ESP_FAIL` in entrambi i
   casi di stop, come oggi.
-- OTA: un manifest con `401`/`403` viene loggato come "token rifiutato" e il pull salta
-  (oggi ogni status diverso da `200` salta: cambia solo il messaggio).
+- OTA: un manifest (o binario) con `401`/`403` viene loggato come "token rifiutato",
+  `ota_pull` ritorna `ESP_ERR_NOT_ALLOWED` e il ciclo segnala `auth_error` anche a coda
+  vuota: altrimenti dopo una rotazione del token il display direbbe `sync ok`.
 - Funzione pura, test host in `test_policies.c` aggiornato prima dell'implementazione.
 
 ## 7. Display e diagnostica
 
 - Riga 4 del display di stato: `token ko` quando `auth_error` (precede `server ko`).
-- `diag_t` acquista `int32_t last_http` (status dell'ultimo upload, `0` se nessuno) e
-  `uint32_t free_heap_min` (heap libero minimo durante il sync); `GET /status` li espone in
-  `last_cycle` come `last_http` e `free_heap_min`. Serve a diagnosticare senza seriale.
+- `diag_t` acquista `int32_t last_http` (status dell'ultimo upload, `0` se nessuno o
+  errore di rete) e `uint32_t free_heap_min` (low-watermark dell'heap dal boot,
+  `esp_get_minimum_free_heap_size`, letto prima e dopo le richieste: un ciclo è un boot);
+  `GET /status` li espone in `last_cycle` come `last_http` e `free_heap_min`. Serve a
+  diagnosticare senza seriale.
 
 ## 8. Backend e documentazione
 
@@ -142,8 +148,8 @@ bool http_status_is_auth_error(int status);
   politica (`401`/`403` → tiene il file e segnala; `429` → come `5xx`); la nota su
   `ALLOW_UNAUTHENTICATED_LAN` diventa "può tornare `false` quando tutti i dispositivi
   mandano il token".
-- `firmware/README.md`: configurazione (`SERVER_BASE_URL`, `DEVICE_TOKEN`), comportamento
-  della coda, HTTPS.
+- `README.md` (radice, sezione firmware): configurazione (`SERVER_BASE_URL`, `DEVICE_TOKEN`),
+  comportamento della coda, HTTPS.
 - `CLAUDE.md`: stato e "Prossima sessione".
 
 ## 9. Verifica
