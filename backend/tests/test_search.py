@@ -104,3 +104,25 @@ def test_day_page_opens_the_requested_note(notes, recordings):
     text = recordings.client.get(f"/browse/2026/09/23?open={capture_id}").text
     assert (f'id="detail-{capture_id}" hx-get="/captures/{capture_id}" hx-trigger="load"') in text
     assert 'hx-trigger="load"' not in recordings.client.get("/browse/2026/09/23").text
+
+
+def test_tag_counts_orders_by_count_then_name_and_excludes_trash(notes, db, settings):
+    assert search.tag_counts(db) == [("casa", 2), ("lavori", 1), ("lavoro", 1)]
+    library.trash_capture(db, Archive(settings.archive_dir), notes[MORNING], NOW)
+    db.commit()
+    assert search.tag_counts(db) == [("casa", 1), ("lavori", 1), ("lavoro", 1)]
+
+
+def test_tag_counts_without_processed_notes(recordings, db):
+    assert search.tag_counts(db) == []
+
+
+def test_tags_page_shows_one_tile_per_tag(notes, recordings):
+    text = recordings.client.get("/tags").text
+    assert 'href="/search?tag=casa"' in text and ">casa<" in text and ">2<" in text
+    assert text.index(">casa<") < text.index(">lavori<") < text.index(">lavoro<")
+    assert 'class="on" href="/tags"' in text  # voce di menu attiva
+
+
+def test_tags_page_without_tags(recordings):
+    assert "Nessun tag" in recordings.client.get("/tags").text

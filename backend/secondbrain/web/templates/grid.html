@@ -6,5 +6,5 @@
   <a href="{{ href }}"><span class="label">{{ label }}</span><span class="count">{{ count }}</span></a>
   {% endfor %}
 </div>
-{% else %}<p class="empty">Nessuna registrazione.</p>{% endif %}
+{% else %}<p class="empty">{{ empty or "Nessuna registrazione." }}</p>{% endif %}
 {% endblock %}
