@@ -106,7 +106,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Tutto su `master`, compreso il backend (`backend-fase1b` e `backend-elaborazione-ai` uniti).
   `origin` (`github.com/francecesco/second_brain`, pubblico) è fermo alla Fase 1a: il
   push lo fa l'autore.
-- **Hardware e firmware: chiusi**, in attesa della batteria. Firmware sul device: 0.7.3
+- **Hardware e firmware: chiusi**, in attesa della batteria. Firmware sul device: 0.7.4
   (build del branch `firmware-https-token`, installata via OTA dal backend; `version.txt`
   in git resta 0.1.0), con `SERVER_BASE_URL` del Mac in ufficio (HTTP) e `DEVICE_TOKEN`
   vero. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token

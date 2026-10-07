@@ -12,7 +12,8 @@ minimo nel ciclo con upload HTTPS: 123 924 byte (nessun `NO_MEM`); il valore dop
 download HTTPS non è stato letto (`diag` si azzera al riavvio post-OTA). Dalla revisione finale: `last_http` torna a `0` anche su errore di rete dopo un upload
 riuscito nello stesso ciclo; `free_heap_min` usa il low-watermark dal boot (il valore sopra
 era un campione prima e dopo la richiesta, quindi una stima per eccesso); un token
-rifiutato sul manifest a coda vuota mostra `token ko`. Deviazioni:
+rifiutato sul manifest a coda vuota mostra `token ko` (verificato il 2026-10-07 ruotando il
+token sul backend: `token ko`, poi `sync ok` dopo il ripristino; device sulla 0.7.4). Deviazioni:
 `http_status_is_auth_error` sta in `sync_policy.c` (pura, test host) e non in
 `http_client.c`; il quick tunnel ha bisogno di circa un minuto dopo l'avvio prima di
 rispondere. Raccoglie i punti rimandati in §11 della spec `2026-09-28-backend-archivio-design.md`.
