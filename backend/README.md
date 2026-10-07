@@ -59,10 +59,12 @@ data/
     2026/09/28/
       091530_70041dd8263c.wav             audio della registrazione
       091530_70041dd8263c.json            sidecar: metadati della registrazione
-      091530_70041dd8263c.md              nota: trascrizione, titolo, riassunto, tag (YAML, leggibile da Obsidian)
       091530_70041dd8263c.ai.json         risposte grezze dei provider AI, mai modificate
     .incoming/                            upload in corso (<uuid>.tmp), ripulita all'avvio
-    .trash/2026/09/28/...                 cestino, con la stessa struttura dell'archivio
+    .trash/2026/09/28/...                 cestino, con la stessa struttura dell'archivio (qui anche il .md)
+  vault/                                  vault Obsidian (da condividere con Syncthing)
+    Captures/2026/
+      2026-09-28 09.15 Chiamare Marco.md  nota: trascrizione, titolo, riassunto, tag (frontmatter YAML)
   firmware/
     epaper154/
       secondbrain-0.6.2.bin
@@ -72,8 +74,9 @@ data/
 Il nome base di una registrazione è `HHMMSS_<device-id>` (ora locale di registrazione,
 id del dispositivo), con suffisso `_2`, `_3`... in caso di collisione. Ogni file
 "correlato" a una registrazione si chiama `<base>.<qualcosa>`; il sidecar è esattamente
-`<base>.json`. I file sono la fonte di verità: il catalogo Postgres si ricostruisce da
-loro con `secondbrain rescan`.
+`<base>.json`. La nota `.md` sta invece nel vault (vedi "Vault Obsidian"), legata alla
+registrazione dall'`id` nel frontmatter. I file sono la fonte di verità: il catalogo
+Postgres si ricostruisce da loro con `secondbrain rescan`.
 
 ## Comandi
 
@@ -86,7 +89,8 @@ Tutti come `docker compose exec app secondbrain ...`:
 | `device list` | elenca i dispositivi registrati |
 | `set-password [--stdin]` | imposta la password dell'interfaccia web |
 | `unlock` | rimuove i tentativi di login falliti e sblocca l'accesso |
-| `rescan` | ricostruisce il catalogo Postgres dall'archivio su disco |
+| `rescan` | ricostruisce il catalogo Postgres dall'archivio e dal vault su disco |
+| `vault migrate` | sposta nel vault le note `.md` rimaste nell'archivio (una volta, dopo l'aggiornamento) |
 | `firmware publish <file.bin> --version X.Y.Z [--type <tipo>]` | pubblica un binario come release corrente per l'OTA |
 | `firmware rollback [--type <tipo>]` | torna alla release precedente |
 | `firmware list` | elenca le release pubblicate (`*` = corrente) |
@@ -155,8 +159,8 @@ non un `172.x`.
 ## Elaborazione AI
 
 Il servizio `worker` (stessa immagine dell'app) prende dalla coda una nota alla volta:
-la trascrive, poi chiede titolo, riassunto breve e tag, e scrive `<base>.md` e
-`<base>.ai.json` accanto al WAV. Ogni nota nuova entra in coda appena arriva.
+la trascrive, poi chiede titolo, riassunto breve e tag, e scrive la nota nel vault
+(vedi sotto) e `<base>.ai.json` accanto al WAV. Ogni nota nuova entra in coda appena arriva.
 
 **Configurazione**
 
@@ -192,9 +196,38 @@ coda, il finder dice perché: `SETTINGS_KEY` mancante o non valida, elaborazione
 pausa, nessun provider con una chiave o nessuno con un modello di testo. Il worker ritenta dopo 1 min, 5 min, 30 min, 2 h e 6 h; al
 sesto tentativo fallito la nota resta "fallita".
 
-**Correzioni a mano nel `.md`** (es. da Obsidian): dopo aver modificato un `.md`, lanciare
-`secondbrain rescan` prima di correggere quella nota dalla UI o di rielaborarla, altrimenti
-UI e worker riscrivono il `.md` partendo dal catalogo e la modifica si perde.
+**Correzioni a mano nel `.md`** (es. da Obsidian): le riprende il worker entro un minuto
+(vedi "Vault Obsidian"); `secondbrain rescan` resta per la ricostruzione completa.
+
+## Vault Obsidian
+
+Le note delle registrazioni vivono in `DATA_DIR/vault/Captures/<anno>/` come
+`<AAAA-MM-GG> <HH.MM> <titolo>.md`: una sola copia, scritta dal backend e leggibile e
+modificabile con Obsidian (aprire `vault/` come vault). Per averle su telefono e portatile
+si condivide `vault/` con Syncthing (configurazione esterna al backend; i file temporanei
+`.syncthing.*` e i `*.sync-conflict-*` vengono ignorati e segnalati). L'audio resta
+nell'archivio: il frontmatter porta `url`, il link alla registrazione nella UI, se
+`PUBLIC_URL` è impostato nel `.env`.
+
+Frontmatter: `id` (chiave: non toccarlo), `device`, `created`, `duration`, `title` e
+`aliases`, `summary`, `tags`, `url`, poi i campi tecnici (`language`, `provider`, `models`,
+`processed_at`, `edited`). Corpo: la trascrizione.
+
+Cosa si può fare da Obsidian: modificare titolo, riassunto, tag e corpo; rinominare il
+file (la parte dopo l'ora diventa il titolo). Il worker, quando è libero, ogni minuto
+rilegge i file cambiati e applica le differenze come correzioni a mano (`edited`), che
+"Rielabora" non sovrascrive; poi riscrive il file normalizzato e, se il titolo è cambiato,
+lo rinomina. Lo stato dell'ultimo controllo è nella pagina Impostazioni. Note senza `id`,
+con `id` sconosciuto o illeggibili vengono segnalate e lasciate stare: il vault può
+contenere anche note tue.
+
+Dalla UI: titolo, correzione della data, cestino e ripristino rinominano o spostano il
+file (nel cestino la nota sta accanto al WAV in `archive/.trash/`, fuori dal vault); il
+dettaglio elenca la nota tra i file e la serve da `GET /captures/<id>/note`.
+
+Aggiornando da una versione in cui il `.md` stava accanto al WAV: `docker compose exec app
+secondbrain vault migrate` sposta le note esistenti (una volta sola); `rescan` segnala
+quelle ancora nell'archivio.
 
 ## Accesso da fuori con Cloudflare Tunnel
 
@@ -223,7 +256,7 @@ del piano di questa fase).
 
 - **Database** (dispositivi, token, release firmware, utente, sessioni, impostazioni e
   chiavi API cifrate — configurazione, non archivio; trascrizioni, riassunti e tag stanno
-  anche nei `.md` dell'archivio):
+  anche nei `.md` del vault):
 
   ```bash
   docker compose exec -T postgres pg_dump -U secondbrain secondbrain > secondbrain.sql
@@ -232,13 +265,13 @@ del piano di questa fase).
 - **`SETTINGS_KEY`** (nel `.env`): senza, le chiavi API del dump non si decifrano e vanno
   reinserite dalla UI.
 
-**Ripristino su una macchina nuova:** copiare `archive/` e `firmware/` in `DATA_DIR`,
+**Ripristino su una macchina nuova:** copiare `archive/`, `vault/` e `firmware/` in `DATA_DIR`,
 `docker compose up -d`, poi:
 
 - con un dump: `docker compose exec -T postgres psql -U secondbrain secondbrain < secondbrain.sql`;
 - senza dump: `docker compose exec app secondbrain rescan` ricostruisce le
-  registrazioni dal disco, comprese trascrizioni, riassunti e tag dai `.md` (le note
-  senza `.md` tornano in coda); dispositivi, release firmware e impostazioni AI vanno
+  registrazioni dal disco, comprese trascrizioni, riassunti e tag dai `.md` del vault
+  (ricollegati per `id`; le note senza `.md` tornano in coda); dispositivi, release firmware e impostazioni AI vanno
   registrati di nuovo (`secondbrain device add`, `secondbrain firmware publish`, pagina
   Impostazioni).
 
