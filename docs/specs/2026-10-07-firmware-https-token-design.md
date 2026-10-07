@@ -1,9 +1,18 @@
 # Firmware — HTTPS e token verso il backend — Design / Spec
 
 **Data:** 2026-10-07
-**Stato:** approvata a sezioni in chat il 2026-10-07; da implementare (piano in
-`docs/plans/2026-10-07-firmware-https-token.md`). Raccoglie i punti rimandati in §11 della spec
-`2026-09-28-backend-archivio-design.md`.
+**Stato:** implementato e **verificato sull'hardware il 2026-10-07** via Wi-Fi (branch
+`firmware-https-token`, piano `docs/plans/2026-10-07-firmware-https-token.md`, 31 test host).
+Verificati con un quick tunnel di Cloudflare (`*.trycloudflare.com`): token sbagliato →
+`401` dal tunnel, file conservato in `queue/`, display `token ko`, `/status` con
+`last_http: 401`; token giusto → upload `201` e OTA pull `0.7.0 → 0.7.1` in HTTPS (manifest
+con `url` `https://` composto dal backend dallo schema inoltrato); in LAN in HTTP senza
+token upload `201` come prima; OTA pull `0.7.2 → 0.7.3` in LAN con token. Heap libero
+minimo nel ciclo con upload HTTPS: 123 924 byte (nessun `NO_MEM`); il valore dopo il
+download HTTPS non è stato letto (`diag` si azzera al riavvio post-OTA). Deviazioni:
+`http_status_is_auth_error` sta in `sync_policy.c` (pura, test host) e non in
+`http_client.c`; il quick tunnel ha bisogno di circa un minuto dopo l'avvio prima di
+rispondere. Raccoglie i punti rimandati in §11 della spec `2026-09-28-backend-archivio-design.md`.
 
 ## 1. Obiettivo
 

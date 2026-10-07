@@ -101,14 +101,17 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Per riavviare un device fermo in DEV MODE: pressione di PWR (dal firmware 0.4.0), oppure
   push di un firmware, oppure `esptool ... --after hard_reset chip_id` con il cavo dati.
 
-## Stato al 2026-09-30
+## Stato al 2026-10-07
 
 - Tutto su `master`, compreso il backend (`backend-fase1b` e `backend-elaborazione-ai` uniti).
   `origin` (`github.com/francecesco/second_brain`, pubblico) è fermo alla Fase 1a: il
   push lo fa l'autore.
-- **Hardware e firmware: chiusi**, in attesa della batteria. Firmware sul device: 0.6.3
-  (build di test del codice corrente, installata via OTA dal backend; `version.txt` in
-  git resta 0.1.0), conosce rete di casa e ufficio.
+- **Hardware e firmware: chiusi**, in attesa della batteria. Firmware sul device: 0.7.3
+  (build del branch `firmware-https-token`, installata via OTA dal backend; `version.txt`
+  in git resta 0.1.0), con `SERVER_BASE_URL` del Mac in ufficio (HTTP) e `DEVICE_TOKEN`
+  vero. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
+  (spec `docs/specs/2026-10-07-firmware-https-token-design.md`): un solo URL per tutte le
+  reti, 401/403 non svuotano più la coda.
 - Batteria: da acquistare con connettore MX1.25 2 pin (polarità da verificare). All'arrivo:
   prova di mantenimento (acceso dopo il rilascio di PWR e dopo il deep sleep), poi misure
   e taratura (vedi Idee future).
@@ -119,8 +122,9 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - **Elaborazione AI** (spec `docs/specs/2026-09-29-backend-elaborazione-ai-design.md`):
   trascrizione, titolo, riassunto e tag con Groq e Gemini (chiavi inserite dall'autore
   nella pagina Impostazioni, cifrate con `SETTINGS_KEY` del `backend/.env` del Mac), worker
-  separato nel compose, ricerca full-text. Verificata sul Mac il 2026-09-30; alcuni test
-  end-to-end rimandati (vedi "Stato" della spec). Unita in `master` il 2026-09-30.
+  separato nel compose, ricerca full-text. Verificata sul Mac il 2026-09-30 e, per gli
+  scenari rimandati, il 2026-10-07 (vedi "Stato" della spec). Unita in `master` il
+  2026-09-30.
 - Le catture di prova di `capture_server.py` sono state cancellate il 2026-09-29.
 
 ## Prossima sessione
@@ -135,12 +139,12 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
    Con l'elaborazione AI: sulla ZimaBoard va generata una `SETTINGS_KEY` nuova
    (`secondbrain gen-key`) e le chiavi API vanno reinserite dalla pagina Impostazioni; l'archivio
    va su `/mnt/Storage1` (l'eMMC di sistema ha 7 GB liberi).
-2. **Test end-to-end rimandati dell'elaborazione AI** (elenco nello "Stato" della spec):
-   fallback con chiave sbagliata, stop del worker durante una trascrizione, pausa,
-   correzione + Rielabora, ricerca dal telefono, cestino durante l'elaborazione, rescan.
-3. **Firmware "HTTPS + token"** (spec separata, punti in §11 della spec backend): prima
-   di tutto 401/403/429 come errori temporanei (oggi ogni 4xx manda il file in
-   `rejected/`), poi TLS e token. Da provare col tunnel attivo.
+   Col firmware HTTPS + token: `secrets.h` → `SERVER_BASE_URL "https://ingest.<dominio>"` e
+   `DEVICE_TOKEN` generato sulla ZimaBoard (`secondbrain device add 70041dd8263c`), poi
+   `ALLOW_UNAUTHENTICATED_LAN=false`; Bot Fight Mode spento sull'hostname dei dispositivi
+   (altrimenti 403/429: la coda resta, ma non parte niente).
+2. **Merge di `firmware-https-token` in `master`** (decisione dell'autore), poi la
+   cancellazione del branch locale e remoto `backend-stile-pannello`, già fuso.
 
 ## Storico
 
@@ -226,6 +230,21 @@ Su Docker Desktop l'app vede l'IP del gateway, non quello del device. Verificato
 device vero: upload, finder, OTA 0.6.2 → 0.6.3. Poi leggibilità: nomi dei giorni, titolo
 di default per fascia del giorno, icone.
 
+**2026-10-07 — Test end-to-end AI e firmware HTTPS + token.** Verificati sul Mac i sette
+scenari rimandati dell'elaborazione AI (fallback con chiave sbagliata, SIGTERM e SIGKILL
+del worker con lease, pausa, correzione + Rielabora, cestino durante l'elaborazione,
+rescan dopo modifica a mano; ricerca a 390 px con Chrome headless). Emerso: Gemini a
+volte risponde con un candidato senza parti di testo (`content: {}`, STOP, quasi 2000
+token di "thoughts") che veniva letto come silenzio; ora è un errore del servizio con
+fallback. Poi la spec firmware "HTTPS + token" (`docs/specs/2026-10-07-firmware-https-token-design.md`):
+un solo `SERVER_BASE_URL`, `DEVICE_TOKEN` in `secrets.h`, modulo `http_client` con bundle
+di certificati e Bearer, 401/403 → `token ko` senza toccare la coda, 429 come i 5xx,
+`last_http` e `free_heap_min` in `/status`. Verificato con un quick tunnel di Cloudflare
+(`cloudflared tunnel --url`, serve ~1 min di propagazione): 401 dal tunnel con coda intatta,
+upload e OTA pull in HTTPS col token, LAN in HTTP invariata; heap libero minimo con TLS
+124 KB (niente PSRAM). Il device si trova in LAN con `curl http://192.168.0.x/status` su
+tutto il /24 (DEV MODE).
+
 **2026-10-06 — Stile della UI web.** Scelta tra tre direzioni con mockup (pannello alla
 Teenage Engineering, dot matrix alla Nothing, 1-bit come il device): vinta la prima,
 dose moderata di arancione. CSS scritto a mano su variabili, font squadrati vendorizzati (Space Grotesk, Space Mono, Doto),
@@ -250,7 +269,8 @@ LED di stato, voce di menu attiva. Linee guida in `docs/stile-ui.md`. Branch
 - **Latenza di avvio**: beep a ~1,7 s dalla pressione. Il resto è bootloader (~0,4 s) e
   init; sotto il secondo solo con light sleep, da valutare dopo le misure di consumo.
 - **Timer periodico di sync** senza cattura (oggi il wake è solo da tasto).
-- **HTTPS** verso il backend reale; provisioning Wi-Fi senza ricompilare (NVS/BLE).
+- Provisioning Wi-Fi, URL e token senza ricompilare (NVS/BLE); service token di Cloudflare
+  Access come seconda barriera.
 - **Doppia pressione di PWR** come trigger DEV alternativo a USER, se il gesto con GPIO0
   risulta scomodo.
 - Backend: allineare `X-Capture-Ts` (UTC) al fuso locale nelle note; batteria nel digest.

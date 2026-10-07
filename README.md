@@ -74,7 +74,8 @@ scrive l'audio dall'I2S alla SD mentre il task principale aggiorna il display.
 - **Coda = directory** `queue/` sulla SD: un `.wav` è una cattura in attesa, l'ack del
   server lo cancella. Durante la registrazione il file è `.wav.part` con `fsync` ogni
   secondo: se manca l'alimentazione, al boot successivo viene recuperato (se ≥ 1 s) o
-  cancellato. I rifiuti definitivi del server (4xx) finiscono in `queue/rejected/`.
+  cancellato. I rifiuti definitivi del server (`4xx` diversi da `401`/`403`/`429`)
+  finiscono in `queue/rejected/`; un token rifiutato ferma il sync e lascia la coda com'è.
 - **Nomi file** `cap_YYYYMMDD_HHMMSS.wav` in UTC dall'RTC; se l'RTC non è mai stato
   sincronizzato, `cap_unsynced_NNNNNN.wav` con contatore in NVS.
 - **Wi-Fi**: scansione, poi connessione alla rete configurata presente con il segnale
@@ -84,10 +85,13 @@ scrive l'audio dall'I2S alla SD mentre il task principale aggiorna il display.
   l'RTC se l'anno non è valido o l'ultima sincronizzazione ha più di 24 ore. Senza
   batteria l'RTC si azzera quando si toglie l'alimentazione.
 - **OTA**: due partizioni app con rollback. *Pull*: a fine sync il device legge
-  `<server>/firmware/manifest.json` (`{version, url, sha256}`) e se la versione è più
+  `<SERVER_BASE_URL>/firmware/manifest.json` (`{version, url, sha256}`) e se la versione è più
   nuova scarica, verifica lo sha256 e riavvia. *Push* (solo DEV): `POST /ota` con il
   binario nel corpo. Un'immagine appena installata si conferma dopo l'init del display;
   se crasha prima, il bootloader torna alla precedente.
+- **HTTPS e token**: gli URL `https://` sono verificati col bundle di certificati di
+  ESP-IDF; ogni richiesta al backend porta `Authorization: Bearer <DEVICE_TOKEN>` se il
+  token è impostato.
 
 Contratto di upload, che il backend dovrà implementare:
 

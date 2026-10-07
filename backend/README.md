@@ -37,9 +37,10 @@ Incollare l'output di `gen-key` in `SETTINGS_KEY` nel `.env` e ricreare i contai
 `docker compose up -d` (vedi "Elaborazione AI" più sotto): finché manca, il resto del
 servizio funziona ma le note restano in coda senza trascrizione.
 
-Il comando `device add` stampa il token una sola volta: salvarlo, serve al dispositivo
-per autenticarsi (finché il firmware non lo supporta, vedi sotto e §11 della spec,
-`ALLOW_UNAUTHENTICATED_LAN=true` in `.env` accetta upload senza token dalla sola LAN).
+Il comando `device add` stampa il token una sola volta: va in `DEVICE_TOKEN` del
+`secrets.h` del firmware (`device token <mac>` ne genera uno nuovo).
+`ALLOW_UNAUTHENTICATED_LAN=true` in `.env` accetta upload senza token dalla sola LAN;
+quando tutti i dispositivi mandano il token può tornare `false`.
 
 Aprire `http://<host-o-ip>:8000` ed entrare con la password impostata sopra.
 
@@ -127,12 +128,10 @@ assente o non valido, `403` `X-Device-Id` diverso dal dispositivo del token, `41
 errori del server (disco pieno `507`, DB non raggiungibile `503`).
 
 Cosa fa il device con ciascun esito: `201`/`409` → cancella la sua copia (accettata o già
-presente, in entrambi i casi non serve più); qualunque altro `4xx` → il firmware attuale
-sposta il file in `rejected/` (non ritenta, il problema non si risolve da solo);
-`5xx`/timeout → tiene il file e ritenta al ciclo successivo. Per questo, finché il
-firmware non manda il token, `ALLOW_UNAUTHENTICATED_LAN` va tenuto `true`: con `false` le
-richieste del device (senza token) prendono `401`, che è un `4xx`, e il firmware
-sposterebbe l'intera coda in `rejected/`.
+presente, in entrambi i casi non serve più); `401`/`403` → tiene il file, interrompe il
+sync e mostra `token ko` (token da sistemare in `secrets.h`); `429`, `5xx`, timeout →
+tiene il file e ritenta al ciclo successivo; qualunque altro `4xx` → sposta il file in
+`rejected/` (non ritenta, il problema non si risolve da solo).
 
 `GET /firmware/manifest.json` (alias di `GET /firmware/epaper154/manifest.json`) e
 `GET /firmware/<tipo>/<file>.bin` servono l'OTA pull con lo stesso schema
