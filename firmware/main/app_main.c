@@ -43,6 +43,7 @@ typedef struct {
     bool  wifi_ok;
     int   sent, rejected, remaining;
     bool  server_error;
+    bool  auth_error;
     char  capture_msg[32];  // "Salvato 0:07" | "Scartato" | "Max 10:00" | "SD assente" | ...
 } cycle_state_t;
 
@@ -205,7 +206,7 @@ static void do_sync(cycle_state_t *st)
     if (st->sd_ok) {
         sync_result_t r;
         sync_run(SB_SYNC_WINDOW_MS, &r);
-        st->sent = r.sent; st->rejected = r.rejected; st->remaining = r.remaining; st->server_error = r.server_error;
+        st->sent = r.sent; st->rejected = r.rejected; st->remaining = r.remaining; st->server_error = r.server_error; st->auth_error = r.auth_error;
     }
 
     if (!battery_below(SB_BATTERY_MIN_OTA_PCT)) {
@@ -246,6 +247,7 @@ static void show_status(const cycle_state_t *st)
     snprintf(l3, sizeof(l3), "coda: %d  %s", st->remaining, bl);
     if (st->capture_msg[0] && !st->wifi_ok) snprintf(l4, sizeof(l4), "%s / no sync", st->capture_msg);
     else if (!st->wifi_ok) strlcpy(l4, "no sync", sizeof(l4));
+    else if (st->auth_error) strlcpy(l4, "token ko", sizeof(l4));
     else if (st->server_error) strlcpy(l4, "server ko", sizeof(l4));
     else if (st->sent > 0) snprintf(l4, sizeof(l4), "%d inviate", st->sent);
     else if (st->capture_msg[0]) strlcpy(l4, st->capture_msg, sizeof(l4));

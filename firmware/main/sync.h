@@ -7,7 +7,8 @@ typedef struct {
     int  sent;          // file accettati (200/201/409) e cancellati
     int  rejected;      // file spostati in rejected/ (altri 4xx)
     int  remaining;     // file ancora in coda alla fine
-    bool server_error;  // sync interrotto per 5xx/timeout/rete
+    bool server_error;  // sync interrotto per 429/5xx/timeout/rete
+    bool auth_error;    // sync interrotto per 401/403: token da sistemare
 } sync_result_t;
 
 // Presuppone Wi-Fi connesso e SD montata. Non inizia nuovi upload oltre window_ms.

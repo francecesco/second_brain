@@ -126,12 +126,16 @@ esp_err_t sync_run(uint32_t window_ms, sync_result_t *out)
         case SYNC_ACTION_DELETE: queue_delete(names[i]); out->sent++; break;
         case SYNC_ACTION_REJECT: queue_reject(names[i]); out->rejected++; ESP_LOGW(TAG, "%s rifiutato (HTTP %d)", names[i], status); break;
         case SYNC_ACTION_STOP:   out->server_error = true; ESP_LOGW(TAG, "sync interrotto (HTTP %d)", status); i = n; break;
+        case SYNC_ACTION_STOP_AUTH:
+            out->auth_error = true;
+            ESP_LOGE(TAG, "token rifiutato dal server (HTTP %d): coda conservata, controlla DEVICE_TOKEN", status);
+            i = n; break;
         }
     }
     free(names);
     out->remaining = queue_count(NULL);
-    ESP_LOGI(TAG, "sync: inviate=%d rifiutate=%d restano=%d server_error=%d (%lu byte in %lu ms)",
-             out->sent, out->rejected, out->remaining, out->server_error,
+    ESP_LOGI(TAG, "sync: inviate=%d rifiutate=%d restano=%d server_error=%d auth_error=%d (%lu byte in %lu ms)",
+             out->sent, out->rejected, out->remaining, out->server_error, out->auth_error,
              (unsigned long)diag_get()->upload_bytes, (unsigned long)diag_get()->upload_ms);
-    return out->server_error ? ESP_FAIL : ESP_OK;
+    return (out->server_error || out->auth_error) ? ESP_FAIL : ESP_OK;
 }

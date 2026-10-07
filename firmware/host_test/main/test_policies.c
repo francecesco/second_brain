@@ -19,6 +19,13 @@ void test_sync_decide(void) {
     TEST_ASSERT_EQUAL_INT(SYNC_ACTION_REJECT, sync_decide(400));
     TEST_ASSERT_EQUAL_INT(SYNC_ACTION_REJECT, sync_decide(413));
     TEST_ASSERT_EQUAL_INT(SYNC_ACTION_REJECT, sync_decide(404));
+    TEST_ASSERT_EQUAL_INT(SYNC_ACTION_REJECT, sync_decide(422));
+    // Token assente/sbagliato o device diverso dal token: non e' colpa del file,
+    // la coda resta intatta e il sync si ferma (spec HTTPS+token §6).
+    TEST_ASSERT_EQUAL_INT(SYNC_ACTION_STOP_AUTH, sync_decide(401));
+    TEST_ASSERT_EQUAL_INT(SYNC_ACTION_STOP_AUTH, sync_decide(403));
+    // Rate limit (Cloudflare): temporaneo come un 5xx.
+    TEST_ASSERT_EQUAL_INT(SYNC_ACTION_STOP, sync_decide(429));
     TEST_ASSERT_EQUAL_INT(SYNC_ACTION_STOP, sync_decide(500));
     TEST_ASSERT_EQUAL_INT(SYNC_ACTION_STOP, sync_decide(503));
     TEST_ASSERT_EQUAL_INT(SYNC_ACTION_STOP, sync_decide(0));   // errore rete/timeout
