@@ -9,6 +9,11 @@ static const struct { int mv; int pct; } CURVE[] = {
 };
 #define CURVE_N (int)(sizeof(CURVE) / sizeof(CURVE[0]))
 
+int battery_mv_calibrated(int raw_mv)
+{
+    return (raw_mv * SB_BATTERY_MV_SCALE_PERMILLE + 500) / 1000;
+}
+
 int battery_pct_from_mv(int mv)
 {
     if (mv <= CURVE[0].mv) return 0;

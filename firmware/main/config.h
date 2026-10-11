@@ -15,17 +15,21 @@
 #define SB_BEEP_START_MS           120   // uno, all'avvio della registrazione (prima del primo campione)
 #define SB_BEEP_STOP_MS            200   // uno, piu' lungo, dopo il salvataggio
 
-// Sorgente di alimentazione (stima: la scheda non segnala la USB). Da tarare con la batteria.
-#define SB_USB_VOLTAGE_MV          4100  // tensione da caricabatterie: sopra si considera USB (senza
-                                         // batteria si legge 4.14-4.18 V; limite: una batteria appena
-                                         // carica sembra USB finche' non scende sotto questo valore)
+// Taratura della tensione (2026-10-11, senza multimetro): il massimo letto durante la carica,
+// 4091 mV grezzi, sono i 4,20 V di fine carica del caricabatterie. Da rifare col multimetro.
+#define SB_BATTERY_MV_SCALE_PERMILLE 1027  // tensione corretta = grezza * 1,027
+
+// Sorgente di alimentazione (stima: la scheda non segnala la USB). Soglie in mV corretti.
+#define SB_USB_VOLTAGE_MV          4230  // sopra si considera USB: una batteria vera non supera 4,20 V,
+                                         // senza batteria si legge 4,25-4,29 V (4,14-4,18 grezzi)
 #define SB_BATTERY_MIN_RUNNING_MV  3300  // sotto, a batteria il device non sarebbe acceso
 #define SB_BATTERY_MAX_SPREAD_MV   150   // dispersione massima di campioni ravvicinati di una batteria vera
 #define SB_BATTERY_SAMPLES         8     // campioni per lettura, a 5 ms l'uno
 #define SB_CHARGE_RISE_MV          30    // salita tra due cicli che indica carica in corso
 #define SB_CHARGE_TREND_MAX_AGE_S  3600  // la lettura precedente vale solo se piu' recente di cosi'
-#define SB_BATTERY_FULL_MV         4170  // su USB con batteria: da qui "piena" (fine carica a 4,2 V;
-                                         // la fase a tensione costante finale conta gia' come piena)
+#define SB_BATTERY_FULL_MV         4150  // su USB con batteria: da qui "piena" (fine carica a 4,2 V,
+                                         // poi si assesta a ~4,17; la fase finale a tensione costante
+                                         // conta gia' come piena)
 
 // Batteria (§3)
 #define SB_BATTERY_MIN_RECORD_PCT  10   // sotto: niente registrazione, niente Wi-Fi

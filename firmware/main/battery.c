@@ -25,7 +25,7 @@ esp_err_t battery_read(power_state_t *out, bool remember)
     for (int i = 0; i < SB_BATTERY_SAMPLES; i++) {
         float v = 0; int unused = 0;
         if (sensors_read_battery(&v, &unused) == ESP_OK) {
-            int mv = (int)(v * 1000.0f + 0.5f);
+            int mv = battery_mv_calibrated((int)(v * 1000.0f + 0.5f));
             sum += mv; n++;
             if (mv < mn) mn = mv;
             if (mv > mx) mx = mv;

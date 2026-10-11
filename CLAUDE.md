@@ -34,7 +34,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `wifi_select.c`, `ota_manifest.c`, `wifi_bssid.c`) con test unity sull'host in
   `host_test/`. Prima il test che fallisce, poi l'implementazione. Test host:
   `cd firmware/host_test && idf.py build && timeout 10 ./build/host_test.elf`
-  (l'eseguibile non termina da solo). Al 2026-10-11 sono 38 e devono restare verdi.
+  (l'eseguibile non termina da solo). Al 2026-10-11 sono 39 e devono restare verdi.
 - Build senza warning (`-Werror` su format-truncation è attivo).
 - Ogni task del piano finisce con una verifica sull'hardware (log seriale o esito visibile)
   prima del commit; se la verifica scopre un bug, il fix va nello stesso commit o nel
@@ -127,9 +127,9 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Tutto su `master`, compreso il backend (`backend-fase1b` e `backend-elaborazione-ai` uniti).
   `origin` (`github.com/francecesco/second_brain`, pubblico) allineato a `master` il
   2026-10-11 (push su richiesta dell'autore).
-- **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.8.0 (build
-  del codice corrente di `master`, flashata via cavo e pubblicata sul backend del Mac per
-  l'OTA il 2026-10-11; `version.txt` in git resta 0.1.0), con `SERVER_BASE_URL` del Mac in
+- **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.8.1 (build
+  del codice corrente di `master`, flashata via cavo il 2026-10-11; sul backend del Mac è
+  pubblicata la 0.8.0, più bassa, quindi niente downgrade; `version.txt` in git resta 0.1.0), con `SERVER_BASE_URL` del Mac in
   ufficio (HTTP) e `DEVICE_TOKEN` vero. Dal 2026-10-07 il firmware parla HTTPS (bundle di
   certificati) e manda il token
   (spec `docs/specs/2026-10-07-firmware-https-token-design.md`): un solo URL per tutte le
@@ -142,7 +142,9 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Batteria: collegata il 2026-10-11. Display `bat NN%`, `in carica NN%`, `bat piena`
   (da 4,17 V su USB) o `USB` senza batteria; `/status` con `battery_present` e `charge`.
   La percentuale usa ancora la curva LiPo tipica e in carica è sovrastimata: la taratura
-  con una scarica completa l'autore l'ha rimandata. Mantenimento a batteria verificato.
+  con una scarica completa l'autore l'ha rimandata. La **tensione** invece è corretta del
+  2,7 % (`SB_BATTERY_MV_SCALE_PERMILLE`): l'ADC leggeva 4091 mV a fine carica, cioè i
+  4,20 V del caricabatterie (stima senza multimetro, da rifare con una misura vera). Mantenimento a batteria verificato.
 - **Backend Fase 1b** (`backend/`, spec `docs/specs/2026-09-28-backend-archivio-design.md`):
   implementato e verificato col device vero sul Mac (upload, finder, OTA). Gira sul Mac
   in Docker sulla porta 8000 con `ALLOW_UNAUTHENTICATED_LAN=true`; `backend/.env` e
@@ -317,7 +319,10 @@ istantaneo.
 custom, refresh da 1,8 a 1,4 s; font Space Grotesk Bold al posto del Courier da 1 px),
 ora in alto a sinistra, icona della batteria in alto a destra (fulmine in carica, "USB"
 senza batteria), esito in negativo su fascia nera, versione solo in DEV MODE. Layout
-deciso con anteprime renderizzate sul Mac, poi verificato sul device (0.8.0).
+deciso con anteprime renderizzate sul Mac, poi verificato sul device (0.8.0). Poi la
+batteria ferma all'83-86 % da ore su USB: era carica, ma l'ADC leggeva ~110 mV in meno
+(partitore e tolleranza). Fattore ×1,027 ricavato dal massimo in carica, soglia USB a
+4,23 V e "piena" a 4,15 V; verificato: "bat piena" su USB e 96 % appena staccata.
 
 **2026-10-06 — Stile della UI web.** Scelta tra tre direzioni con mockup (pannello alla
 Teenage Engineering, dot matrix alla Nothing, 1-bit come il device): vinta la prima,
