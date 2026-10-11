@@ -63,10 +63,8 @@ void test_queue_part_decide(void);
 void test_sync_decide(void);
 void test_http_status_is_auth_error(void);
 void test_http_url_has_base(void);
-void test_sync_retry_delay_doubles_to_cap(void);
-void test_sync_retry_should_arm(void);
+void test_wake_timer_should_arm(void);
 void test_status_should_refresh(void);
-void test_sync_retry_counts_as_failure(void);
 void test_timesync_needed(void);
 void test_timesync_tm_to_epoch_utc(void);
 
@@ -106,10 +104,8 @@ void app_main(void) {
     RUN_TEST(test_sync_decide);
     RUN_TEST(test_http_status_is_auth_error);
     RUN_TEST(test_http_url_has_base);
-    RUN_TEST(test_sync_retry_delay_doubles_to_cap);
-    RUN_TEST(test_sync_retry_should_arm);
+    RUN_TEST(test_wake_timer_should_arm);
     RUN_TEST(test_status_should_refresh);
-    RUN_TEST(test_sync_retry_counts_as_failure);
     RUN_TEST(test_timesync_needed);
     RUN_TEST(test_timesync_tm_to_epoch_utc);
     RUN_TEST(test_wifi_select_none_visible);

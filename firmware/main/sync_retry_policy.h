@@ -1,19 +1,13 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
-// Timer di sync (spec timer §4): quando riprovare, se armare il timer, se aggiornare il
-// display dopo un wake da timer. Funzioni pure, testate su host.
+#include "battery_policy.h"
+// Wake periodico (spec wake periodico §4): se armare il timer e se aggiornare il display
+// dopo un wake da timer. Funzioni pure, testate su host.
 
-// Ritardo del tentativo n (0 = primo): SB_SYNC_RETRY_MIN_MS raddoppiato, tetto SB_SYNC_RETRY_MAX_MS.
-uint32_t sync_retry_delay_ms(unsigned attempt);
-
-// Vero se va armato il timer: coda non vuota e, a batteria, percentuale non sotto la soglia
-// di sync (SB_BATTERY_MIN_RECORD_PCT). A USB la percentuale non conta.
-bool sync_retry_should_arm(int remaining, bool on_battery, int battery_pct);
-
-// Vero se un wake da timer conta come tentativo fallito (il ritardo raddoppia): non ha
-// inviato niente e lascia file in coda. Se ha fatto progressi si riprova al primo gradino.
-bool sync_retry_counts_as_failure(int sent, int remaining);
+// Vero se va armato il timer di wake (SB_WAKE_PERIOD_MS): sempre, tranne a batteria sotto
+// la soglia di sync (SB_BATTERY_MIN_RECORD_PCT). A USB la percentuale non conta.
+bool wake_timer_should_arm(bool on_battery, int battery_pct);
 
 // Esito del ciclo come lo mostra la riga 4 del display.
 typedef enum {
@@ -25,5 +19,15 @@ typedef enum {
     STATUS_OUTCOME_AUTH_KO,    // "token ko"
 } status_outcome_t;
 
-// Dopo un wake da timer: refresh se sono stati inviati file o l'esito e' cambiato.
-bool status_should_refresh(int sent, status_outcome_t outcome, status_outcome_t shown);
+// Quello che la schermata di stato mostra, senza l'ora (che cambia a ogni wake).
+typedef struct {
+    status_outcome_t outcome;
+    int              remaining;
+    char             ssid[33];   // "" senza rete
+    charge_state_t   charge;
+    int              pct;        // -1 senza batteria
+} status_view_t;
+
+// Dopo un wake da timer: refresh se sono stati inviati file o se la vista e' cambiata; la
+// percentuale conta solo se si sposta di almeno SB_BATTERY_DISPLAY_STEP_PCT punti.
+bool status_should_refresh(int sent, const status_view_t *now, const status_view_t *shown);

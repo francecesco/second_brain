@@ -1,26 +1,20 @@
 #include "sync_retry_policy.h"
 #include "config.h"
+#include <stdlib.h>
+#include <string.h>
 
-uint32_t sync_retry_delay_ms(unsigned attempt)
+bool wake_timer_should_arm(bool on_battery, int battery_pct)
 {
-    uint64_t ms = SB_SYNC_RETRY_MIN_MS;
-    for (unsigned i = 0; i < attempt && ms < SB_SYNC_RETRY_MAX_MS; i++) ms *= 2;
-    return ms > SB_SYNC_RETRY_MAX_MS ? SB_SYNC_RETRY_MAX_MS : (uint32_t)ms;
+    return !(on_battery && battery_pct < SB_BATTERY_MIN_RECORD_PCT);
 }
 
-bool sync_retry_should_arm(int remaining, bool on_battery, int battery_pct)
+bool status_should_refresh(int sent, const status_view_t *now, const status_view_t *shown)
 {
-    if (remaining <= 0) return false;
-    if (on_battery && battery_pct < SB_BATTERY_MIN_RECORD_PCT) return false;
-    return true;
-}
-
-bool sync_retry_counts_as_failure(int sent, int remaining)
-{
-    return sent == 0 && remaining > 0;
-}
-
-bool status_should_refresh(int sent, status_outcome_t outcome, status_outcome_t shown)
-{
-    return sent > 0 || outcome != shown;
+    if (sent > 0) return true;
+    if (now->outcome != shown->outcome || now->remaining != shown->remaining ||
+        now->charge != shown->charge || strcmp(now->ssid, shown->ssid) != 0) {
+        return true;
+    }
+    if ((now->pct < 0) != (shown->pct < 0)) return true;
+    return abs(now->pct - shown->pct) >= SB_BATTERY_DISPLAY_STEP_PCT;
 }

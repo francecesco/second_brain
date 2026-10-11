@@ -56,40 +56,45 @@ void test_http_url_has_base(void) {
     TEST_ASSERT_FALSE(http_url_has_base("https://ingest.esempio.it/x.bin", ""));
 }
 
-void test_sync_retry_delay_doubles_to_cap(void) {
-    TEST_ASSERT_EQUAL_UINT32(15 * 60 * 1000, sync_retry_delay_ms(0));
-    TEST_ASSERT_EQUAL_UINT32(30 * 60 * 1000, sync_retry_delay_ms(1));
-    TEST_ASSERT_EQUAL_UINT32(60 * 60 * 1000, sync_retry_delay_ms(2));
-    TEST_ASSERT_EQUAL_UINT32(4 * 60 * 60 * 1000, sync_retry_delay_ms(4));
-    TEST_ASSERT_EQUAL_UINT32(4 * 60 * 60 * 1000, sync_retry_delay_ms(10));
-    TEST_ASSERT_EQUAL_UINT32(4 * 60 * 60 * 1000, sync_retry_delay_ms(40)); // niente overflow dello shift
+void test_wake_timer_should_arm(void) {
+    // Wake ogni 5 min sempre (spec wake periodico §3): coda e esito non contano.
+    TEST_ASSERT_TRUE(wake_timer_should_arm(false, -1));   // USB senza batteria
+    TEST_ASSERT_TRUE(wake_timer_should_arm(false, 5));    // USB: la percentuale non conta
+    TEST_ASSERT_TRUE(wake_timer_should_arm(true, 50));
+    TEST_ASSERT_TRUE(wake_timer_should_arm(true, SB_BATTERY_MIN_RECORD_PCT));
+    TEST_ASSERT_FALSE(wake_timer_should_arm(true, SB_BATTERY_MIN_RECORD_PCT - 1)); // sotto soglia: solo tasto
 }
 
-void test_sync_retry_should_arm(void) {
-    TEST_ASSERT_FALSE(sync_retry_should_arm(0, false, -1));   // coda vuota, USB
-    TEST_ASSERT_FALSE(sync_retry_should_arm(0, true, 80));    // coda vuota, batteria
-    TEST_ASSERT_TRUE(sync_retry_should_arm(1, false, -1));    // USB: la percentuale non conta
-    TEST_ASSERT_TRUE(sync_retry_should_arm(3, true, 50));
-    TEST_ASSERT_TRUE(sync_retry_should_arm(1, true, SB_BATTERY_MIN_RECORD_PCT));
-    TEST_ASSERT_FALSE(sync_retry_should_arm(1, true, SB_BATTERY_MIN_RECORD_PCT - 1)); // sotto soglia: niente Wi-Fi, niente timer
-}
-
-void test_sync_retry_counts_as_failure(void) {
-    // Un wake da timer "fallisce" (e il ritardo raddoppia) solo se non ha inviato niente e
-    // lascia file in coda: se ha fatto progressi (finestra esaurita, 5xx dopo qualche 201)
-    // si riprova presto, al primo gradino.
-    TEST_ASSERT_TRUE(sync_retry_counts_as_failure(0, 3));
-    TEST_ASSERT_FALSE(sync_retry_counts_as_failure(2, 3));
-    TEST_ASSERT_FALSE(sync_retry_counts_as_failure(0, 0));
-    TEST_ASSERT_FALSE(sync_retry_counts_as_failure(5, 0));
+static status_view_t view(status_outcome_t o, int remaining, const char *ssid, charge_state_t c, int pct) {
+    status_view_t v; memset(&v, 0, sizeof(v));
+    v.outcome = o; v.remaining = remaining; strncpy(v.ssid, ssid, sizeof(v.ssid) - 1); v.charge = c; v.pct = pct;
+    return v;
 }
 
 void test_status_should_refresh(void) {
-    TEST_ASSERT_TRUE(status_should_refresh(2, STATUS_OUTCOME_SENT, STATUS_OUTCOME_SENT));      // inviati: sempre
-    TEST_ASSERT_FALSE(status_should_refresh(0, STATUS_OUTCOME_SERVER_KO, STATUS_OUTCOME_SERVER_KO)); // stesso esito
-    TEST_ASSERT_TRUE(status_should_refresh(0, STATUS_OUTCOME_AUTH_KO, STATUS_OUTCOME_SERVER_KO));   // esito diverso
-    TEST_ASSERT_TRUE(status_should_refresh(0, STATUS_OUTCOME_NO_WIFI, STATUS_OUTCOME_NONE));        // mai mostrato nulla
-    TEST_ASSERT_FALSE(status_should_refresh(0, STATUS_OUTCOME_NO_WIFI, STATUS_OUTCOME_NO_WIFI));
+    status_view_t shown = view(STATUS_OUTCOME_OK, 0, "Casa", CHARGE_DISCHARGING, 77);
+    status_view_t now = shown;
+    TEST_ASSERT_FALSE(status_should_refresh(0, &now, &shown));                 // niente di nuovo
+    TEST_ASSERT_TRUE(status_should_refresh(2, &now, &shown));                  // inviati: sempre
+    now.outcome = STATUS_OUTCOME_SERVER_KO;
+    TEST_ASSERT_TRUE(status_should_refresh(0, &now, &shown));                  // esito diverso
+    now = shown; now.remaining = 1;
+    TEST_ASSERT_TRUE(status_should_refresh(0, &now, &shown));                  // coda diversa
+    now = shown; strcpy(now.ssid, "Ufficio");
+    TEST_ASSERT_TRUE(status_should_refresh(0, &now, &shown));                  // rete diversa
+    now = shown; now.charge = CHARGE_CHARGING;
+    TEST_ASSERT_TRUE(status_should_refresh(0, &now, &shown));                  // USB attaccata/staccata
+    now = shown; now.pct = 76;
+    TEST_ASSERT_FALSE(status_should_refresh(0, &now, &shown));                 // oscillazione di un punto
+    now.pct = 78;
+    TEST_ASSERT_FALSE(status_should_refresh(0, &now, &shown));
+    now.pct = 77 - SB_BATTERY_DISPLAY_STEP_PCT;
+    TEST_ASSERT_TRUE(status_should_refresh(0, &now, &shown));                  // scesa di uno scalino
+    now.pct = 77 + SB_BATTERY_DISPLAY_STEP_PCT;
+    TEST_ASSERT_TRUE(status_should_refresh(0, &now, &shown));
+    status_view_t none; memset(&none, 0, sizeof(none));                        // memoria RTC azzerata
+    now = shown;
+    TEST_ASSERT_TRUE(status_should_refresh(0, &now, &none));
 }
 
 void test_timesync_needed(void) {
