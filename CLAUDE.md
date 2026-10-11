@@ -34,7 +34,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `wifi_select.c`, `ota_manifest.c`, `wifi_bssid.c`) con test unity sull'host in
   `host_test/`. Prima il test che fallisce, poi l'implementazione. Test host:
   `cd firmware/host_test && idf.py build && timeout 10 ./build/host_test.elf`
-  (l'eseguibile non termina da solo). Al 2026-10-11 sono 38 e devono restare verdi.
+  (l'eseguibile non termina da solo). Al 2026-10-11 sono 36 e devono restare verdi.
 - Build senza warning (`-Werror` su format-truncation è attivo).
 - Ogni task del piano finisce con una verifica sull'hardware (log seriale o esito visibile)
   prima del commit; se la verifica scopre un bug, il fix va nello stesso commit o nel
@@ -75,12 +75,14 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   solo con "Massimizza compatibilità" attivo (altrimenti è a 5 GHz) e con la schermata
   Hotspot personale aperta o un dispositivo già collegato; IP `172.20.10.x`. Il backend in
   LAN da lì non si raggiunge: serve il tunnel. Su una rete sconosciuta l'hotspot è anche
-  il modo per dare l'ora al device (NTP).
+  il modo per dare l'ora al device (NTP). iOS trasmette l'hotspot solo con la schermata
+  aperta, con un client collegato o per ~90 s dopo: di fatto è un "sync a richiesta". Il
+  Mac lo vede sempre perché usa l'hotspot istantaneo (Bluetooth/iCloud), non il beacon.
 - Batteria collegata dal 2026-10-11 (1000 mAh, MX1.25). La scheda non dice se la USB è
   collegata né se sta caricando: lo stato si deduce dalla tensione (`battery_policy.c`). Con
   la batteria i campioni sono stabili (spread ~12 mV), senza erano sparsi su 2,9–4,18 V.
-  Il mantenimento a batteria (GPIO17) **non è ancora verificato**: finché non lo è, un
-  distacco della USB può spegnere il device e azzerare l'RTC.
+  Mantenimento a batteria (GPIO17) verificato il 2026-10-11: acceso al rilascio di PWR e
+  di nuovo sveglio dopo il deep sleep, solo a batteria.
 - Per catturare il log di un ciclo normale con il cavo: script Python che aspetta la
   comparsa di `/dev/cu.usbmodem1101` e legge, poi l'utente preme PWR. Per il flash si aspetta
   che la porta resti stabile qualche secondo (DEV MODE), altrimenti sparisce a metà.
@@ -120,21 +122,21 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Tutto su `master`, compreso il backend (`backend-fase1b` e `backend-elaborazione-ai` uniti).
   `origin` (`github.com/francecesco/second_brain`, pubblico) allineato a `master` il
   2026-10-11 (push su richiesta dell'autore).
-- **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.7.8 (build
-  del codice corrente di `master`, flashata via cavo il 2026-10-11; sul backend resta
+- **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.7.9 (build
+  del branch `firmware-wake-periodico`, flashata via cavo il 2026-10-11; sul backend resta
   pubblicata la 0.7.7, più bassa, quindi niente downgrade; `version.txt` in git resta
   0.1.0), con `SERVER_BASE_URL` del Mac in ufficio (HTTP) e `DEVICE_TOKEN` vero. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
   (spec `docs/specs/2026-10-07-firmware-https-token-design.md`): un solo URL per tutte le
-  reti, 401/403 non svuotano più la coda. Dal 2026-10-07 anche il **timer di sync**
-  (spec `docs/specs/2026-10-07-firmware-timer-sync-design.md`): con file in coda il device si
-  risveglia da solo (15 min, raddoppio fino a 4 h), a coda vuota solo da tasto; lo schermo
-  si aggiorna ai wake da timer solo se cambia qualcosa. Numeri in `config.h`, da rivedere
-  con le misure di consumo a batteria.
+  reti, 401/403 non svuotano più la coda. Dal 2026-10-11 il **wake periodico** (spec
+  `docs/specs/2026-10-11-firmware-wake-periodico-design.md`, sostituisce il backoff del timer
+  di sync del 2026-10-07): il device si sveglia da solo ogni 5 min, con o senza coda, tranne
+  a batteria sotto il 10 %; lo schermo si aggiorna ai wake da timer solo se cambiano esito,
+  coda, rete, stato di carica o la percentuale di 2 punti. Branch non ancora fuso in
+  `master`. Intervallo in `config.h`, da rivedere con le misure di consumo a batteria.
 - Batteria: collegata il 2026-10-11. Display `bat NN%`, `in carica NN%`, `bat piena`
   (da 4,17 V su USB) o `USB` senza batteria; `/status` con `battery_present` e `charge`.
   La percentuale usa ancora la curva LiPo tipica e in carica è sovrastimata: la taratura
-  con una scarica completa l'autore l'ha rimandata. Da fare: prova di mantenimento (acceso
-  dopo il rilascio di PWR e dopo il deep sleep, senza USB).
+  con una scarica completa l'autore l'ha rimandata. Mantenimento a batteria verificato.
 - **Backend Fase 1b** (`backend/`, spec `docs/specs/2026-09-28-backend-archivio-design.md`):
   implementato e verificato col device vero sul Mac (upload, finder, OTA). Gira sul Mac
   in Docker sulla porta 8000 con `ALLOW_UNAUTHENTICATED_LAN=true`; `backend/.env` e
@@ -298,7 +300,12 @@ ordine di priorità (prima vinceva il segnale più forte: l'hotspot in tasca avr
 casa) con l'hotspot dell'iPhone come ultima scelta; verificato da una rete sconosciuta:
 al primo ciclo l'hotspot non era ancora visibile, al secondo collegato in ~1,2 s, NTP ok,
 OTA verso il Mac in LAN in timeout (~21 s di Wi-Fi sprecati per ciclo finché non c'è il
-tunnel).
+tunnel). Mantenimento a batteria verificato (77 % a batteria dopo il distacco). Poi il
+**wake periodico** ogni 5 min al posto del timer di sync con backoff: lo schermo staccando
+la USB non cambiava finché non si premeva PWR. Verificato su USB (wake a +298 e +601 s,
+ciclo di ~3,8 s senza reti, schermo fermo) e staccando la USB (passa da solo a "bat NN%").
+Emerso che l'hotspot dell'iPhone di solito non trasmette: il Mac lo vede tramite l'hotspot
+istantaneo.
 
 **2026-10-06 — Stile della UI web.** Scelta tra tre direzioni con mockup (pannello alla
 Teenage Engineering, dot matrix alla Nothing, 1-bit come il device): vinta la prima,
@@ -315,9 +322,9 @@ LED di stato, voce di menu attiva. Linee guida in `docs/stile-ui.md`. Branch
   server, cache su SD, mostrato al posto della schermata di stato.
 - **Refresh parziale e-Paper**: contatore che scorre durante la registrazione, meno
   lampeggi.
-- **Batteria** (collegata, 1000 mAh): verificare per prima cosa che il device resti acceso
-  al rilascio di PWR e dopo il deep sleep (mantenimento GPIO17); poi consumo in deep sleep e
-  per ciclo, autonomia. **Taratura** proposta e rimandata: carica piena registrando la curva
+- **Batteria** (collegata, 1000 mAh, mantenimento verificato): consumo in deep sleep e per
+  ciclo, autonomia col wake ogni 5 min (stima ~1 settimana, ~4 giorni col backend
+  irraggiungibile); se non basta, intervallo diverso a batteria o backoff sui fallimenti. **Taratura** proposta e rimandata: carica piena registrando la curva
   di carica, poi scarica completa a device sveglio con log mV/tempo su SD ogni 30 s fino allo
   spegnimento, CSV letto dalla seriale in DEV MODE; percentuale = frazione di autonomia
   rimasta, 0 % con margine sopra la tensione di spegnimento; curva da sostituire in
