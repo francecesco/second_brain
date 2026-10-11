@@ -221,18 +221,26 @@ static void do_sync(cycle_state_t *st)
     }
 }
 
-// Riga 1: ora locale a sinistra e versione firmware a destra (24 colonne da 8 px).
-static void fmt_time_and_version(char *out, size_t n)
+// Ora locale in alto a sinistra ("--:--" se l'RTC non e' valido). La versione del
+// firmware compare solo nella schermata DEV.
+static void fmt_clock(char *out, size_t n)
 {
-    char clock[8] = "--:--";
     time_t now = time(NULL); struct tm lt; struct tm utc;
     gmtime_r(&now, &utc); localtime_r(&now, &lt);
-    if (capture_name_rtc_valid(&utc)) snprintf(clock, sizeof(clock), "%02d:%02d", lt.tm_hour, lt.tm_min);
-    char ver[16];
-    snprintf(ver, sizeof(ver), "v%s", fw_version());
-    int pad = 24 - (int)strlen(clock) - (int)strlen(ver);
-    if (pad < 1) pad = 1;
-    snprintf(out, n, "%s%*s%s", clock, pad, "", ver);
+    if (capture_name_rtc_valid(&utc)) snprintf(out, n, "%02d:%02d", lt.tm_hour, lt.tm_min);
+    else strlcpy(out, "--:--", n);
+}
+
+// Icona della batteria in alto a destra.
+static screen_battery_t screen_battery(const power_state_t *ps)
+{
+    if (!ps->valid) return SCREEN_BAT_UNKNOWN;
+    switch (ps->charge) {
+    case CHARGE_DISCHARGING: return SCREEN_BAT_DISCHARGING;
+    case CHARGE_CHARGING:    return SCREEN_BAT_CHARGING;
+    case CHARGE_FULL:        return SCREEN_BAT_FULL;
+    default:                 return SCREEN_BAT_NONE;
+    }
 }
 
 static void fmt_wifi_line(bool wifi_ok, char *out, size_t n)
@@ -243,13 +251,14 @@ static void fmt_wifi_line(bool wifi_ok, char *out, size_t n)
 
 static void show_status(const cycle_state_t *st)
 {
-    char l1[32], l2[32], l3[32], l4[48];
-    fmt_time_and_version(l1, sizeof(l1));
+    char l1[8], l2[32], l3[32], l4[48];
+    fmt_clock(l1, sizeof(l1));
     fmt_wifi_line(st->wifi_ok, l2, sizeof(l2));
     char bl[20];
     battery_label(bl, sizeof(bl));
     snprintf(l3, sizeof(l3), "coda: %d  %s", st->remaining, bl);
-    if (st->capture_msg[0] && !st->wifi_ok) snprintf(l4, sizeof(l4), "%s / no sync", st->capture_msg);
+    // Senza rete l'esito della cattura vince su "no sync": "nessuna rete" e' gia' sopra.
+    if (st->capture_msg[0] && !st->wifi_ok) strlcpy(l4, st->capture_msg, sizeof(l4));
     else if (!st->wifi_ok) strlcpy(l4, "no sync", sizeof(l4));
     else if (st->auth_error) strlcpy(l4, "token ko", sizeof(l4));
     else if (st->server_error) strlcpy(l4, "server ko", sizeof(l4));
@@ -257,9 +266,17 @@ static void show_status(const cycle_state_t *st)
     else if (st->capture_msg[0]) strlcpy(l4, st->capture_msg, sizeof(l4));
     else strlcpy(l4, "sync ok", sizeof(l4));
     ESP_LOGI(TAG, "stato: [%s] [%s] [%s] [%s]", l1, l2, l3, l4);
+    const power_state_t *ps = battery_last();
+    const screen_status_t scr = {
+        .clock = l1,
+        .battery = screen_battery(ps),
+        .pct = ps->valid ? ps->pct : -1,
+        .network = st->wifi_ok ? wifi_current_ssid() : NULL,
+        .queue = st->remaining,
+        .outcome = l4,
+    };
     ensure_display();
-    const char *const lines[4] = { l1, l2, l3, l4 };
-    display_lines_n(lines, 4);
+    display_status(&scr);
 }
 
 // Esito della riga 4 come categoria, per decidere se un wake da timer deve aggiornare lo schermo.

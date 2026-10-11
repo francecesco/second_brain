@@ -80,6 +80,8 @@ void test_battery_source_no_battery(void);
 void test_battery_source_rising_means_charging(void);
 void test_battery_present(void);
 void test_battery_charge_state(void);
+void test_screen_battery_fill(void);
+void test_screen_status_draws_outcome_band(void);
 
 void app_main(void) {
     UNITY_BEGIN();
@@ -119,5 +121,7 @@ void app_main(void) {
     RUN_TEST(test_battery_source_rising_means_charging);
     RUN_TEST(test_battery_present);
     RUN_TEST(test_battery_charge_state);
+    RUN_TEST(test_screen_battery_fill);
+    RUN_TEST(test_screen_status_draws_outcome_band);
     UNITY_END();
 }

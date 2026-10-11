@@ -1,16 +1,20 @@
 #pragma once
 #include "esp_err.h"
 #include <stdint.h>
+#include "screen.h"
 
 #define DISPLAY_W 200
 #define DISPLAY_H 200
 
 esp_err_t display_init(void);
 void display_text(const char *line1, const char *line2);
-void display_lines(const char *l1, const char *l2, const char *l3);  // 3 righe, max 24 caratteri ciascuna
+void display_lines(const char *l1, const char *l2, const char *l3);  // 3 righe
 #define DISPLAY_MAX_LINES 5
 void display_lines_n(const char *const lines[], int n);              // fino a 5 righe, spaziatura automatica
 void display_blit_1bit(const uint8_t *buf, int w, int h);
+
+// Schermata di stato (ora, batteria, rete, coda, esito): vedi screen.h.
+void display_status(const screen_status_t *st);
 
 // Come display_text, ma il refresh (~2 s) avviene in un task: il chiamante prosegue
 // subito (es. Wi-Fi). display_wait_idle() attende la fine prima di un nuovo disegno.
