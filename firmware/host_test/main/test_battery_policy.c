@@ -38,8 +38,20 @@ void test_battery_source_no_battery(void) {
 }
 
 void test_battery_source_charger_voltage(void) {
-    TEST_ASSERT_EQUAL_INT(POWER_SRC_USB, guess(4140, 0, 0, false));   // letto sul device senza batteria
+    // senza batteria si leggevano 4140 mV grezzi, cioe' ~4250 corretti: USB
+    TEST_ASSERT_EQUAL_INT(POWER_SRC_USB, guess(battery_mv_calibrated(4140), 0, 0, false));
     TEST_ASSERT_EQUAL_INT(POWER_SRC_BATTERY, guess(4000, 0, 0, false));
+    // batteria piena appena staccata dalla USB (4,20 V): ancora batteria
+    TEST_ASSERT_EQUAL_INT(POWER_SRC_BATTERY, guess(4200, 0, 0, false));
+}
+
+void test_battery_mv_calibrated(void) {
+    // Taratura del 2026-10-11: il massimo letto in carica (4091 mV) sono i 4,20 V di fine carica.
+    int full = battery_mv_calibrated(4091);
+    TEST_ASSERT_TRUE(full >= 4190 && full <= 4210);
+    TEST_ASSERT_EQUAL_INT(0, battery_mv_calibrated(0));
+    // a fine carica, assestata (4059-4070 mV grezzi), conta come piena
+    TEST_ASSERT_EQUAL_INT(CHARGE_FULL, battery_charge_state(POWER_SRC_USB, true, battery_mv_calibrated(4059)));
 }
 
 void test_battery_source_rising_means_charging(void) {

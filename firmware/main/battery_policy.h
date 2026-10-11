@@ -7,6 +7,10 @@
 // collegamento dati USB. Soglie in config.h, da tarare con la batteria reale.
 typedef enum { POWER_SRC_BATTERY, POWER_SRC_USB } power_source_t;
 
+// Tensione corretta dalla lettura grezza dell'ADC (partitore e tolleranza dell'ADC), con il
+// fattore SB_BATTERY_MV_SCALE_PERMILLE. Tutte le soglie in mV sono su valori corretti.
+int battery_mv_calibrated(int raw_mv);
+
 // Percentuale 0-100 da una curva di scarica LiPo tipica (a riposo, 1 cella).
 int battery_pct_from_mv(int mv);
 
