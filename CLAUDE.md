@@ -34,7 +34,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `wifi_select.c`, `ota_manifest.c`, `wifi_bssid.c`) con test unity sull'host in
   `host_test/`. Prima il test che fallisce, poi l'implementazione. Test host:
   `cd firmware/host_test && idf.py build && timeout 10 ./build/host_test.elf`
-  (l'eseguibile non termina da solo). Al 2026-09-28 sono 30 e devono restare verdi.
+  (l'eseguibile non termina da solo). Al 2026-10-11 sono 38 e devono restare verdi.
 - Build senza warning (`-Werror` su format-truncation è attivo).
 - Ogni task del piano finisce con una verifica sull'hardware (log seriale o esito visibile)
   prima del commit; se la verifica scopre un bug, il fix va nello stesso commit o nel
@@ -70,9 +70,20 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   la voce di casa in `secrets.h` forza il BSSID del router `54:78:f0:bd:65:eb`.
 - Rete dell'ufficio ("Advenias"): più AP, associazione in 1–2 s; con budget di 8 s la
   connessione a volte non arrivava, ora è 12 s dopo la scansione.
-- Non c'è batteria collegata: staccando la USB il device si spegne e **l'RTC si azzera**
-  (NTP lo risistema al primo sync). Un taglio di alimentazione durante la registrazione
-  è il test di recupero dei `.part`.
+- Reti in `secrets.h` **in ordine di priorità**: casa, ufficio, hotspot "iPhone di
+  Francesco" (dal 2026-10-11). Vince la prima in vista, non la più forte. L'hotspot si vede
+  solo con "Massimizza compatibilità" attivo (altrimenti è a 5 GHz) e con la schermata
+  Hotspot personale aperta o un dispositivo già collegato; IP `172.20.10.x`. Il backend in
+  LAN da lì non si raggiunge: serve il tunnel. Su una rete sconosciuta l'hotspot è anche
+  il modo per dare l'ora al device (NTP).
+- Batteria collegata dal 2026-10-11 (1000 mAh, MX1.25). La scheda non dice se la USB è
+  collegata né se sta caricando: lo stato si deduce dalla tensione (`battery_policy.c`). Con
+  la batteria i campioni sono stabili (spread ~12 mV), senza erano sparsi su 2,9–4,18 V.
+  Il mantenimento a batteria (GPIO17) **non è ancora verificato**: finché non lo è, un
+  distacco della USB può spegnere il device e azzerare l'RTC.
+- Per catturare il log di un ciclo normale con il cavo: script Python che aspetta la
+  comparsa di `/dev/cu.usbmodem1101` e legge, poi l'utente preme PWR. Per il flash si aspetta
+  che la porta resti stabile qualche secondo (DEV MODE), altrimenti sparisce a metà.
 - Trappola OTA: se sul server resta pubblicata una versione più alta di quella flashata
   (`secondbrain firmware list` sul backend, `ota_serve/firmware/manifest.json` con
   `capture_server.py`), il device si aggiorna a quel binario al primo ciclo. Dopo un flash
@@ -104,24 +115,26 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Per riavviare un device fermo in DEV MODE: pressione di PWR (dal firmware 0.4.0), oppure
   push di un firmware, oppure `esptool ... --after hard_reset chip_id` con il cavo dati.
 
-## Stato al 2026-10-07
+## Stato al 2026-10-11
 
 - Tutto su `master`, compreso il backend (`backend-fase1b` e `backend-elaborazione-ai` uniti).
-  `origin` (`github.com/francecesco/second_brain`, pubblico) è fermo alla Fase 1a: il
-  push lo fa l'autore.
-- **Hardware e firmware: chiusi**, in attesa della batteria. Firmware sul device: 0.7.7
-  (build del codice corrente di `master`, installata via OTA dal backend; `version.txt`
-  in git resta 0.1.0), con `SERVER_BASE_URL` del Mac in ufficio (HTTP) e `DEVICE_TOKEN`
-  vero. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
+  `origin` (`github.com/francecesco/second_brain`, pubblico) allineato a `master` il
+  2026-10-11 (push su richiesta dell'autore).
+- **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.7.8 (build
+  del codice corrente di `master`, flashata via cavo il 2026-10-11; sul backend resta
+  pubblicata la 0.7.7, più bassa, quindi niente downgrade; `version.txt` in git resta
+  0.1.0), con `SERVER_BASE_URL` del Mac in ufficio (HTTP) e `DEVICE_TOKEN` vero. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
   (spec `docs/specs/2026-10-07-firmware-https-token-design.md`): un solo URL per tutte le
   reti, 401/403 non svuotano più la coda. Dal 2026-10-07 anche il **timer di sync**
   (spec `docs/specs/2026-10-07-firmware-timer-sync-design.md`): con file in coda il device si
   risveglia da solo (15 min, raddoppio fino a 4 h), a coda vuota solo da tasto; lo schermo
   si aggiorna ai wake da timer solo se cambia qualcosa. Numeri in `config.h`, da rivedere
   con le misure di consumo a batteria.
-- Batteria: da acquistare con connettore MX1.25 2 pin (polarità da verificare). All'arrivo:
-  prova di mantenimento (acceso dopo il rilascio di PWR e dopo il deep sleep), poi misure
-  e taratura (vedi Idee future).
+- Batteria: collegata il 2026-10-11. Display `bat NN%`, `in carica NN%`, `bat piena`
+  (da 4,17 V su USB) o `USB` senza batteria; `/status` con `battery_present` e `charge`.
+  La percentuale usa ancora la curva LiPo tipica e in carica è sovrastimata: la taratura
+  con una scarica completa l'autore l'ha rimandata. Da fare: prova di mantenimento (acceso
+  dopo il rilascio di PWR e dopo il deep sleep, senza USB).
 - **Backend Fase 1b** (`backend/`, spec `docs/specs/2026-09-28-backend-archivio-design.md`):
   implementato e verificato col device vero sul Mac (upload, finder, OTA). Gira sul Mac
   in Docker sulla porta 8000 con `ALLOW_UNAUTHENTICATED_LAN=true`; `backend/.env` e
@@ -275,6 +288,18 @@ primo raddoppio osservato. Lezioni: `docker compose up --build` per un altro bra
 l'app e rovina una prova con "server fermo"; il DHCP dell'ufficio cambia gli IP di Mac e
 device (il device si ritrova scansionando `/status` sul /24).
 
+**2026-10-11 — Batteria e hotspot.** Collegata la batteria (1000 mAh). Su USB il display
+mostrava solo "USB": ora la batteria si riconosce dai campioni stabili e la percentuale si
+mostra anche in carica, con lo stato dedotto dalla tensione (nessun segnale dal
+caricabatterie). Verificato: "in carica 83%" con la tensione salita 3977 → 4058 mV in
+pochi minuti. L'autore ha fatto notare che l'80 % letto in carica con la curva generica
+non vale: la taratura vera richiede una scarica completa, rimandata. Poi le reti in
+ordine di priorità (prima vinceva il segnale più forte: l'hotspot in tasca avrebbe battuto
+casa) con l'hotspot dell'iPhone come ultima scelta; verificato da una rete sconosciuta:
+al primo ciclo l'hotspot non era ancora visibile, al secondo collegato in ~1,2 s, NTP ok,
+OTA verso il Mac in LAN in timeout (~21 s di Wi-Fi sprecati per ciclo finché non c'è il
+tunnel).
+
 **2026-10-06 — Stile della UI web.** Scelta tra tre direzioni con mockup (pannello alla
 Teenage Engineering, dot matrix alla Nothing, 1-bit come il device): vinta la prima,
 dose moderata di arancione. CSS scritto a mano su variabili, font squadrati vendorizzati (Space Grotesk, Space Mono, Doto),
@@ -290,10 +315,17 @@ LED di stato, voce di menu attiva. Linee guida in `docs/stile-ui.md`. Branch
   server, cache su SD, mostrato al posto della schermata di stato.
 - **Refresh parziale e-Paper**: contatore che scorre durante la registrazione, meno
   lampeggi.
-- **Batteria** (in arrivo): verificare per prima cosa che il device resti acceso al
-  rilascio di PWR e dopo il deep sleep (mantenimento GPIO17); poi consumo in deep sleep e
-  per ciclo, autonomia, curva di scarica reale da sostituire in `battery_policy.c`, soglie
-  di riconoscimento USB e 10/30 %. Con la batteria l'RTC non si azzera più.
+- **Batteria** (collegata, 1000 mAh): verificare per prima cosa che il device resti acceso
+  al rilascio di PWR e dopo il deep sleep (mantenimento GPIO17); poi consumo in deep sleep e
+  per ciclo, autonomia. **Taratura** proposta e rimandata: carica piena registrando la curva
+  di carica, poi scarica completa a device sveglio con log mV/tempo su SD ogni 30 s fino allo
+  spegnimento, CSV letto dalla seriale in DEV MODE; percentuale = frazione di autonomia
+  rimasta, 0 % con margine sopra la tensione di spegnimento; curva da sostituire in
+  `battery_policy.c`, più lo scarto in mV dovuto alla carica. Poi soglie di riconoscimento
+  USB (col caricatore da muro la USB si deduce solo da tensione ≥ 4,1 V o salita tra cicli)
+  e 10/30 %.
+- **Hotspot senza backend raggiungibile**: oggi ogni ciclo via hotspot prova OTA e upload
+  verso un IP LAN irraggiungibile. Si risolve col tunnel; eventualmente timeout più corti.
 - **Spegnimento vero** (GPIO17 a 0) come alternativa al deep sleep per lunghi periodi.
 - **Latenza di avvio**: beep a ~1,7 s dalla pressione. Il resto è bootloader (~0,4 s) e
   init; sotto il secondo solo con light sleep, da valutare dopo le misure di consumo.
