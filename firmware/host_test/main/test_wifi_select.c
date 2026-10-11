@@ -13,6 +13,7 @@ static wifi_scan_entry_t ap(const char *ssid, const char *bssid_txt, int rssi) {
 static const wifi_network_t NETS[] = {
     { "Casa",    "pw1", "54:78:f0:bd:65:eb" },
     { "Ufficio", "pw2", NULL },
+    { "iPhone",  "pw3", NULL },
 };
 
 void test_wifi_select_none_visible(void) {
@@ -35,9 +36,11 @@ void test_wifi_select_home_requires_pinned_bssid(void) {
     TEST_ASSERT_EQUAL_INT(0, wifi_select_best(NETS, 2, scan2, 2));
 }
 
-void test_wifi_select_strongest_wins(void) {
-    wifi_scan_entry_t scan[] = { ap("Ufficio", "aa:aa:aa:aa:aa:aa", -75), ap("Casa", "54:78:f0:bd:65:eb", -60) };
-    TEST_ASSERT_EQUAL_INT(0, wifi_select_best(NETS, 2, scan, 2));
-    scan[0].rssi = -50;
-    TEST_ASSERT_EQUAL_INT(1, wifi_select_best(NETS, 2, scan, 2));
+void test_wifi_select_priority_wins(void) {
+    // L'ordine in secrets.h e' la priorita': casa, ufficio, hotspot. Il segnale non conta.
+    wifi_scan_entry_t scan[] = { ap("iPhone", "bb:bb:bb:bb:bb:bb", -30), ap("Ufficio", "aa:aa:aa:aa:aa:aa", -75),
+                                 ap("Casa", "54:78:f0:bd:65:eb", -85) };
+    TEST_ASSERT_EQUAL_INT(0, wifi_select_best(NETS, 3, scan, 3));
+    TEST_ASSERT_EQUAL_INT(1, wifi_select_best(NETS, 3, scan, 2));
+    TEST_ASSERT_EQUAL_INT(2, wifi_select_best(NETS, 3, scan, 1));
 }

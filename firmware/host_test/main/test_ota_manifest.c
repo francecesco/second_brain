@@ -73,7 +73,7 @@ void test_timesync_tm_to_epoch_utc(void);
 void test_wifi_select_none_visible(void);
 void test_wifi_select_picks_office(void);
 void test_wifi_select_home_requires_pinned_bssid(void);
-void test_wifi_select_strongest_wins(void);
+void test_wifi_select_priority_wins(void);
 
 void test_battery_pct_from_mv(void);
 void test_battery_source_usb_host(void);
@@ -115,7 +115,7 @@ void app_main(void) {
     RUN_TEST(test_wifi_select_none_visible);
     RUN_TEST(test_wifi_select_picks_office);
     RUN_TEST(test_wifi_select_home_requires_pinned_bssid);
-    RUN_TEST(test_wifi_select_strongest_wins);
+    RUN_TEST(test_wifi_select_priority_wins);
     RUN_TEST(test_battery_pct_from_mv);
     RUN_TEST(test_battery_source_usb_host);
     RUN_TEST(test_battery_source_charger_voltage);

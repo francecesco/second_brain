@@ -117,6 +117,7 @@ esp_err_t wifi_connect(int timeout_ms)
                 strlcpy(entries[i].ssid, (const char *)recs[i].ssid, sizeof(entries[i].ssid));
                 memcpy(entries[i].bssid, recs[i].bssid, 6);
                 entries[i].rssi = recs[i].rssi;
+                ESP_LOGI(TAG, "  visto '%s' %d dBm", entries[i].ssid, entries[i].rssi);
             }
             n_entries = n_ap;
         }

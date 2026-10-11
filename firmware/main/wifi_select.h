@@ -16,7 +16,8 @@ typedef struct {
     int8_t  rssi;
 } wifi_scan_entry_t;
 
-// Ritorna l'indice in nets della rete configurata con il segnale migliore tra quelle
-// presenti in scan (SSID uguale; se la voce ha un BSSID, deve coincidere anche quello),
-// oppure -1 se nessuna e' in vista.
+// Ritorna l'indice in nets della prima rete configurata presente in scan (SSID uguale; se
+// la voce ha un BSSID, deve coincidere anche quello), oppure -1 se nessuna e' in vista.
+// L'ordine di nets e' la priorita' (casa, ufficio, hotspot del telefono): il segnale non
+// conta, altrimenti un hotspot vicino vincerebbe sulla rete di casa.
 int wifi_select_best(const wifi_network_t *nets, int n_nets, const wifi_scan_entry_t *scan, int n_scan);
