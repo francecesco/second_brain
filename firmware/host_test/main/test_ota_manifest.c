@@ -80,6 +80,8 @@ void test_battery_source_usb_host(void);
 void test_battery_source_charger_voltage(void);
 void test_battery_source_no_battery(void);
 void test_battery_source_rising_means_charging(void);
+void test_battery_present(void);
+void test_battery_charge_state(void);
 
 void app_main(void) {
     UNITY_BEGIN();
@@ -119,5 +121,7 @@ void app_main(void) {
     RUN_TEST(test_battery_source_charger_voltage);
     RUN_TEST(test_battery_source_no_battery);
     RUN_TEST(test_battery_source_rising_means_charging);
+    RUN_TEST(test_battery_present);
+    RUN_TEST(test_battery_charge_state);
     UNITY_END();
 }

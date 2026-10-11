@@ -106,13 +106,13 @@ esp_err_t sync_run(uint32_t window_ms, sync_result_t *out)
     uint8_t mac[6]; char device_id[13] = "unknown";
     if (esp_read_mac(mac, ESP_MAC_WIFI_STA) == ESP_OK)
         snprintf(device_id, sizeof(device_id), "%02x%02x%02x%02x%02x%02x", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    // Stato dell'alimentazione letto a inizio ciclo (app_main): percentuale solo a batteria.
+    // Stato dell'alimentazione letto a inizio ciclo (app_main): percentuale se c'e' la batteria.
     char bat_pct[8] = "", bat_v[8] = "", src[12] = "";
     const power_state_t *ps = battery_last();
     if (ps->valid) {
         snprintf(bat_v, sizeof(bat_v), "%.2f", ps->mv / 1000.0);
         snprintf(src, sizeof(src), "%s", ps->source == POWER_SRC_USB ? "usb" : "battery");
-        if (ps->source == POWER_SRC_BATTERY) snprintf(bat_pct, sizeof(bat_pct), "%d", ps->pct);
+        if (ps->present) snprintf(bat_pct, sizeof(bat_pct), "%d", ps->pct);
     }
 
     int64_t t0 = esp_timer_get_time();

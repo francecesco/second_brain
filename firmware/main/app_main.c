@@ -246,7 +246,7 @@ static void show_status(const cycle_state_t *st)
     char l1[32], l2[32], l3[32], l4[48];
     fmt_time_and_version(l1, sizeof(l1));
     fmt_wifi_line(st->wifi_ok, l2, sizeof(l2));
-    char bl[16];
+    char bl[20];
     battery_label(bl, sizeof(bl));
     snprintf(l3, sizeof(l3), "coda: %d  %s", st->remaining, bl);
     if (st->capture_msg[0] && !st->wifi_ok) snprintf(l4, sizeof(l4), "%s / no sync", st->capture_msg);

@@ -23,7 +23,10 @@ static esp_err_t status_get(httpd_req_t *req)
     if (sensors_init() == ESP_OK && battery_read(&ps, false) == ESP_OK) {
         cJSON_AddStringToObject(root, "power", ps.source == POWER_SRC_USB ? "usb" : "battery");
         cJSON_AddNumberToObject(root, "battery_v", ps.mv / 1000.0);
-        if (ps.source == POWER_SRC_BATTERY) cJSON_AddNumberToObject(root, "battery_pct", ps.pct);
+        cJSON_AddBoolToObject(root, "battery_present", ps.present);
+        static const char *const CHARGE[] = { "none", "discharging", "charging", "full" };
+        cJSON_AddStringToObject(root, "charge", CHARGE[ps.charge]);
+        if (ps.present) cJSON_AddNumberToObject(root, "battery_pct", ps.pct);
     }
     time_t now = time(NULL); struct tm utc; gmtime_r(&now, &utc);
     char ts[24];

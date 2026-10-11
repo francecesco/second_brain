@@ -15,11 +15,11 @@ static const char *TAG = "battery";
 RTC_DATA_ATTR static int s_prev_mv;
 RTC_DATA_ATTR static int64_t s_prev_epoch;
 
-static power_state_t s_last = { .valid = false, .source = POWER_SRC_USB, .mv = 0, .pct = -1 };
+static power_state_t s_last = { .valid = false, .source = POWER_SRC_USB, .mv = 0, .present = false, .charge = CHARGE_NONE, .pct = -1 };
 
 esp_err_t battery_read(power_state_t *out, bool remember)
 {
-    power_state_t st = { .valid = false, .source = POWER_SRC_USB, .mv = 0, .pct = -1 };
+    power_state_t st = { .valid = false, .source = POWER_SRC_USB, .mv = 0, .present = false, .charge = CHARGE_NONE, .pct = -1 };
     int sum = 0, n = 0, mn = 100000, mx = 0;
     esp_err_t err = ESP_FAIL;
     for (int i = 0; i < SB_BATTERY_SAMPLES; i++) {
@@ -40,10 +40,13 @@ esp_err_t battery_read(power_state_t *out, bool remember)
         int32_t dt = (s_prev_epoch > 0 && now > s_prev_epoch) ? (int32_t)(now - s_prev_epoch) : 0;
         bool usb_host = usb_serial_jtag_is_connected();
         st.source = battery_guess_source(st.mv, mn, mx, s_prev_mv, dt, usb_host);
-        st.pct = st.source == POWER_SRC_BATTERY ? battery_pct_from_mv(st.mv) : -1;
-        ESP_LOGI(TAG, "%d mV [%d..%d] (prec. %d mV, %ld s fa), usb_host=%d -> %s %d%%",
+        st.present = st.source == POWER_SRC_BATTERY || battery_guess_present(mn, mx);
+        st.pct = st.present ? battery_pct_from_mv(st.mv) : -1;
+        st.charge = battery_charge_state(st.source, st.present, st.mv);
+        ESP_LOGI(TAG, "%d mV [%d..%d] (prec. %d mV, %ld s fa), usb_host=%d -> %s, batteria %s %d%% (carica %d)",
                  st.mv, mn, mx, s_prev_mv, (long)dt, usb_host,
-                 st.source == POWER_SRC_USB ? "USB" : "batteria", st.pct);
+                 st.source == POWER_SRC_USB ? "USB" : "batteria",
+                 st.present ? "presente" : "assente", st.pct, (int)st.charge);
         if (remember) { s_prev_mv = st.mv; s_prev_epoch = now; }
     } else {
         ESP_LOGW(TAG, "lettura fallita: %s", esp_err_to_name(err));
@@ -63,6 +66,8 @@ bool battery_below(int pct)
 void battery_label(char *out, int n)
 {
     if (!s_last.valid) snprintf(out, n, "bat ?");
-    else if (s_last.source == POWER_SRC_USB) snprintf(out, n, "USB");
-    else snprintf(out, n, "bat %d%%", s_last.pct);
+    else if (s_last.source == POWER_SRC_BATTERY) snprintf(out, n, "bat %d%%", s_last.pct);
+    else if (s_last.charge == CHARGE_FULL) snprintf(out, n, "bat piena");
+    else if (s_last.charge == CHARGE_CHARGING) snprintf(out, n, "in carica %d%%", s_last.pct);
+    else snprintf(out, n, "USB");
 }

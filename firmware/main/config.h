@@ -24,6 +24,8 @@
 #define SB_BATTERY_SAMPLES         8     // campioni per lettura, a 5 ms l'uno
 #define SB_CHARGE_RISE_MV          30    // salita tra due cicli che indica carica in corso
 #define SB_CHARGE_TREND_MAX_AGE_S  3600  // la lettura precedente vale solo se piu' recente di cosi'
+#define SB_BATTERY_FULL_MV         4170  // su USB con batteria: da qui "piena" (fine carica a 4,2 V;
+                                         // la fase a tensione costante finale conta gia' come piena)
 
 // Batteria (§3)
 #define SB_BATTERY_MIN_RECORD_PCT  10   // sotto: niente registrazione, niente Wi-Fi

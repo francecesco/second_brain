@@ -37,3 +37,15 @@ power_source_t battery_guess_source(int mv, int min_mv, int max_mv, int prev_mv,
     }
     return POWER_SRC_BATTERY;
 }
+
+bool battery_guess_present(int min_mv, int max_mv)
+{
+    return min_mv >= SB_BATTERY_MIN_RUNNING_MV && max_mv - min_mv <= SB_BATTERY_MAX_SPREAD_MV;
+}
+
+charge_state_t battery_charge_state(power_source_t src, bool present, int mv)
+{
+    if (src == POWER_SRC_BATTERY) return CHARGE_DISCHARGING;
+    if (!present) return CHARGE_NONE;
+    return mv >= SB_BATTERY_FULL_MV ? CHARGE_FULL : CHARGE_CHARGING;
+}

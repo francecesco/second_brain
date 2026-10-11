@@ -52,3 +52,24 @@ void test_battery_source_rising_means_charging(void) {
     // tensione in calo: batteria
     TEST_ASSERT_EQUAL_INT(POWER_SRC_BATTERY, guess(3790, 3800, 600, false));
 }
+
+void test_battery_present(void) {
+    // Batteria vera su USB (misurata il 2026-10-11): campioni stabili.
+    TEST_ASSERT_TRUE(battery_guess_present(3970, 3982));
+    // Batteria quasi scarica ma ancora in grado di tenerlo acceso.
+    TEST_ASSERT_TRUE(battery_guess_present(3400, 3420));
+    // Senza batteria: impulsi del caricabatterie, valori sparsi o troppo bassi.
+    TEST_ASSERT_FALSE(battery_guess_present(3000, 4180));
+    TEST_ASSERT_FALSE(battery_guess_present(2906, 2906));
+}
+
+void test_battery_charge_state(void) {
+    // a batteria: si scarica
+    TEST_ASSERT_EQUAL_INT(CHARGE_DISCHARGING, battery_charge_state(POWER_SRC_BATTERY, true, 3900));
+    // USB senza batteria: niente da caricare
+    TEST_ASSERT_EQUAL_INT(CHARGE_NONE, battery_charge_state(POWER_SRC_USB, false, 4140));
+    // USB con batteria: in carica (letto sul device il 2026-10-11)...
+    TEST_ASSERT_EQUAL_INT(CHARGE_CHARGING, battery_charge_state(POWER_SRC_USB, true, 4024));
+    // ...finche' non arriva alla tensione di fine carica
+    TEST_ASSERT_EQUAL_INT(CHARGE_FULL, battery_charge_state(POWER_SRC_USB, true, 4190));
+}
