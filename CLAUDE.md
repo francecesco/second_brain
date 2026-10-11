@@ -34,7 +34,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `wifi_select.c`, `ota_manifest.c`, `wifi_bssid.c`) con test unity sull'host in
   `host_test/`. Prima il test che fallisce, poi l'implementazione. Test host:
   `cd firmware/host_test && idf.py build && timeout 10 ./build/host_test.elf`
-  (l'eseguibile non termina da solo). Al 2026-10-11 sono 36 e devono restare verdi.
+  (l'eseguibile non termina da solo). Al 2026-10-11 sono 38 e devono restare verdi.
 - Build senza warning (`-Werror` su format-truncation è attivo).
 - Ogni task del piano finisce con una verifica sull'hardware (log seriale o esito visibile)
   prima del commit; se la verifica scopre un bug, il fix va nello stesso commit o nel
@@ -112,8 +112,13 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   e stack liberi minimi (il 2026-10-07 in HTTP: heap 138 KB, stack del main 7,2 KB su 10).
   Il record sta in memoria RTC: si legge in DEV MODE solo se il ciclo è stato fatto prima
   di entrarci e senza togliere l'alimentazione.
-- Il refresh completo dell'e-Paper "lampeggia" in nero per ~2 s: è il pannello, non un
-  bug. Il refresh parziale non è implementato.
+- Il refresh completo dell'e-Paper "lampeggia" in nero per ~1,5 s: è il pannello, non un
+  bug. Il refresh parziale non è implementato. Dal 2026-10-11 si usa la forma d'onda di
+  fabbrica (OTP, `0x22=0xF7`): la LUT custom dell'esempio Waveshare dava neri grigi.
+- Schermate disegnate in `screen.c` (C senza ESP-IDF) con Space Grotesk Bold in bitmap
+  (`font_grotesk.c`, generato da `firmware/tools/gen_font.py` dal woff2 della UI web).
+  Anteprima sul Mac senza flash: `cc -I main tools/screen_preview.c main/screen.c
+  main/font_grotesk.c -o /tmp/preview && /tmp/preview <dir>` scrive un PBM per caso.
 - Per riavviare un device fermo in DEV MODE: pressione di PWR (dal firmware 0.4.0), oppure
   push di un firmware, oppure `esptool ... --after hard_reset chip_id` con il cavo dati.
 
@@ -122,7 +127,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Tutto su `master`, compreso il backend (`backend-fase1b` e `backend-elaborazione-ai` uniti).
   `origin` (`github.com/francecesco/second_brain`, pubblico) allineato a `master` il
   2026-10-11 (push su richiesta dell'autore).
-- **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.7.9 (build
+- **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.8.0 (build
   del codice corrente di `master`, flashata via cavo il 2026-10-11; sul backend resta
   pubblicata la 0.7.7, più bassa, quindi niente downgrade; `version.txt` in git resta
   0.1.0), con `SERVER_BASE_URL` del Mac in ufficio (HTTP) e `DEVICE_TOKEN` vero. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
@@ -306,6 +311,12 @@ la USB non cambiava finché non si premeva PWR. Verificato su USB (wake a +298 e
 ciclo di ~3,8 s senza reti, schermo fermo) e staccando la USB (passa da solo a "bat NN%").
 Emerso che l'hotspot dell'iPhone di solito non trasmette: il Mac lo vede tramite l'hotspot
 istantaneo.
+
+**2026-10-11 — Display.** Neri più intensi (forma d'onda di fabbrica al posto della LUT
+custom, refresh da 1,8 a 1,4 s; font Space Grotesk Bold al posto del Courier da 1 px),
+ora in alto a sinistra, icona della batteria in alto a destra (fulmine in carica, "USB"
+senza batteria), esito in negativo su fascia nera, versione solo in DEV MODE. Layout
+deciso con anteprime renderizzate sul Mac, poi verificato sul device (0.8.0).
 
 **2026-10-06 — Stile della UI web.** Scelta tra tre direzioni con mockup (pannello alla
 Teenage Engineering, dot matrix alla Nothing, 1-bit come il device): vinta la prima,
