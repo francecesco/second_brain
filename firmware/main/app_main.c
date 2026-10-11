@@ -272,6 +272,17 @@ static status_outcome_t cycle_outcome(const cycle_state_t *st)
     return STATUS_OUTCOME_OK;
 }
 
+// Quello che la schermata di stato mostra, ora esclusa (spec wake periodico §3.3).
+static status_view_t cycle_view(const cycle_state_t *st)
+{
+    status_view_t v = { .outcome = cycle_outcome(st), .remaining = st->remaining };
+    if (st->wifi_ok && wifi_current_ssid()) strlcpy(v.ssid, wifi_current_ssid(), sizeof(v.ssid));
+    const power_state_t *ps = battery_last();
+    v.charge = ps->valid ? ps->charge : CHARGE_NONE;
+    v.pct = ps->valid ? ps->pct : -1;
+    return v;
+}
+
 static void dev_mode(void)
 {
     power_cycle_deadline_cancel();
@@ -339,24 +350,21 @@ void app_main(void)
     if (mode == BOOT_CAPTURE) do_capture(&st);
 
 
-    if (mode == BOOT_TIMER_SYNC) ESP_LOGI(TAG, "wake dal timer: tentativo %u", retry_state_attempt());
+    if (mode == BOOT_TIMER_SYNC) ESP_LOGI(TAG, "wake dal timer");
     do_sync(&st);
     if (st.sd_ok) st.remaining = queue_count(NULL);
 
-    status_outcome_t outcome = cycle_outcome(&st);
-    bool refresh = (mode != BOOT_TIMER_SYNC) || status_should_refresh(st.sent, outcome, retry_state_shown());
-    if (refresh) { show_status(&st); retry_state_set_shown(outcome); }
-    else ESP_LOGI(TAG, "wake dal timer senza novita' (esito %d, coda %d): display non aggiornato", (int)outcome, st.remaining);
+    status_view_t view = cycle_view(&st);
+    bool refresh = (mode != BOOT_TIMER_SYNC) || status_should_refresh(st.sent, &view, retry_state_shown());
+    if (refresh) { show_status(&st); retry_state_set_shown(&view); }
+    else ESP_LOGI(TAG, "wake dal timer senza novita' (esito %d, coda %d, carica %d, %d%%): display non aggiornato",
+                  (int)view.outcome, view.remaining, (int)view.charge, view.pct);
 
-    // Timer di sync (spec timer §3): il ritardo raddoppia solo tra wake da timer consecutivi
-    // che non hanno inviato niente; un wake che ha fatto progressi riparte dal primo gradino.
-    if (mode == BOOT_TIMER_SYNC && sync_retry_counts_as_failure(st.sent, st.remaining)) retry_state_bump();
-    else retry_state_reset();
+    // Wake periodico (spec wake periodico §3): ogni SB_WAKE_PERIOD_MS, a batteria non sotto
+    // la soglia di sync; altrimenti solo da tasto.
     const power_state_t *ps = battery_last();
     uint32_t timer_ms = 0;
-    if (sync_retry_should_arm(st.remaining, ps->valid && ps->source == POWER_SRC_BATTERY, ps->pct))
-        timer_ms = sync_retry_delay_ms(retry_state_attempt());
-    diag_get()->retry_attempt = retry_state_attempt();
+    if (wake_timer_should_arm(ps->valid && ps->source == POWER_SRC_BATTERY, ps->pct)) timer_ms = SB_WAKE_PERIOD_MS;
     diag_get()->next_wake_s = timer_ms / 1000;
     diag_get()->t_cycle_end = diag_now_ms();
     vTaskDelay(pdMS_TO_TICKS(300));

@@ -30,6 +30,8 @@
 // Batteria (§3)
 #define SB_BATTERY_MIN_RECORD_PCT  10   // sotto: niente registrazione, niente Wi-Fi
 #define SB_BATTERY_MIN_OTA_PCT     30   // sotto: niente OTA pull
+#define SB_BATTERY_DISPLAY_STEP_PCT 2   // a un wake da timer la percentuale ridisegna lo schermo
+                                        // solo se si sposta di tanto (le letture oscillano di 1)
 
 // Rete e sync (§6.3)
 #define SB_WIFI_BUDGET_MS          12000  // dopo la scansione; su AP affollati 8 s non bastano
@@ -37,9 +39,9 @@
 #define SB_OTA_MANIFEST_TIMEOUT_MS 10000  // GET del manifest (pochi byte)
 #define SB_OTA_DOWNLOAD_TIMEOUT_MS 15000  // inattivita' socket durante il download del binario
 #define SB_SYNC_WINDOW_MS          (3 * 60 * 1000)
-// Timer di sync (spec timer §3-4): con file in coda il device si risveglia da solo.
-#define SB_SYNC_RETRY_MIN_MS       (15 * 60 * 1000)      // primo tentativo
-#define SB_SYNC_RETRY_MAX_MS       (4 * 60 * 60 * 1000)  // tetto del raddoppio
+// Wake periodico (spec wake periodico §3): il device si risveglia da solo per sync, OTA
+// e display, con o senza file in coda. Da rivedere con le misure di consumo a batteria.
+#define SB_WAKE_PERIOD_MS          (5 * 60 * 1000)
 
 // Scadenza di ciclo (§4): deep sleep forzato se il ciclo si blocca.
 #define SB_CYCLE_DEADLINE_MS       (5 * 60 * 1000)
