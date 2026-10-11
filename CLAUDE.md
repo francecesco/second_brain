@@ -123,7 +123,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `origin` (`github.com/francecesco/second_brain`, pubblico) allineato a `master` il
   2026-10-11 (push su richiesta dell'autore).
 - **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.7.9 (build
-  del branch `firmware-wake-periodico`, flashata via cavo il 2026-10-11; sul backend resta
+  del codice corrente di `master`, flashata via cavo il 2026-10-11; sul backend resta
   pubblicata la 0.7.7, più bassa, quindi niente downgrade; `version.txt` in git resta
   0.1.0), con `SERVER_BASE_URL` del Mac in ufficio (HTTP) e `DEVICE_TOKEN` vero. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
   (spec `docs/specs/2026-10-07-firmware-https-token-design.md`): un solo URL per tutte le
@@ -131,8 +131,8 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `docs/specs/2026-10-11-firmware-wake-periodico-design.md`, sostituisce il backoff del timer
   di sync del 2026-10-07): il device si sveglia da solo ogni 5 min, con o senza coda, tranne
   a batteria sotto il 10 %; lo schermo si aggiorna ai wake da timer solo se cambiano esito,
-  coda, rete, stato di carica o la percentuale di 2 punti. Branch non ancora fuso in
-  `master`. Intervallo in `config.h`, da rivedere con le misure di consumo a batteria.
+  coda, rete, stato di carica o la percentuale di 2 punti. Fuso in `master` il
+  2026-10-11. Intervallo in `config.h`, da rivedere con le misure di consumo a batteria.
 - Batteria: collegata il 2026-10-11. Display `bat NN%`, `in carica NN%`, `bat piena`
   (da 4,17 V su USB) o `USB` senza batteria; `/status` con `battery_present` e `charge`.
   La percentuale usa ancora la curva LiPo tipica e in carica è sovrastimata: la taratura
