@@ -128,9 +128,10 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `origin` (`github.com/francecesco/second_brain`, pubblico) allineato a `master` il
   2026-10-11 (push su richiesta dell'autore).
 - **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.8.0 (build
-  del codice corrente di `master`, flashata via cavo il 2026-10-11; sul backend resta
-  pubblicata la 0.7.7, più bassa, quindi niente downgrade; `version.txt` in git resta
-  0.1.0), con `SERVER_BASE_URL` del Mac in ufficio (HTTP) e `DEVICE_TOKEN` vero. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
+  del codice corrente di `master`, flashata via cavo e pubblicata sul backend del Mac per
+  l'OTA il 2026-10-11; `version.txt` in git resta 0.1.0), con `SERVER_BASE_URL` del Mac in
+  ufficio (HTTP) e `DEVICE_TOKEN` vero. Dal 2026-10-07 il firmware parla HTTPS (bundle di
+  certificati) e manda il token
   (spec `docs/specs/2026-10-07-firmware-https-token-design.md`): un solo URL per tutte le
   reti, 401/403 non svuotano più la coda. Dal 2026-10-11 il **wake periodico** (spec
   `docs/specs/2026-10-11-firmware-wake-periodico-design.md`, sostituisce il backoff del timer
