@@ -5,8 +5,12 @@
 `backend-fase1b`, piano `docs/plans/2026-09-28-backend-archivio.md`, task 1–13, 252 test
 su Postgres reale). Verificati: upload dal device in LAN senza token (`201`), finder da
 Mac e telefono, login, titolo, cestino, correzione data, OTA pull 0.6.2 → 0.6.3 servito
-dal backend. **Da fare:** Task 14, deploy sulla ZimaBoard con tunnel Cloudflare, e le
-verifiche di §10 che ne dipendono (IP reale del device, `401` senza token dal tunnel).
+dal backend. **In produzione sulla ZimaBoard dal 2026-10-11** (Task 14), dietro il tunnel
+Cloudflare già presente sull'host, con un solo hostname per UI e dispositivi
+(`DEVICE_HOSTNAME` vuoto) e porta 8100. Verificati: `/healthz` e `/login` dal tunnel,
+`401` senza token anche con lo User-Agent dell'ESP32 (Bot Fight Mode non interviene),
+upload del device vero via HTTPS col token (`201`), manifest OTA con URL `https://`.
+Restano da fare: login da rete mobile e blocco, riavvio della ZimaBoard, backup.
 Deviazioni/aggiunte emerse in esecuzione: blocco del login per client (`Cf-Connecting-Ip`
 o IP) con tetto globale, login serializzato e comando `secondbrain unlock` (§7); la porta
 è pubblicata solo in IPv4 (un bind IPv6 allargava la regola LAN); `MAX_UPLOAD_BYTES`

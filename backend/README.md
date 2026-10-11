@@ -246,6 +246,13 @@ Attenzione: Bot Fight Mode (o altre protezioni WAF di Cloudflare) sull'hostname 
 dispositivi può bloccare le richieste del firmware, che non è un browser (vedi Task 14
 del piano di questa fase).
 
+**Con un `cloudflared` già presente sull'host** (come sulla ZimaBoard) non serve il profilo
+`tunnel`: si aggiunge un public hostname verso la porta pubblicata dell'app. Se quel
+`cloudflared` è un container sulla rete Docker di default, l'host si raggiunge come
+`http://172.17.0.1:<APP_PORT>`. **Con un solo hostname** per UI e dispositivi lasciare
+`DEVICE_HOSTNAME` vuoto: impostato, quell'hostname risponde solo a `/captures` e
+`/firmware/*` e la UI darebbe 404. Gli upload dal tunnel chiedono comunque il token.
+
 ## Backup e ripristino
 
 - **Archivio** (`archive/`): è la fonte di verità. Basta uno snapshot del NAS o:

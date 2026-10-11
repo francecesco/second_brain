@@ -60,11 +60,16 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   Senza cavo dati (USB solo alimentazione) si lavora via Wi-Fi: `POST /ota` per il push,
   `GET /status` per lo stato, OTA pull pubblicando un manifest sul server di test.
 - ESP-IDF v5.3.1 in `~/esp/esp-idf`: `. ~/esp/esp-idf/export.sh` prima di `idf.py`.
-- Server sul Mac: dal 2026-09-29 il device carica sul backend vero (`cd backend && docker
-  compose up -d`, porta 8000; vedi `backend/README.md`). `tools/capture_server.py` resta
-  come server di prova minimale, ma non va avviato insieme al backend (stessa porta).
-  Il device deve avere in `secrets.h` il base URL del Mac **su quella rete** (a casa
-  `192.168.1.28`, in ufficio `192.168.0.244` il 2026-09-29, cambia col DHCP).
+- Server: dal 2026-10-11 il backend di produzione è sulla **ZimaBoard** (`ssh zima`, utente
+  `casaos`, IP Tailscale; in LAN `192.168.1.71`), in `~/secondbrain` con i dati in
+  `/mnt/Storage1/secondbrain`, porta **8100** (la 8000 è di un'altra app, la 8080 di
+  Stremio). Fuori: `https://secondbrain.cescohomelab.com`, un solo hostname per UI e
+  dispositivi, dal tunnel `cloudflared` che c'era già sulla ZimaBoard (container sulla rete
+  Docker di default, servizio verso `172.17.0.1:8100`). Il device usa quell'URL HTTPS da
+  ogni rete. Deploy del codice: sulla ZimaBoard non c'è `rsync`, si usa `git archive
+  --format=tar HEAD:backend | ssh zima 'tar -x -C ~/secondbrain'`, poi `docker compose up
+  -d --build`. Il backend sul Mac (`cd backend && docker compose up -d`, porta 8000) resta
+  per lo sviluppo; `tools/capture_server.py` come server di prova minimale.
 - Rete di casa: due AP con lo stesso SSID FASTWEB; quello con BSSID `cc:2d:21:5f:59:29`
   non inoltra TCP (ping ok, connessioni in timeout in entrambe le direzioni). Per questo
   la voce di casa in `secrets.h` forza il BSSID del router `54:78:f0:bd:65:eb`.
@@ -92,7 +97,8 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   via USB, `secondbrain firmware rollback` o pubblicare la versione flashata.
 - OTA col backend: `docker compose cp <bin> app:/tmp/fw.bin` e `docker compose exec app
   secondbrain firmware publish /tmp/fw.bin --version X.Y.Z`; il manifest è generato
-  dalla release corrente.
+  dalla release corrente. Sulla ZimaBoard prima `scp <bin> zima:/tmp/` e i comandi dentro
+  `ssh zima 'cd ~/secondbrain && ...'`.
 - Audio: l'amplificatore dell'altoparlante (GPIO46) è **attivo alto** e impiega centinaia
   di ms a svegliarsi; il canale I2S TX va aperto solo per il beep (il full-duplex spostava
   il microfono sullo slot sbagliato) con `auto_clear` (altrimenti in underrun ripete
@@ -128,10 +134,10 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `origin` (`github.com/francecesco/second_brain`, pubblico) allineato a `master` il
   2026-10-11 (push su richiesta dell'autore).
 - **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.8.1 (build
-  del codice corrente di `master`, flashata via cavo il 2026-10-11; sul backend del Mac è
-  pubblicata la 0.8.0, più bassa, quindi niente downgrade; `version.txt` in git resta 0.1.0), con `SERVER_BASE_URL` del Mac in
-  ufficio (HTTP) e `DEVICE_TOKEN` vero. Dal 2026-10-07 il firmware parla HTTPS (bundle di
-  certificati) e manda il token
+  del codice corrente di `master`, inviata via `POST /ota` il 2026-10-11 e pubblicata
+  come release corrente sulla ZimaBoard; `version.txt` in git resta 0.1.0), con
+  `SERVER_BASE_URL "https://secondbrain.cescohomelab.com"` e il token generato sulla
+  ZimaBoard. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
   (spec `docs/specs/2026-10-07-firmware-https-token-design.md`): un solo URL per tutte le
   reti, 401/403 non svuotano più la coda. Dal 2026-10-11 il **wake periodico** (spec
   `docs/specs/2026-10-11-firmware-wake-periodico-design.md`, sostituisce il backoff del timer
@@ -146,9 +152,13 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   2,7 % (`SB_BATTERY_MV_SCALE_PERMILLE`): l'ADC leggeva 4091 mV a fine carica, cioè i
   4,20 V del caricabatterie (stima senza multimetro, da rifare con una misura vera). Mantenimento a batteria verificato.
 - **Backend Fase 1b** (`backend/`, spec `docs/specs/2026-09-28-backend-archivio-design.md`):
-  implementato e verificato col device vero sul Mac (upload, finder, OTA). Gira sul Mac
-  in Docker sulla porta 8000 con `ALLOW_UNAUTHENTICATED_LAN=true`; `backend/.env` e
-  `backend/data/` sono locali e gitignored. Manca il Task 14: deploy sulla ZimaBoard.
+  **in produzione sulla ZimaBoard dal 2026-10-11**, partito da zero (database nuovo,
+  `SETTINGS_KEY` nuova generata lì, nuovo token del device in `secrets.h`),
+  `ALLOW_UNAUTHENTICATED_LAN=false`, `PUBLIC_URL=https://secondbrain.cescohomelab.com`,
+  `DEVICE_HOSTNAME` vuoto (con un solo hostname la UI darebbe 404). Release firmware
+  0.8.1 pubblicata lì. Le chiavi API dei provider AI vanno reinserite dalla pagina
+  Impostazioni: senza, il worker resta fermo. Sul Mac resta il backend di sviluppo
+  (`backend/.env` e `backend/data/` locali e gitignored).
 - **Elaborazione AI** (spec `docs/specs/2026-09-29-backend-elaborazione-ai-design.md`):
   trascrizione, titolo, riassunto e tag con Groq e Gemini (chiavi inserite dall'autore
   nella pagina Impostazioni, cifrate con `SETTINGS_KEY` del `backend/.env` del Mac), worker
@@ -165,22 +175,16 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 
 ## Prossima sessione
 
-1. **Deploy sulla ZimaBoard** (Task 14 del piano `docs/plans/2026-09-28-backend-archivio.md`),
-   da casa. Servono dall'autore: dominio Cloudflare e hostname (proposti `brain.<dominio>`
-   per la UI, `ingest.<dominio>` per i dispositivi), `utente@host` SSH, cartella dati
-   (proposta `/DATA/AppData/secondbrain`). Verifiche: `X-Forwarded-Proto` dal tunnel,
-   Bot Fight Mode spento sull'hostname dei dispositivi, IP reale del device nei log (non
-   `172.x`), `401` senza token dal tunnel, login da rete mobile. Poi `secrets.h` punta
-   alla ZimaBoard per la rete di casa.
-   Con l'elaborazione AI: sulla ZimaBoard va generata una `SETTINGS_KEY` nuova
-   (`secondbrain gen-key`) e le chiavi API vanno reinserite dalla pagina Impostazioni; l'archivio
-   va su `/mnt/Storage1` (l'eMMC di sistema ha 7 GB liberi).
-   Col vault: `VAULT_DIR` su `/mnt/Storage1/.../vault` condiviso con Syncthing, `PUBLIC_URL`
-   nel `.env` per i link nelle note, `secondbrain vault migrate` dopo il ripristino dell'archivio.
-   Col firmware HTTPS + token: `secrets.h` → `SERVER_BASE_URL "https://ingest.<dominio>"` e
-   `DEVICE_TOKEN` generato sulla ZimaBoard (`secondbrain device add 70041dd8263c`), poi
-   `ALLOW_UNAUTHENTICATED_LAN=false`; Bot Fight Mode spento sull'hostname dei dispositivi
-   (altrimenti 403/429: la coda resta, ma non parte niente).
+1. **Chiudere il deploy** (Task 14 del piano `docs/plans/2026-09-28-backend-archivio.md`):
+   chiavi API dalla pagina Impostazioni sulla ZimaBoard e verifica dell'elaborazione delle
+   due registrazioni già caricate; dal telefono su rete mobile login e blocco dopo 5
+   tentativi; `sudo reboot` della ZimaBoard con servizi e tunnel che tornano da soli;
+   backup (`pg_dump` del README e snapshot di `/mnt/Storage1/secondbrain`, compresa la
+   `SETTINGS_KEY` del `.env`).
+2. **Vault con Syncthing** sulla ZimaBoard: `/mnt/Storage1/secondbrain/vault` condiviso col
+   Mac, prova con Obsidian vero.
+3. Batteria: scarica completa per la curva della percentuale e misura del consumo per
+   decidere se il wake ogni 5 min regge.
 
 ## Storico
 
@@ -323,6 +327,15 @@ deciso con anteprime renderizzate sul Mac, poi verificato sul device (0.8.0). Po
 batteria ferma all'83-86 % da ore su USB: era carica, ma l'ADC leggeva ~110 mV in meno
 (partitore e tolleranza). Fattore ×1,027 ricavato dal massimo in carica, soglia USB a
 4,23 V e "piena" a 4,15 V; verificato: "bat piena" su USB e 96 % appena staccata.
+
+**2026-10-11 — Deploy sulla ZimaBoard.** Backend in Docker sulla ZimaBoard, partito da
+zero, dati su `/mnt/Storage1/secondbrain`, porta 8100 (8000 e 8080 occupate da altre
+app), esposto da `https://secondbrain.cescohomelab.com` col tunnel `cloudflared` che
+c'era già. Emersi: niente `rsync` sulla ZimaBoard (si usa `git archive`); con un solo
+hostname `DEVICE_HOSTNAME` va lasciato vuoto; lo User-Agent dell'ESP32 passa (`401`
+senza token, niente Bot Fight Mode). Firmware 0.8.1 con l'URL HTTPS del tunnel inviato
+via `POST /ota`: al primo ciclo dal Wi-Fi di casa ha caricato le due registrazioni in
+coda (`201`) e chiesto il manifest; poi release 0.8.1 pubblicata sulla ZimaBoard.
 
 **2026-10-06 — Stile della UI web.** Scelta tra tre direzioni con mockup (pannello alla
 Teenage Engineering, dot matrix alla Nothing, 1-bit come il device): vinta la prima,
