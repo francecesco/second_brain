@@ -1,12 +1,13 @@
 # Firmware — Tasti a click — Design / Spec
 
 **Data:** 2026-10-11
-**Stato:** implementato e **verificato sull'hardware il 2026-10-12** su USB (branch
+**Stato:** implementato e **verificato sull'hardware il 2026-10-12**, su USB e a batteria (branch
 `firmware-tasti-click`, firmware 0.8.3, 43 test host). Verificati: wake con USER dal deep
 sleep senza modalità download (2026-10-11); click di PWR → registrazione, click dopo 8,9 s →
 stop, 8046 ms di audio su 8099, "Salvato 0:08", upload `201`; triplo click → click in più
 visto a 328 ms dall'avvio, registrazione scartata, DEV MODE, click di USER → riavvio; click di
-USER → sync. **Deviazione** da §3.2–3.3: il secondo click di un triplo click spesso cade
+USER → sync. A batteria l'autore ha ripetuto tutti i gesti con esito positivo e la
+registrazione è arrivata sulla ZimaBoard. **Deviazione** da §3.2–3.3: il secondo click di un triplo click spesso cade
 durante l'avvio dell'app (~0,5 s dopo il click che sveglia) e non si vede, quindi qualunque
 click in più nei primi `SB_DEV_CLICK_WINDOW_MS` (2 s dall'avvio) porta in DEV: anche il
 doppio click rapido, che non è più uno stop. Non provato: l'accensione a batteria a scheda

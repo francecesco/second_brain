@@ -147,9 +147,8 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `origin` (`github.com/francecesco/second_brain`, pubblico) allineato a `master` il
   2026-10-11 (push su richiesta dell'autore).
 - **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.8.3 (build
-  del codice corrente di `master` coi tasti a click, flashata via cavo il 2026-10-12; sulla
-  ZimaBoard la release pubblicata è ancora la 0.8.1, più bassa, quindi niente downgrade;
-  `version.txt` in git resta 0.1.0), con
+  del codice corrente di `master` coi tasti a click, flashata via cavo e pubblicata come
+  release corrente sulla ZimaBoard il 2026-10-12; `version.txt` in git resta 0.1.0), con
   `SERVER_BASE_URL "https://secondbrain.cescohomelab.com"` e il token generato sulla
   ZimaBoard. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
   (spec `docs/specs/2026-10-07-firmware-https-token-design.md`): un solo URL per tutte le
@@ -197,9 +196,8 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
    `SETTINGS_KEY` del `.env`).
 2. **Vault con Syncthing** sulla ZimaBoard: `/mnt/Storage1/secondbrain/vault` condiviso col
    Mac, prova con Obsidian vero.
-3. **Tasti a click a batteria**: click sotto registra/ferma con upload, triplo click DEV,
-   click sopra sync, tutto senza USB; poi pubblicare la 0.8.3 sulla ZimaBoard per l'OTA.
-   Non provata l'accensione a batteria da scheda spenta del tutto (PWR tenuto ~1 s).
+3. Tasti: resta da provare l'accensione a batteria da scheda spenta del tutto (PWR tenuto
+   ~1 s).
 4. Batteria: scarica completa per la curva della percentuale e misura del consumo per
    decidere se il wake ogni 5 min regge.
 
@@ -353,7 +351,8 @@ triplo click cade durante l'avvio (~0,5 s) e non si vede, quindi conta come DEV 
 click in più nei primi 2 s. I click li conta un task che campiona PWR ogni 10 ms (il main
 resta bloccato nel refresh dell'e-Paper). Verificato su USB: registrazione di 8 s senza
 perdite con upload dall'ufficio, triplo click con scarto e DEV, uscita con USER, sync con
-USER. Flash senza DEV MODE con `esptool` appena il device si sveglia.
+USER; poi a batteria tutti i gesti, con l'upload arrivato sulla ZimaBoard. Release 0.8.3
+pubblicata per l'OTA. Flash senza DEV MODE con `esptool` appena il device si sveglia.
 
 **2026-10-11 — Deploy sulla ZimaBoard.** Backend in Docker sulla ZimaBoard, partito da
 zero, dati su `/mnt/Storage1/secondbrain`, porta 8100 (8000 e 8080 occupate da altre
