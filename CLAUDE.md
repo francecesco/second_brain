@@ -169,7 +169,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `SETTINGS_KEY` nuova generata lì, nuovo token del device in `secrets.h`),
   `ALLOW_UNAUTHENTICATED_LAN=false`, `PUBLIC_URL=https://secondbrain.cescohomelab.com`,
   `DEVICE_HOSTNAME` vuoto (con un solo hostname la UI darebbe 404). Release firmware
-  pubblicata lì. Chiavi API dei provider AI reinserite dall'autore il 2026-10-12: ciclo
+  0.8.3 pubblicata lì. Chiavi API dei provider AI reinserite dall'autore il 2026-10-12: ciclo
   completo verificato (upload dal device, trascrizione con Groq, nota con titolo nel vault
   `/mnt/Storage1/secondbrain/vault/Captures/`). Sul Mac resta il backend di sviluppo
   (`backend/.env` e `backend/data/` locali e gitignored).
