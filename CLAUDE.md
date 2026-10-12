@@ -189,6 +189,10 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 
 ## Prossima sessione
 
+0. **Deploy sulla ZimaBoard della vista "Da fare" / "Completati" / menu** (in `master`,
+   provata dall'autore sul Mac; sulla ZimaBoard c'è la prima versione): quando l'autore
+   dà l'ok, `git archive --format=tar HEAD:backend | ssh zima 'tar -x -C ~/secondbrain'`
+   e `docker compose up -d --build`.
 1. **Chiudere il deploy** (Task 14 del piano `docs/plans/2026-09-28-backend-archivio.md`):
    dal telefono su rete mobile login e blocco dopo 5 tentativi; `sudo reboot` della ZimaBoard con servizi e tunnel che tornano da soli;
    backup (`pg_dump` del README e snapshot di `/mnt/Storage1/secondbrain`, compresa la
@@ -341,6 +345,16 @@ deciso con anteprime renderizzate sul Mac, poi verificato sul device (0.8.0). Po
 batteria ferma all'83-86 % da ore su USB: era carica, ma l'ADC leggeva ~110 mV in meno
 (partitore e tolleranza). Fattore ×1,027 ricavato dal massimo in carica, soglia USB a
 4,23 V e "piena" a 4,15 V; verificato: "bat piena" su USB e 96 % appena staccata.
+
+**2026-10-12 — Note da fare e menu.** Ogni registrazione si spunta come fatta: esce
+dall'archivio e da "Da fare" e passa in "Completati" (spec
+`docs/specs/2026-10-12-backend-note-da-fare-design.md`); stato nel sidecar (`done_at`), nel
+catalogo (migrazione 0006) e come `completata` nel frontmatter del vault, mai riletto. Il
+titolo di una riga apre e richiude il dettaglio; le voci dell'intestazione stanno in un
+menu a scomparsa, senza "Ricerca". Lezione: la prima versione l'ho mandata subito sulla
+ZimaBoard; l'autore vuole provare prima in locale sul Mac (`docker compose up -d --build`
+in `backend/`, http://localhost:8000) e decide lui il deploy. Sulla ZimaBoard gira ancora
+quella prima versione (casella con titolo barrato, senza "Completati").
 
 **2026-10-12 — Tasti a click.** Tenere premuto per registrare era scomodo: ora il tasto
 sotto (PWR) registra e ferma a click, tre click portano in DEV MODE, il tasto sopra (USER,
