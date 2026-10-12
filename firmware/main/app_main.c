@@ -38,6 +38,8 @@
 #include "status_http.h"
 #include "diag.h"
 #include "battery.h"
+#include "buttons.h"
+#include "button_policy.h"
 
 static const char *TAG = "app";
 
@@ -129,25 +131,27 @@ static void fmt_mmss(uint32_t ms, char *out, size_t n)
     snprintf(out, n, "%lu:%02lu", (unsigned long)(s / 60), (unsigned long)(s % 60));
 }
 
-static void do_capture(cycle_state_t *st)
+// Registrazione a click (spec tasti §3). Ritorna true se un click in piu' nei primi
+// SB_DEV_CLICK_WINDOW_MS chiede la DEV MODE: la registrazione appena partita e' scartata.
+static bool do_capture(cycle_state_t *st)
 {
     diag_t *d = diag_get();
     if (battery_below(SB_BATTERY_MIN_RECORD_PCT)) {
         strlcpy(st->capture_msg, "Batteria scarica", sizeof(st->capture_msg));
-        return;
+        return false;
     }
-    if (!st->sd_ok) { strlcpy(st->capture_msg, "SD assente", sizeof(st->capture_msg)); return; }
+    if (!st->sd_ok) { strlcpy(st->capture_msg, "SD assente", sizeof(st->capture_msg)); return false; }
     uint64_t free_b = 0;
     if (storage_free_bytes(&free_b) == ESP_OK && free_b < SB_SD_MIN_FREE_BYTES) {
         strlcpy(st->capture_msg, "SD piena", sizeof(st->capture_msg));
-        return;
+        return false;
     }
-    if (audio_init_join() != ESP_OK) { strlcpy(st->capture_msg, "Errore audio", sizeof(st->capture_msg)); return; }
+    if (audio_init_join() != ESP_OK) { strlcpy(st->capture_msg, "Errore audio", sizeof(st->capture_msg)); return false; }
 
     char part[QUEUE_PATH_MAX + 32], id[CAPTURE_NAME_MAX + 8];
     if (queue_new_part_path(part, sizeof(part), id, sizeof(id)) != ESP_OK) {
         strlcpy(st->capture_msg, "Errore SD", sizeof(st->capture_msg));
-        return;
+        return false;
     }
     // Beep PRIMA di aprire la registrazione: non finisce nel file e dice "parla ora".
     // L'amplificatore resta acceso per tutta la cattura (i beep non aspettano l'avvio).
@@ -155,7 +159,7 @@ static void do_capture(cycle_state_t *st)
     audio_beep(SB_BEEP_FREQ_HZ, SB_BEEP_START_MS);
     if (capture_start(part) != ESP_OK) {
         strlcpy(st->capture_msg, "Errore SD", sizeof(st->capture_msg));
-        return;
+        return false;
     }
     d->t_capture_start = diag_now_ms();
     power_cycle_deadline_start(SB_CYCLE_DEADLINE_MS + SB_CAPTURE_MAX_MS); // §4: registrazione esclusa dai 5 min
@@ -164,11 +168,24 @@ static void do_capture(cycle_state_t *st)
     display_text("* REC", id);   // ~2 s di refresh, idem
     d->t_rec_shown = diag_now_ms();
 
-    // Il rilascio del tasto lo rileva il task registratore (entro ~130 ms); qui si
-    // aspetta solo che finisca.
-    while (capture_is_running()) vTaskDelay(pdMS_TO_TICKS(50));
+    // I click li annota il task dei tasti, anche mentre qui si aspettava il refresh: il primo
+    // dopo quello di avvio decide. Senza click la registrazione finisce da sola a 10 min.
+    bool dev = false;
+    while (capture_is_running()) {
+        if (buttons_clicks() > 0) {
+            dev = button_capture_gesture(buttons_click_ms(0)) == GESTURE_DEV;
+            ESP_LOGI(TAG, "click di PWR a %lu ms dall'avvio -> %s", (unsigned long)buttons_click_ms(0), dev ? "DEV" : "stop");
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
     capture_result_t r;
     capture_stop(&r);
+    if (dev) {
+        queue_discard(part);
+        audio_amp_enable(false);
+        return true;
+    }
     power_cycle_deadline_start(SB_CYCLE_DEADLINE_MS);
     d->capture_ms = r.duration_ms;
     d->peak = r.peak;
@@ -191,6 +208,7 @@ static void do_capture(cycle_state_t *st)
     audio_amp_enable(false);
     if (r.err != ESP_OK) ESP_LOGW(TAG, "cattura con errore: %s", esp_err_to_name(r.err));
     ESP_LOGI(TAG, "cattura: %s (%s)", st->capture_msg, id);
+    return false;
 }
 
 static void do_sync(cycle_state_t *st)
@@ -320,14 +338,14 @@ static void dev_mode(void)
     const char *const lines[4] = { "DEV MODE", ip, wl, ver };
     display_lines_n(lines, 4);
 
-    // Resta sveglio. Una pressione di PWR (2 campioni consecutivi a 100 ms) riavvia
-    // in NORMAL: e' l'unico modo di uscire dal DEV mode senza togliere alimentazione.
+    // Resta sveglio. Un click di USER (2 campioni consecutivi a 100 ms) riavvia in NORMAL:
+    // non PWR, cosi' un click in piu' del triplo click non chiude subito la DEV MODE.
     int pressed = 0, ticks = 0;
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(100));
-        pressed = power_pwr_pressed() ? pressed + 1 : 0;
+        pressed = power_user_pressed() ? pressed + 1 : 0;
         if (pressed >= 2) {
-            ESP_LOGI(TAG, "PWR premuto in DEV mode: riavvio in NORMAL");
+            ESP_LOGI(TAG, "USER premuto in DEV mode: riavvio in NORMAL");
             display_text("DEV MODE", "riavvio...");
             esp_restart();
         }
@@ -343,6 +361,7 @@ void app_main(void)
     // --- boot base ---
     power_init();
     boot_mode_t mode = power_boot_mode();
+    if (mode == BOOT_CAPTURE) buttons_watch_start();   // subito: i click del triplo click sono rapidi
     ESP_LOGI(TAG, "boot mode: %s", power_boot_mode_name(mode));
     if (mode != BOOT_DEV) diag_begin(power_boot_mode_name(mode)); // in DEV si conserva l'ultimo ciclo reale, per leggerlo da /status
     display_init_async();                  // ~1.2 s di attese su BUSY: corre da solo
@@ -364,7 +383,10 @@ void app_main(void)
     st.sd_ok = (storage_mount() == ESP_OK) && (queue_init() == ESP_OK);
     if (!st.sd_ok) ESP_LOGW(TAG, "SD non disponibile");
 
-    if (mode == BOOT_CAPTURE) do_capture(&st);
+    if (mode == BOOT_CAPTURE && do_capture(&st)) {
+        ESP_LOGI(TAG, "triplo click: DEV MODE");
+        dev_mode();                        // non ritorna
+    }
 
 
     if (mode == BOOT_TIMER_SYNC) ESP_LOGI(TAG, "wake dal timer");

@@ -2,16 +2,17 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-// Modalita' di boot (spec Fase 1a §4.2, timer §5), decisa dalla causa di wake e dai tasti:
-//  - BOOT_TIMER_SYNC: wake dal timer di sync -> solo sync, senza campionare i tasti
-//  - BOOT_DEV:        USER premuto entro 1 s -> Wi-Fi + server push/status, resta sveglio
-//  - BOOT_CAPTURE:    PWR tenuto per tutti i 300 ms iniziali -> registra subito
-//  - BOOT_SYNC_ONLY:  pressione breve di PWR, oppure reset/power-on -> solo sync
+// Modalita' di boot (spec tasti §3), decisa dalla causa di wake:
+//  - BOOT_TIMER_SYNC: wake dal timer -> solo sync, senza tasti
+//  - BOOT_CAPTURE:    click di PWR (o accensione con PWR premuto) -> registra subito;
+//                     un click in piu' nei primi 2 s porta in DEV (vedi app_main)
+//  - BOOT_SYNC_ONLY:  click di USER, oppure reset/accensione senza tasti -> solo sync
+//  - BOOT_DEV:        non deciso al boot: ci si arriva dal triplo click durante CAPTURE
 typedef enum { BOOT_SYNC_ONLY, BOOT_CAPTURE, BOOT_DEV, BOOT_TIMER_SYNC } boot_mode_t;
 
 void power_init(void);
 bool power_pwr_pressed(void);   // BOARD_BTN_PWR (GPIO18), wake source
-bool power_user_pressed(void);  // BOARD_BTN_USER (GPIO0, strapping: mai come wake)
+bool power_user_pressed(void);  // BOARD_BTN_USER (GPIO0, strapping: sveglia solo dal deep sleep)
 boot_mode_t power_boot_mode(void);
 const char *power_boot_mode_name(boot_mode_t m);
 
@@ -20,5 +21,5 @@ const char *power_boot_mode_name(boot_mode_t m);
 void power_cycle_deadline_start(uint32_t ms);
 void power_cycle_deadline_cancel(void);
 
-// Deep sleep con wake EXT1 su BOARD_BTN_PWR e, se timer_ms > 0, anche dal timer. Non ritorna.
+// Deep sleep con wake EXT1 su PWR e USER e, se timer_ms > 0, anche dal timer. Non ritorna.
 void power_deep_sleep(uint32_t timer_ms);
