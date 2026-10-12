@@ -3,7 +3,8 @@
 **Data:** 2026-10-12
 **Stato:** implementata sul branch `backend-note-scritte` il 2026-10-12; 604 test del
 backend verdi, screenshot a 1280 e 390 px (chiaro e scuro) fatti. Provata in locale
-dall'autore: **non ancora**. Deploy sulla ZimaBoard: **dopo l'ok dell'autore**. Deviazioni
+dall'autore il 2026-10-12, fusa in `master` e **pubblicata sulla ZimaBoard** lo stesso
+giorno. Dopo la prova i tasti sono passati alla taglia comune (`docs/stile-ui.md`). Deviazioni
 emerse: creazione serializzata con un advisory lock di Postgres (due doppi invii
 simultanei facevano cancellare al perdente i file del vincitore); successo con redirect a
 `/todo#salvata` e bozza del browser (`sb-draft`) tolta solo su quel segno (una sessione

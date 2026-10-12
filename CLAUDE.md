@@ -174,8 +174,9 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `/mnt/Storage1/secondbrain/vault/Captures/`). Sul Mac resta il backend di sviluppo
   (`backend/.env` e `backend/data/` locali e gitignored).
 - **Note scritte** (spec `docs/specs/2026-10-12-backend-note-scritte-design.md`): sul
-  branch `backend-note-scritte`, non ancora in `master` né sulla ZimaBoard (aspettano la
-  prova locale e l'ok dell'autore).
+  dal pulsante "Nuova nota" si scrive una nota che segue la pipeline delle registrazioni.
+  Provata dall'autore in locale, in `master` e **sulla ZimaBoard dal 2026-10-12** (backup
+  del DB prima del deploy in `/mnt/Storage1/secondbrain/backup/`).
 - **Elaborazione AI** (spec `docs/specs/2026-09-29-backend-elaborazione-ai-design.md`):
   trascrizione, titolo, riassunto e tag con Groq e Gemini (chiavi inserite dall'autore
   nella pagina Impostazioni, cifrate con `SETTINGS_KEY` del `backend/.env` del Mac), worker
@@ -398,8 +399,12 @@ in fase `enrich`: l'AI aggiunge solo titolo, riassunto e tag. Emersi in revision
 doppi invii simultanei facevano cancellare al perdente i file del vincitore (advisory lock
 di Postgres sulla creazione); la bozza nel browser si toglieva anche con la sessione
 scaduta (ora solo sul segno `#salvata` dopo il redirect); su `/new` il pulsante della barra
-è nello stato `on` perché "Salva" sia l'unico pieno. 597 test backend. Sul branch
-`backend-note-scritte`; prova dell'autore in locale e deploy ancora da fare.
+è nello stato `on` perché "Salva" sia l'unico pieno; `rescan` ricreava il dispositivo "App"
+come e-paper. Dopo la prova: "Nuova nota", "Salva", "Annulla" ed "Entra" avevano misure
+proprie e stonavano, ora tutti i tasti hanno una sola taglia (regole in `docs/stile-ui.md`,
+"Misure dei pulsanti"). 604 test backend. Provata dall'autore, fusa in `master` e
+pubblicata sulla ZimaBoard il 2026-10-12. Lezione: Tailscale verso la ZimaBoard può non
+rispondere; in casa `ssh -o HostName=192.168.1.71 zima`.
 
 ## Idee future e cose rimandate
 
