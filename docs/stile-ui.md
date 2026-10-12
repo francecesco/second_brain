@@ -87,6 +87,8 @@ Sì, e solo qui:
 - orario della riga di cui è aperto il dettaglio (`.row:has(> .detail:not(:empty)) .time`);
 - titolo di una riga o di un risultato al passaggio del mouse;
 - pulsante principale (`button.pri`), uno per modulo: salva, entra;
+- pulsante "Nuova nota" nell'intestazione: l'unico elemento pieno arancione della barra. Su
+  `/new` è nello stato `on` (non pieno), così "Salva" resta l'unico pulsante pieno della vista;
 - LED "in corso" (`.led.run`) e icona "fallita" (`.status.failed`);
 - avvisi (`.notice`, `#flash`): bordo sinistro, icona e link;
 - marcatore "corretto a mano" (`.edited`), badge "data stimata" (`.badge`), errori di
@@ -215,6 +217,11 @@ aggiunge `?v=` con l'hash del contenuto: Cloudflare tiene in cache i `.css` per 
 senza, dopo un deploy il tunnel serviva il foglio di stile vecchio con l'HTML nuovo
 (2026-10-12). Un file statico nuovo caricato da una pagina passa da `static_url`.
 
+**Link con forma di pulsante** (`a.btn`). Stesso aspetto di `button` (bordo, hover, altezza),
+per azioni di navigazione che non inviano un modulo: "Annulla" nella pagina Nuova nota,
+con icona. Mai pieno. Nei moduli di composizione (`.compose .actions`) i pulsanti sono
+alti 2,5 rem per il bersaglio al tocco.
+
 ## Storico delle decisioni
 
 - **2026-10-06** — Direzione scelta tra tre mockup (pannello alla Teenage Engineering,
@@ -225,3 +232,6 @@ senza, dopo un deploy il tunnel serviva il foglio di stile vecchio con l'HTML nu
 - **2026-10-07** — Albero a tessere ispirato ai menu a schede di Nothing, contatori in
   Doto, stessa forma per le tessere della griglia; bordo d'accento solo sulla voce più
   profonda.
+- **2026-10-12** — Pulsante "Nuova nota" nell'intestazione, unico pieno arancione della
+  barra, nello stato `on` su `/new` perché lì "Salva" è il pulsante pieno; "Annulla" come
+  link `a.btn`; icona matita riusata.

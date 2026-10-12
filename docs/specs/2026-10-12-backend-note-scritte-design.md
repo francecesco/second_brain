@@ -1,7 +1,16 @@
 # Backend — Note scritte dall'app — Design / Spec
 
 **Data:** 2026-10-12
-**Stato:** approvata in chat a sezioni il 2026-10-12, da pianificare.
+**Stato:** implementata sul branch `backend-note-scritte` il 2026-10-12; 597 test del
+backend verdi, screenshot a 1280 e 390 px (chiaro e scuro) fatti. Provata in locale
+dall'autore: **non ancora**. Deploy sulla ZimaBoard: **dopo l'ok dell'autore**. Deviazioni
+emerse: creazione serializzata con un advisory lock di Postgres (due doppi invii
+simultanei facevano cancellare al perdente i file del vincitore); successo con redirect a
+`/todo#salvata` e bozza del browser (`sb-draft`) tolta solo su quel segno (una sessione
+scaduta non la perde); su `/new` il pulsante dell'intestazione è nello stato `on`, non
+pieno, per lasciare "Salva" come unico pieno; errore imprevisto o del disco: 500 con il
+testo mantenuto; "Annulla" come link `a.btn`; rescan di una nota scritta senza `.md` la
+rimette in coda e il worker ricostruisce la trascrizione dal `.txt` senza provider audio.
 
 ## 1. Obiettivo
 

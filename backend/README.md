@@ -57,7 +57,7 @@ Tutto sotto `DATA_DIR` (default `./data`, montato in `/data/...` nel container):
 data/
   archive/
     2026/09/28/
-      091530_70041dd8263c.wav             audio della registrazione
+      091530_70041dd8263c.wav             audio della registrazione (nelle note scritte: .txt col testo)
       091530_70041dd8263c.json            sidecar: metadati della registrazione
       091530_70041dd8263c.ai.json         risposte grezze dei provider AI, mai modificate
     .incoming/                            upload in corso (<uuid>.tmp), ripulita all'avvio
@@ -237,6 +237,25 @@ dettaglio elenca la nota tra i file e la serve da `GET /captures/<id>/note`.
 Aggiornando da una versione in cui il `.md` stava accanto al WAV: `docker compose exec app
 secondbrain vault migrate` sposta le note esistenti (una volta sola); `rescan` segnala
 quelle ancora nell'archivio.
+
+## Note scritte
+
+Dall'app web, il pulsante **Nuova nota** nell'intestazione (sempre visibile) apre `/new`:
+si scrive il testo (fino a 20.000 caratteri) e si salva. La nota nasce come una
+registrazione già trascritta: dispositivo "App" (tipo `web`), nell'archivio il testo sta in
+`<base>.txt` al posto del WAV, accanto al sidecar. Da lì segue la stessa strada delle
+registrazioni: il worker fa solo l'arricchimento (titolo, riassunto, tag, con regole dei
+nomi e vocabolario), poi archivio, "Da fare", ricerca, tag, vault, spunta e cestino. Il
+testo scritto è la trascrizione e l'AI non lo cambia: "Rielabora" rifà solo titolo,
+riassunto e tag. Testo vuoto o troppo lungo: errore 422 e il testo resta nel modulo; errore
+del disco o imprevisto: 500, testo ancora lì.
+
+Dopo il salvataggio si torna a "Da fare" (`/todo#salvata`). Il testo in corso è tenuto come
+bozza nel browser (`localStorage`, chiave `sb-draft`) e si toglie solo a salvataggio
+riuscito: una sessione scaduta o un errore non la perdono. La creazione è serializzata con
+un advisory lock di Postgres, così un doppio invio non produce note doppie né file
+cancellati. `secondbrain rescan` ricostruisce le note scritte dal `.txt` (anche senza `.md`),
+senza chiamare provider di trascrizione.
 
 ## Accesso da fuori con Cloudflare Tunnel
 
