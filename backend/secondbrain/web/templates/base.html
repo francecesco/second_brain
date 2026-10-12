@@ -25,6 +25,18 @@ function toggleDetail(button) {
 }
 document.addEventListener("click", function (evt) {
   if (evt.target.id === "flash") { evt.target.hidden = true; }
+  // Il menu a scomparsa si chiude cliccando fuori.
+  document.querySelectorAll("details.menu[open]").forEach(function (menu) {
+    if (!menu.contains(evt.target)) { menu.open = false; }
+  });
+});
+document.addEventListener("keydown", function (evt) {
+  if (evt.key === "Escape") {
+    document.querySelectorAll("details.menu[open]").forEach(function (menu) {
+      menu.open = false;
+      menu.querySelector("summary").focus();
+    });
+  }
 });
 </script>
 </head>

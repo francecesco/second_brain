@@ -18,46 +18,23 @@
     <button type="submit" aria-label="Cerca" title="Cerca">{{ icon("search") }}</button>
   </form>
   {% set fix_label = "Da sistemare (" ~ estimated_count ~ ")" if estimated_count else "Da sistemare" %}
-  <nav>
-    <a{% if section == "browse" %} class="on"{% endif %} href="/browse{{ qs }}" aria-label="Archivio" title="Archivio">{{ icon("archive") }}<span class="label">Archivio</span></a>
-    <a{% if section == "search" %} class="on"{% endif %} href="/search" aria-label="Ricerca" title="Ricerca">{{ icon("search") }}<span class="label">Ricerca</span></a>
-    <a{% if section == "tags" %} class="on"{% endif %} href="/tags" aria-label="Tag" title="Tag">{{ icon("tag") }}<span class="label">Tag</span></a>
-    {% include "_nav_todo.html" %}
-    <a{% if section == "fix" %} class="on"{% endif %} href="/fix" aria-label="{{ fix_label }}" title="{{ fix_label }}">{{ icon("fix") }}<span class="label">{{ fix_label }}</span></a>
-    <a{% if section == "trash" %} class="on"{% endif %} href="/trash" aria-label="Cestino" title="Cestino">{{ icon("trash") }}<span class="label">Cestino</span></a>
-    <a{% if section == "devices" %} class="on"{% endif %} href="/devices" aria-label="Dispositivi" title="Dispositivi">{{ icon("devices") }}<span class="label">Dispositivi</span></a>
-    <a{% if section == "settings" %} class="on"{% endif %} href="/settings" aria-label="Impostazioni" title="Impostazioni">{{ icon("settings") }}<span class="label">Impostazioni</span></a>
-    <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" aria-label="Esci" title="Esci">{{ icon("logout") }}<span class="label">Esci</span></button></form>
-  </nav>
+  {% set section_labels = {"browse": "Archivio", "todo": "Da fare", "done": "Completati", "tags": "Tag", "fix": "Da sistemare", "trash": "Cestino", "devices": "Dispositivi", "settings": "Impostazioni", "search": "Ricerca"} %}
+  <details class="menu">
+    <summary aria-label="Menu" title="Menu">{{ icon("menu") }}<span class="current">{{ section_labels.get(section, "Menu") }}</span></summary>
+    <nav>
+      <a{% if section == "browse" %} class="on"{% endif %} href="/browse{{ qs }}" aria-label="Archivio" title="Archivio">{{ icon("archive") }}<span class="label">Archivio</span></a>
+      {% include "_nav_counts.html" %}
+      <a{% if section == "tags" %} class="on"{% endif %} href="/tags" aria-label="Tag" title="Tag">{{ icon("tag") }}<span class="label">Tag</span></a>
+      <a{% if section == "fix" %} class="on"{% endif %} href="/fix" aria-label="{{ fix_label }}" title="{{ fix_label }}">{{ icon("fix") }}<span class="label">{{ fix_label }}</span></a>
+      <a{% if section == "trash" %} class="on"{% endif %} href="/trash" aria-label="Cestino" title="Cestino">{{ icon("trash") }}<span class="label">Cestino</span></a>
+      <a{% if section == "devices" %} class="on"{% endif %} href="/devices" aria-label="Dispositivi" title="Dispositivi">{{ icon("devices") }}<span class="label">Dispositivi</span></a>
+      <a{% if section == "settings" %} class="on"{% endif %} href="/settings" aria-label="Impostazioni" title="Impostazioni">{{ icon("settings") }}<span class="label">Impostazioni</span></a>
+      <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" aria-label="Esci" title="Esci">{{ icon("logout") }}<span class="label">Esci</span></button></form>
+    </nav>
+  </details>
 </header>
 <div class="layout">
-  <aside class="tree">
-    <input type="checkbox" id="tree-toggle" hidden>
-    <label for="tree-toggle" class="tree-toggle">Archivio</label>
-    <ul>
-    {% for y, n in tree.years %}
-      <li><a href="/browse/{{ y }}{{ qs }}"{% if y == year %} class="current"{% endif %}>{{ y }}<span class="count">{{ n }}</span></a>
-      {% if y == year and tree.months %}
-        <ul>
-        {% for m, mn in tree.months %}
-          <li><a href="/browse/{{ y }}/{{ '%02d' % m }}{{ qs }}"{% if m == month %} class="current"{% endif %}>{{ MONTHS[m - 1] }}<span class="count">{{ mn }}</span></a>
-          {% if m == month and tree.days %}
-            <ul>
-            {% for d, dn in tree.days %}
-              <li><a href="/browse/{{ y }}/{{ '%02d' % m }}/{{ '%02d' % d }}{{ qs }}"{% if d == day_num %} class="current"{% endif %}>{{ weekday_short(date(y, m, d)) }}<span class="count">{{ dn }}</span></a></li>
-            {% endfor %}
-            </ul>
-          {% endif %}
-          </li>
-        {% endfor %}
-        </ul>
-      {% endif %}
-      </li>
-    {% else %}
-      <li class="empty">Nessuna registrazione</li>
-    {% endfor %}
-    </ul>
-  </aside>
+  {% include "_tree.html" %}
   <main>
     {% if ai_notice %}<p class="notice" role="status">{{ icon("fix") }}<span>{{ ai_notice }}</span> <a href="/settings">Impostazioni</a></p>{% endif %}
     {% if crumbs %}<nav class="crumbs">{% for label, href in crumbs %}{% if not loop.first %} › {% endif %}{% if href %}<a href="{{ href }}">{{ label }}</a>{% else %}{{ label }}{% endif %}{% endfor %}</nav>{% endif %}

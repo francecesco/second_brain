@@ -1,12 +1,16 @@
 # Backend — Note da fare e dettaglio a fisarmonica — Design / Spec
 
 **Data:** 2026-10-12
-**Stato:** implementato sul branch `backend-note-da-fare` (544 test del backend, screenshot a
-1280 e 390 px in chiaro e scuro controllati contro `docs/stile-ui.md`); verifica sulla
-ZimaBoard in corso. **Deviazioni:** nei risultati di ricerca e per tag, che sono link
-all'archivio, la nota fatta è barrata ma la casella non c'è: si spunta dall'archivio o da
-"Da fare". Spuntare una nota aggiorna anche il contatore "Da fare (N)" nella barra
-(htmx out-of-band), con il filtro dispositivo letto dall'URL della pagina corrente.
+**Stato:** implementato sul branch `backend-note-da-fare` (546 test del backend, screenshot a
+1280 e 390 px in chiaro e scuro); in prova sul Mac dall'autore. **Cambiato dopo la prima
+prova dell'autore (2026-10-12)**: la nota spuntata non resta barrata nell'archivio ma
+**esce dalla lista** (archivio, albero e "Da fare") e passa nella nuova vista
+**"Completati"** (dall'ultima spuntata), da cui togliendo la spunta torna indietro; la
+ricerca trova anche le completate, barrate. Le voci dell'intestazione stanno in un **menu
+a scomparsa**, senza la voce "Ricerca" (c'è già il campo "Cerca nelle note"). Spuntare
+aggiorna out-of-band i contatori del menu e l'albero, letti con il filtro dispositivo e la
+data della pagina corrente (`HX-Current-URL`). Nei risultati di ricerca la casella non
+c'è: si spunta dall'archivio, da "Da fare" o da "Completati".
 
 ## 1. Obiettivo
 

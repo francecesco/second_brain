@@ -58,48 +58,70 @@ def test_rescan_keeps_done(recordings, db, settings):
     assert capture_by(db, CID).done_at == NOW
 
 
-def test_done_routes_return_the_row(recordings, db):
+def test_checking_removes_the_row_and_updates_counters(recordings, db):
+    # In ogni lista la riga sparisce: restano gli aggiornamenti out-of-band di menu e albero.
     cap = capture_by(db, CID)
     c = recordings.client
     assert c.post(f"/captures/{cap.id}/done").status_code == 403          # CSRF
-    r = c.post(f"/captures/{cap.id}/done", headers=htmx(recordings))
-    assert r.status_code == 200 and f'id="row-{cap.id}"' in r.text
-    assert 'class="row done"' in r.text and f'hx-post="/captures/{cap.id}/undone"' in r.text
-    assert 'aria-label="Segna come da fare"' in r.text
-    r = c.post(f"/captures/{cap.id}/undone", headers=htmx(recordings))
-    assert 'class="row"' in r.text and 'aria-label="Segna come fatta"' in r.text
+    headers = htmx(recordings) | {"HX-Current-URL": "http://test/browse/2026/09/23"}
+    r = c.post(f"/captures/{cap.id}/done", headers=headers)
+    assert r.status_code == 200 and f'id="row-{cap.id}"' not in r.text
+    assert 'id="nav-todo"' in r.text and "Da fare (2)" in r.text
+    assert 'id="nav-done"' in r.text and "Completati (1)" in r.text
+    assert 'id="tree"' in r.text and r.text.count('hx-swap-oob="outerHTML"') == 3
     assert c.post("/captures/00000000-0000-0000-0000-000000000000/done",
                   headers=htmx(recordings)).status_code == 404
 
 
-def test_todo_page_and_counter(recordings, db):
-    c = recordings.client
-    text = c.get("/todo").text
-    assert "Da fare (3)" in text and 'aria-label="Da fare (3)"' in text
-    assert "23/09/2026 21:15:30" in text and "10/08/2026 09:00:00" in text
-    cap = capture_by(db, CID)
-    c.post(f"/captures/{cap.id}/done", headers=htmx(recordings))
-    text = c.get("/todo").text
-    assert "Da fare (2)" in text and "23/09/2026 21:15:30" not in text
-    assert "Da fare (1)" in c.get(f"/todo?device={DEV2}").text
-    # nell'archivio resta, barrata; nei risultati per tag pure
-    assert 'class="row done"' in c.get("/browse/2026/09/23").text
-
-
-def test_on_the_todo_page_checking_removes_the_row(recordings, db):
-    # Resta solo l'aggiornamento out-of-band del contatore: la riga sparisce dalla lista.
+def test_counters_follow_the_device_of_the_current_page(recordings, db):
     cap = capture_by(db, CID)
     headers = htmx(recordings) | {"HX-Current-URL": f"http://test/todo?device={DEV}"}
-    r = recordings.client.post(f"/captures/{cap.id}/done?from=todo", headers=headers)
-    assert r.status_code == 200 and f'id="row-{cap.id}"' not in r.text
+    r = recordings.client.post(f"/captures/{cap.id}/done", headers=headers)
     assert 'id="nav-todo" class="on" href="/todo?device=' in r.text and "Da fare (1)" in r.text
-    assert 'hx-swap-oob="outerHTML"' in r.text
 
 
-def test_done_row_updates_the_counter_out_of_band(recordings, db):
+def test_done_notes_leave_archive_and_todo_and_go_to_completed(recordings, db):
+    c = recordings.client
+    assert "Da fare (3)" in c.get("/todo").text
     cap = capture_by(db, CID)
-    r = recordings.client.post(f"/captures/{cap.id}/done", headers=htmx(recordings))
-    assert 'id="nav-todo"' in r.text and "Da fare (2)" in r.text and 'hx-swap-oob="outerHTML"' in r.text
+    c.post(f"/captures/{cap.id}/done", headers=htmx(recordings))
+    assert "21:15:30" not in c.get("/browse/2026/09/23").text            # sparita dal giorno
+    assert "10:00:00" in c.get("/browse/2026/09/23").text
+    assert "23/09/2026 21:15:30" not in c.get("/todo").text
+    done = c.get("/done").text
+    assert "Completati (1)" in done and "23/09/2026 21:15:30" in done
+    assert f'hx-post="/captures/{cap.id}/undone"' in done and "checked" in done
+    assert 'aria-label="Segna come da fare"' in done
+    c.post(f"/captures/{cap.id}/undone", headers=htmx(recordings))
+    assert "21:15:30" in c.get("/browse/2026/09/23").text and "Completati (0)" in c.get("/done").text
+
+
+def test_tree_counts_only_open_notes(recordings, db, settings):
+    arch = Archive(settings.archive_dir)
+    library.set_done(db, arch, capture_by(db, "cap_20260810_070000").id, True, NOW)
+    db.commit()
+    assert catalog.month_counts(db, 2026) == [(9, 2)]                     # agosto sparisce
+    assert catalog.day_counts(db, 2026, 9) == [(23, 2)]
+
+
+def test_completed_are_ordered_by_completion(recordings, db, settings):
+    from datetime import timedelta
+    arch = Archive(settings.archive_dir)
+    library.set_done(db, arch, capture_by(db, "cap_20260810_070000").id, True, NOW + timedelta(hours=1))
+    library.set_done(db, arch, capture_by(db, CID).id, True, NOW)
+    db.commit()
+    assert [c.capture_id for c in catalog.list_done(db)] == ["cap_20260810_070000", CID]
+    assert catalog.count_done(db) == 2
+
+
+def test_menu_holds_all_sections_without_search(recordings):
+    text = recordings.client.get("/todo").text
+    assert '<details class="menu"' in text
+    for label in ("Archivio", "Da fare (3)", "Completati (0)", "Tag", "Da sistemare", "Cestino",
+                  "Dispositivi", "Impostazioni", "Esci"):
+        assert f'aria-label="{label}"' in text, label
+    assert 'href="/search" aria-label="Ricerca"' not in text
+    assert '<span class="current">Da fare</span>' in text           # sezione corrente nel menu chiuso
 
 
 def test_row_title_toggles_the_detail(recordings, db):
