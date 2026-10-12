@@ -99,7 +99,7 @@ mark { background: var(--mark-bg); color: inherit; border-radius: 2px; padding: 
 .login h1::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--acc); }
 .login label { display: block; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: var(--mute); }
 .login input { width: 100%; margin: .4rem 0 .8rem; }
-.login button { width: 100%; justify-content: center; padding: .55rem; }
+.login button { width: 100%; justify-content: center; }
 .login .error { margin: 0 0 .8rem; }
 
 /* Intestazione */
@@ -232,7 +232,6 @@ a.tag:hover { border-color: var(--acc); color: var(--acc); }
 .compose { display: grid; gap: .6rem; max-width: 48rem; }
 .compose textarea { width: 100%; min-height: 14rem; resize: vertical; }
 .compose .notice { margin: 0; }
-.compose .actions :is(button, .btn) { min-height: 2.5rem; padding: 0 .9rem; }
 
 /* Tabelle: cestino, dispositivi */
 .table-wrap { overflow-x: auto; }
@@ -275,7 +274,6 @@ td .actions { margin: 0; }
   main { padding: .9rem; }
   .row .meta { margin-left: 0; width: 100%; }
   .top .brand .label, .actions .label, .top .new-note .label, .top .dots { display: none; }
-  .compose .actions .label { display: inline; }
   .menu .current { display: none; }
   .top nav { min-width: 14rem; }
   .search-open { display: inline-flex; }
