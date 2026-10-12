@@ -1,5 +1,7 @@
 """Jinja: template, filtri di formato, nomi dei mesi e dei giorni, titolo di default."""
+import hashlib
 from datetime import date, datetime
+from functools import lru_cache
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -12,6 +14,15 @@ from ..search import MAX_QUERY_LEN
 
 WEB_DIR = Path(__file__).parent
 STATIC_DIR = WEB_DIR / "static"
+
+
+@lru_cache(maxsize=None)
+def static_url(name: str) -> str:
+    """Indirizzo di un file statico con la versione del contenuto: Cloudflare e i browser
+    tengono in cache CSS e JS per ore, cosi' dopo un deploy l'indirizzo cambia e si
+    riscarica. Il file si legge una volta per processo (cambia solo con un nuovo deploy)."""
+    digest = hashlib.sha256((STATIC_DIR / name).read_bytes()).hexdigest()[:12]
+    return f"/static/{name}?v={digest}"
 MONTHS = ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio",
           "agosto", "settembre", "ottobre", "novembre", "dicembre")
 WEEKDAYS = ("lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica")
@@ -79,6 +90,7 @@ templates.env.globals["default_title"] = default_title
 templates.env.globals["display_title"] = display_title
 templates.env.globals["reprocess_confirm"] = reprocess_confirm
 templates.env.globals["DETAIL_FIELDS"] = DETAIL_FIELDS
+templates.env.globals["static_url"] = static_url
 templates.env.globals["FIELD_LABELS"] = FIELD_LABELS
 templates.env.globals["ROW_POLL_S"] = ROW_POLL_S
 templates.env.globals["ROW_TAG_PREVIEW"] = ROW_TAG_PREVIEW
