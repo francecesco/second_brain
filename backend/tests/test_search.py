@@ -7,7 +7,7 @@ from secondbrain import library, search
 from secondbrain.archive import Archive
 from secondbrain.web.templating import day_month_label
 from tests.ai_fakes import processed
-from tests.helpers import NOW, capture_by
+from tests.helpers import NOW, capture_by, htmx
 
 EVENING = "cap_20260923_191530"   # 23/09 21:15:30
 MORNING = "cap_20260923_080000"   # 23/09 10:00:00
@@ -126,3 +126,10 @@ def test_tags_page_shows_one_tile_per_tag(notes, recordings):
 
 def test_tags_page_without_tags(recordings):
     assert "Nessun tag" in recordings.client.get("/tags").text
+
+
+def test_done_notes_are_struck_in_results(notes, recordings, db):
+    cap = capture_by(db, "cap_20260923_191530")
+    recordings.client.post(f"/captures/{cap.id}/done", headers=htmx(recordings))
+    text = recordings.client.get("/search?tag=casa").text
+    assert text.count('class="hit done"') == 1 and text.count('class="hit"') == 1

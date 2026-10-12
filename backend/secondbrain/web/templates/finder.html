@@ -22,6 +22,7 @@
     <a{% if section == "browse" %} class="on"{% endif %} href="/browse{{ qs }}" aria-label="Archivio" title="Archivio">{{ icon("archive") }}<span class="label">Archivio</span></a>
     <a{% if section == "search" %} class="on"{% endif %} href="/search" aria-label="Ricerca" title="Ricerca">{{ icon("search") }}<span class="label">Ricerca</span></a>
     <a{% if section == "tags" %} class="on"{% endif %} href="/tags" aria-label="Tag" title="Tag">{{ icon("tag") }}<span class="label">Tag</span></a>
+    {% include "_nav_todo.html" %}
     <a{% if section == "fix" %} class="on"{% endif %} href="/fix" aria-label="{{ fix_label }}" title="{{ fix_label }}">{{ icon("fix") }}<span class="label">{{ fix_label }}</span></a>
     <a{% if section == "trash" %} class="on"{% endif %} href="/trash" aria-label="Cestino" title="Cestino">{{ icon("trash") }}<span class="label">Cestino</span></a>
     <a{% if section == "devices" %} class="on"{% endif %} href="/devices" aria-label="Dispositivi" title="Dispositivi">{{ icon("devices") }}<span class="label">Dispositivi</span></a>

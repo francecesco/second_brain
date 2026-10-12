@@ -9,9 +9,10 @@ SCHEMA_VERSION = 1
 FIELDS = (
     "id", "device_id", "capture_id", "recorded_at", "date_estimated", "received_at",
     "title", "duration_s", "size_bytes", "sha256", "firmware_version", "battery_pct",
-    "battery_v", "power_source", "trashed_at",
+    "battery_v", "power_source", "trashed_at", "done_at",
 )
-DATETIME_FIELDS = ("recorded_at", "received_at", "trashed_at")
+# done_at e' arrivato dopo: un sidecar che non lo ha vale "da fare" (data.get -> None).
+DATETIME_FIELDS = ("recorded_at", "received_at", "trashed_at", "done_at")
 REQUIRED = ("id", "device_id", "capture_id", "recorded_at", "received_at",
             "duration_s", "size_bytes", "sha256")
 

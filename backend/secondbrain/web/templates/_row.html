@@ -1,5 +1,8 @@
-<div class="row" id="row-{{ c.id }}">
-  <button type="button" class="row-main" hx-get="/captures/{{ c.id }}" hx-target="#detail-{{ c.id }}">
+{% from "_icons.html" import icon %}
+{% set done = c.done_at is not none %}
+<div class="row{% if done %} done{% endif %}" id="row-{{ c.id }}">
+  {% if not c.trashed_at %}<label class="check" title="{{ 'Segna come da fare' if done else 'Segna come fatta' }}"><input type="checkbox"{% if done %} checked{% endif %} hx-post="/captures/{{ c.id }}/{{ 'undone' if done else 'done' }}{% if todo_view %}?from=todo{% endif %}" hx-target="#row-{{ c.id }}" hx-swap="outerHTML" aria-label="{{ 'Segna come da fare' if done else 'Segna come fatta' }}"></label>{% endif %}
+  <button type="button" class="row-main" aria-expanded="{{ 'true' if open_id == c.id else 'false' }}" aria-controls="detail-{{ c.id }}" data-detail-url="/captures/{{ c.id }}" onclick="toggleDetail(this)">
     <span class="time">{% if show_day %}{{ c.recorded_at.astimezone(tz).strftime('%d/%m/%Y') }} {% endif %}{{ c.recorded_at.astimezone(tz).strftime('%H:%M:%S') }}</span>
     {% include "_row_head.html" %}
     {% if c.date_estimated %}<span class="badge">data stimata</span>{% endif %}
@@ -7,3 +10,4 @@
   </button>
   <div class="detail" id="detail-{{ c.id }}"{% if open_id == c.id %} hx-get="/captures/{{ c.id }}" hx-trigger="load"{% endif %}></div>
 </div>
+{% if oob_nav %}{% with oob=True %}{% include "_nav_todo.html" %}{% endwith %}{% endif %}

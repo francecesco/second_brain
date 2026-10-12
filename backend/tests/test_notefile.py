@@ -208,3 +208,11 @@ def test_render_with_meta_without_url_or_title():
     text = render_note(Note(), ROME, meta)
     assert "url:" not in text and "title:" not in text and "aliases:" not in text
     assert "duration: 0\n" in text and parse_note(text).title is None
+
+
+def test_render_with_meta_writes_done():
+    base = dict(capture_id="cap_x", device_id="d", created=datetime(2026, 10, 7, 9, 0, tzinfo=UTC),
+                duration_s=1.0, title=None, url=None)
+    assert "completata: false\n" in render_note(Note(), ROME, NoteMeta(**base))
+    text = render_note(Note(), ROME, NoteMeta(**base, done=True))
+    assert "completata: true\n" in text and parse_note(text).title is None

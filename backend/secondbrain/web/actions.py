@@ -1,8 +1,9 @@
 """Azioni sulle registrazioni e pagine cestino, da sistemare, dispositivi (spec §7)."""
 import uuid
+from urllib.parse import parse_qs, urlsplit
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -10,7 +11,7 @@ from .. import catalog, library, ota
 from ..devices import DeviceError, rename_device
 from ..models import WebSession
 from ..naming import day_dir
-from .context import base_context, page_context
+from .context import base_context, clean_device, page_context
 from .deps import get_db, require_csrf, require_login
 from .templating import templates
 
@@ -37,6 +38,45 @@ def set_title_route(request: Request, capture_id: uuid.UUID, title: str = Form("
         raise HTTPException(404, "registrazione sconosciuta") from None
     return templates.TemplateResponse(request, "_row.html",
                                       base_context(request, db, session) | {"c": capture})
+
+
+def _set_done(request: Request, capture_id: uuid.UUID, done: bool, from_todo: bool,
+              db: Session, session: WebSession):
+    try:
+        capture = library.set_done(db, _archive(request), capture_id, done, request.app.state.clock(),
+                                   **_vault_kw(request))
+    except library.NotFound:
+        raise HTTPException(404, "registrazione sconosciuta") from None
+    # Il contatore nella barra segue il filtro del dispositivo della pagina da cui arriva il clic.
+    current = urlsplit(request.headers.get("hx-current-url", "")).query
+    device = clean_device(parse_qs(current).get("device", [None])[0])
+    ctx = base_context(request, db, session, device) | {
+        "c": capture, "oob_nav": True, "todo_view": from_todo, "section": "todo" if from_todo else None}
+    if from_todo and done:
+        # Dalla vista "Da fare" la riga sparisce; resta solo il contatore aggiornato nella barra.
+        return templates.TemplateResponse(request, "_nav_todo.html", ctx | {"oob": True})
+    return templates.TemplateResponse(request, "_row.html", ctx)
+
+
+@router.post("/captures/{capture_id}/done")
+def done_route(request: Request, capture_id: uuid.UUID, from_: str | None = Query(None, alias="from"),
+               db: Session = Depends(get_db), session: WebSession = Depends(require_csrf)):
+    return _set_done(request, capture_id, True, from_ == "todo", db, session)
+
+
+@router.post("/captures/{capture_id}/undone")
+def undone_route(request: Request, capture_id: uuid.UUID, from_: str | None = Query(None, alias="from"),
+                 db: Session = Depends(get_db), session: WebSession = Depends(require_csrf)):
+    return _set_done(request, capture_id, False, from_ == "todo", db, session)
+
+
+@router.get("/todo")
+def todo_page(request: Request, device: str | None = None, db: Session = Depends(get_db),
+              session: WebSession = Depends(require_login)):
+    device = clean_device(device)
+    return templates.TemplateResponse(request, "todo.html", page_context(request, db, session, device) | {
+        "crumbs": [("Da fare", None)], "captures": catalog.list_todo(db, device),
+        "show_day": True, "todo_view": True})
 
 
 @router.post("/captures/{capture_id}/recorded-at")

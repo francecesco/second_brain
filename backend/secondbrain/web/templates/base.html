@@ -12,6 +12,17 @@ document.addEventListener("htmx:responseError", function (evt) {
   flash.textContent = evt.detail.xhr.responseText || "Errore";
   flash.hidden = false;
 });
+// Clic sul titolo di una riga: apre il dettaglio, o lo richiude se e' gia' aperto.
+function toggleDetail(button) {
+  var detail = document.getElementById(button.getAttribute("aria-controls"));
+  if (detail.innerHTML.trim()) {
+    detail.innerHTML = "";
+    button.setAttribute("aria-expanded", "false");
+  } else {
+    button.setAttribute("aria-expanded", "true");
+    htmx.ajax("GET", button.dataset.detailUrl, {target: detail});
+  }
+}
 document.addEventListener("click", function (evt) {
   if (evt.target.id === "flash") { evt.target.hidden = true; }
 });

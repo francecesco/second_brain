@@ -86,6 +86,21 @@ def list_estimated(s: Session) -> list[Capture]:
     return list(s.scalars(_active(stmt, None)))
 
 
+def _todo(stmt):
+    return stmt.where(Capture.done_at.is_(None))
+
+
+def count_todo(s: Session, device_id: str | None = None) -> int:
+    """Registrazioni ancora da fare (spec note da fare §2): non spuntate, non nel cestino."""
+    return s.scalar(_active(_todo(select(func.count()).select_from(Capture)), device_id))
+
+
+def list_todo(s: Session, device_id: str | None = None) -> list[Capture]:
+    stmt = (_todo(select(Capture)).order_by(Capture.recorded_at.desc())
+            .options(selectinload(Capture.job)))
+    return list(s.scalars(_active(stmt, device_id)))
+
+
 def list_trashed(s: Session) -> list[Capture]:
     stmt = (select(Capture).where(Capture.trashed_at.is_not(None))
             .order_by(Capture.trashed_at.desc()))

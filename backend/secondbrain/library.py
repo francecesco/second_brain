@@ -67,6 +67,19 @@ def set_title(s: Session, archive: Archive, capture_id: uuid.UUID, title: str, *
     return capture
 
 
+def set_done(s: Session, archive: Archive, capture_id: uuid.UUID, done: bool, now: datetime, *,
+             vault: Vault | None = None, tz: ZoneInfo | None = None,
+             public_url: str | None = None) -> Capture:
+    """Spunta o toglie la spunta (spec note da fare §3): sidecar, catalogo e frontmatter."""
+    capture = _get(s, capture_id)
+    if done != (capture.done_at is not None):
+        capture.done_at = now if done else None
+    if vault is not None and tz is not None:
+        place_note(vault, capture, tz, public_url)
+    _save(s, archive, capture)
+    return capture
+
+
 def correct_recorded_at(s: Session, archive: Archive, tz: ZoneInfo, capture_id: uuid.UUID,
                         local: datetime, *, vault: Vault | None = None,
                         public_url: str | None = None) -> Capture:

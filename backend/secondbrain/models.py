@@ -41,6 +41,8 @@ class Capture(Base):
         Index("ix_captures_day", "day"),
         Index("ix_captures_search_vector", "search_vector", postgresql_using="gin"),
         Index("ix_captures_tags", "tags", postgresql_using="gin"),
+        Index("ix_captures_todo", "recorded_at",
+              postgresql_where=text("done_at IS NULL AND trashed_at IS NULL")),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
@@ -60,6 +62,8 @@ class Capture(Base):
     battery_v: Mapped[float | None] = mapped_column(Double)
     power_source: Mapped[str | None] = mapped_column(String(16))
     trashed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Spuntata come fatta (spec note da fare §3): verita' nel sidecar, come il titolo manuale.
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Campi AI (spec AI §6-7): la verità è il `.md` accanto al WAV, qui sono una copia
     # per la UI e la ricerca, ricostruibile con `rescan`.
     transcript: Mapped[str | None] = mapped_column(Text)

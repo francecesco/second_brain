@@ -9,7 +9,7 @@
 {% if q or tag %}
 {% for h in hits %}
 {% set c = h.capture %}
-<a class="hit" href="/browse/{{ c.day.strftime('%Y/%m/%d') }}?open={{ c.id }}#row-{{ c.id }}">
+<a class="hit{% if c.done_at %} done{% endif %}" href="/browse/{{ c.day.strftime('%Y/%m/%d') }}?open={{ c.id }}#row-{{ c.id }}">
   <span class="day">{{ day_month_label(c.day) }}</span>
   <span class="title">{{ display_title(c, tz) }}</span>
   {% set tag_preview = (c.tags or [])[:ROW_TAG_PREVIEW] %}

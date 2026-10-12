@@ -126,11 +126,19 @@ bordo né ombra): sono righe e voci di menu, non tasti.
 bordo 1 px, raggio 2 px. Nelle card delle impostazioni, che hanno già fondo `--bg`, i
 campi passano a `--panel`. Il focus è un anello di 2 px d'accento.
 
-**Righe della lista** (`_row.html`). `.row` con hairline sotto; `.row-main` è un
-`<button>` a tutta larghezza che apre il dettaglio via htmx in `.detail`. Ordine:
-orario (`--mute`, Doto), titolo, tag, LED di stato, meta a destra (dispositivo,
-durata, dimensione in monospazio). La riga aperta si riconosce dall'orario arancione:
-non servono classi aggiunte via JavaScript.
+**Righe della lista** (`_row.html`). `.row` con hairline sotto, a due colonne: a sinistra
+la casella "fatta" (`.check`), a destra `.row-main`, un `<button>` che apre il dettaglio
+in `.detail` e lo richiude al secondo clic (`toggleDetail` in `base.html`, che tiene
+aggiornato `aria-expanded`); il dettaglio occupa tutta la larghezza. Nel cestino la
+casella non c'è e `.row-main` prende entrambe le colonne. Ordine dentro il pulsante:
+orario (`--mute`, Doto), titolo, tag, LED di stato, meta a destra (dispositivo, durata,
+dimensione in monospazio). La riga aperta si riconosce dall'orario arancione.
+
+**Casella "fatta"** (`.row .check`). Quadrato di 18 px, bordo 1,5 px `--mute`, angoli
+2 px, fondo `--bg`; spuntata è piena di `--fg` con la spunta in `--panel`. **Non è
+arancione**: "fatta" non è né "qui" né "attenzione". La `label` attorno fa da bersaglio
+al tocco (36×44 px). Riga fatta (`.row.done`): titolo barrato in `--mute`; resta
+leggibile e cliccabile.
 
 **LED di stato** (`_row_head.html`). `.led.queue`: anello grigio, in coda. `.led.run`:
 disco arancione che lampeggia (fermo con `prefers-reduced-motion`). Fallita: icona

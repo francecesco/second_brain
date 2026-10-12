@@ -149,8 +149,18 @@ main { flex: 1; min-width: 0; padding: 1rem 1.2rem; }
 .grid .label { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
 .grid .count { font-family: var(--dot); font-weight: 700; font-size: 16px; line-height: 1; }
 
-/* Righe del giorno */
-.row { border-bottom: 1px solid var(--line); }
+/* Righe del giorno: casella "fatta" a sinistra, pulsante della riga, dettaglio a tutta larghezza */
+.row { border-bottom: 1px solid var(--line); display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: .4rem; }
+.row > .row-main:first-child, .row > .detail { grid-column: 1 / -1; }   /* cestino: niente casella */
+.row .check { display: flex; align-items: flex-start; justify-content: center; width: 2.25rem; min-height: 2.75rem; padding-top: .78rem; cursor: pointer; }
+.row .check input { appearance: none; -webkit-appearance: none; margin: 0; width: 18px; height: 18px; padding: 0; flex: none;
+  border: 1.5px solid var(--mute); border-radius: 2px; background: var(--bg); cursor: pointer; display: grid; place-content: center; }
+.row .check input::after { content: ""; width: 5px; height: 10px; margin-top: -2px; border: solid var(--panel); border-width: 0 2px 2px 0; transform: rotate(45deg); visibility: hidden; }
+.row .check:hover input { border-color: var(--fg); }
+.row .check input:checked { background: var(--fg); border-color: var(--fg); }
+.row .check input:checked::after { visibility: visible; }
+.row.done .title { text-decoration: line-through; text-decoration-thickness: 1px; color: var(--mute); }
+.row.done .row-main:hover .title { color: var(--acc); }
 .row-main { display: flex; flex-wrap: wrap; gap: .3rem .8rem; width: 100%; text-align: left; background: none; border: 0; border-radius: 0; box-shadow: none; padding: .6rem 0;
   font: inherit; letter-spacing: 0; text-transform: none; font-weight: 400; cursor: pointer; }
 .row-main:hover { box-shadow: none; transform: none; }
@@ -211,6 +221,7 @@ td .actions { margin: 0; }
 .hit .day { color: var(--mute); margin-right: .6rem; font-size: .9em; }
 .hit .title { font-weight: 500; margin-right: .4rem; }
 .hit .excerpt { display: block; color: var(--mute); margin-top: .2rem; }
+.hit.done .title { text-decoration: line-through; text-decoration-thickness: 1px; color: var(--mute); }
 
 /* Impostazioni */
 .card { background: var(--bg); border: 1px solid var(--line); border-radius: 2px; padding: .9rem 1rem 1rem; margin-bottom: .8rem; }

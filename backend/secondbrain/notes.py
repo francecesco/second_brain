@@ -52,7 +52,8 @@ def note_meta(capture: Capture, tz: ZoneInfo, public_url: str | None) -> NoteMet
     return NoteMeta(capture_id=capture.capture_id, device_id=capture.device_id,
                     created=capture.recorded_at, duration_s=capture.duration_s,
                     title=capture.title or capture.title_auto,
-                    url=f"{public_url}/captures/{capture.id}" if public_url else None)
+                    url=f"{public_url}/captures/{capture.id}" if public_url else None,
+                    done=capture.done_at is not None)
 
 def empty_ai_fields() -> dict:
     """Campi AI del catalogo di una nota senza `.md` (mai elaborata, o `.md` cancellato).

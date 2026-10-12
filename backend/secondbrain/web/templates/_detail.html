@@ -30,5 +30,5 @@
   {% if not (job and job.status == "running") %}<button type="button" hx-post="/captures/{{ c.id }}/reprocess" hx-target="#detail-{{ c.id }}" hx-confirm="{{ reprocess_confirm(c) }}" aria-label="Rielabora" title="Rielabora">{{ icon("refresh") }}<span class="label">Rielabora</span></button>{% endif %}
   <button type="button" hx-post="/captures/{{ c.id }}/trash" hx-target="#row-{{ c.id }}" hx-swap="outerHTML" hx-confirm="Spostare la registrazione nel cestino?" aria-label="Cestino" title="Cestino">{{ icon("trash") }}<span class="label">Cestino</span></button>
 {% endif %}
-  <button type="button" onclick="this.closest('.detail').innerHTML=''" aria-label="Chiudi" title="Chiudi">{{ icon("close") }}<span class="label">Chiudi</span></button>
+  <button type="button" onclick="toggleDetail(this.closest('.row').querySelector('.row-main'))" aria-label="Chiudi" title="Chiudi">{{ icon("close") }}<span class="label">Chiudi</span></button>
 </div>
