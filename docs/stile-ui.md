@@ -135,10 +135,15 @@ dell'intestazione. Regole:
   cambia solo i colori;
 - sotto i 700 px cambia solo l'etichetta, che sparisce; padding e icona restano uguali;
 - nella stessa riga (intestazione, `.actions`) tutti i tasti hanno la stessa altezza;
-- unica eccezione: i moduli di composizione (`.compose .actions`), dove "Salva" e
-  "Annulla" sono alti 2,5 rem con l'etichetta visibile anche al telefono, per il
-  bersaglio al tocco nel corpo della pagina. Non vale per l'intestazione;
+- nessuna eccezione per pagina o modulo: anche "Salva"/"Annulla" di Nuova nota ed
+  "Entra" del login hanno la taglia comune. La **larghezza** può seguire il layout del
+  modulo ("Entra" occupa tutta la riga del login), l'altezza no;
 - al massimo un tasto pieno per vista (vedi "Dove va l'arancione").
+
+Non sono tasti, e quindi non seguono la taglia: le righe (`.row-main`) e le voci del menu
+(`.top nav`), già descritte sopra, e la matita "modifica" accanto ai titoli dei campi del
+dettaglio (`.pencil`), un'icona nuda in linea col testo, senza bordo né ombra finché non
+ci si passa sopra.
 
 **Link con forma di pulsante** (`a.btn`). Stesso aspetto e stesse misure di `button`
 (bordo, hover, altezza), per azioni di navigazione che non inviano un modulo: "Annulla"
@@ -252,4 +257,6 @@ senza, dopo un deploy il tunnel serviva il foglio di stile vecchio con l'HTML nu
   link `a.btn`; icona matita riusata.
 - **2026-10-12** — "Nuova nota" alto 40 px e con l'icona ingrandita al telefono stonava
   accanto a "Menu": riportato alle misure comuni dei tasti, regole scritte in "Misure dei
-  pulsanti" (un tasto si distingue per colore, mai per misura).
+  pulsanti" (un tasto si distingue per colore, mai per misura). Tolte anche le misure
+  proprie di "Salva"/"Annulla" in Nuova nota (2,5 rem, etichetta sempre visibile) e di
+  "Entra" nel login (padding maggiorato).
