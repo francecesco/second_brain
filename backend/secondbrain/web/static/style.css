@@ -131,7 +131,8 @@ mark { background: var(--mark-bg); color: inherit; border-radius: 2px; padding: 
 .top nav form { border-top: 1px solid var(--line); margin-top: .3rem; padding-top: .3rem; }
 .search-open { display: none; cursor: pointer; }
 /* "Nuova nota": l'azione principale dell'intestazione, l'unico tasto pieno della barra. */
-.top .new-note { display: inline-flex; align-items: center; gap: .4rem; min-height: 2.5rem; padding: 0 .8rem;
+/* Stesse misure del pulsante "Menu" (padding .35rem .7rem, testo 10,5 px, line-height 1,4): cambia solo il colore. */
+.top .new-note { display: inline-flex; align-items: center; gap: .35rem; padding: .35rem .7rem; line-height: 1.4;
   background: var(--acc); color: var(--acc-fg); border: 1px solid var(--acc); border-radius: 2px; box-shadow: 0 2px 0 var(--acc-edge);
   font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; }
 .top .new-note:hover { color: var(--acc-fg); filter: brightness(1.08); }
@@ -274,8 +275,6 @@ td .actions { margin: 0; }
   main { padding: .9rem; }
   .row .meta { margin-left: 0; width: 100%; }
   .top .brand .label, .actions .label, .top .new-note .label, .top .dots { display: none; }
-  .top .new-note { padding: 0 .75rem; }
-  .top .new-note .icon { width: 1.1rem; height: 1.1rem; }
   .compose .actions .label { display: inline; }
   .menu .current { display: none; }
   .top nav { min-width: 14rem; }
