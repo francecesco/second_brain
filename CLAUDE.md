@@ -189,10 +189,6 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 
 ## Prossima sessione
 
-0. **Deploy sulla ZimaBoard della vista "Da fare" / "Completati" / menu** (in `master`,
-   provata dall'autore sul Mac; sulla ZimaBoard c'è la prima versione): quando l'autore
-   dà l'ok, `git archive --format=tar HEAD:backend | ssh zima 'tar -x -C ~/secondbrain'`
-   e `docker compose up -d --build`.
 1. **Chiudere il deploy** (Task 14 del piano `docs/plans/2026-09-28-backend-archivio.md`):
    dal telefono su rete mobile login e blocco dopo 5 tentativi; `sudo reboot` della ZimaBoard con servizi e tunnel che tornano da soli;
    backup (`pg_dump` del README e snapshot di `/mnt/Storage1/secondbrain`, compresa la
@@ -346,6 +342,16 @@ batteria ferma all'83-86 % da ore su USB: era carica, ma l'ADC leggeva ~110 mV i
 (partitore e tolleranza). Fattore ×1,027 ricavato dal massimo in carica, soglia USB a
 4,23 V e "piena" a 4,15 V; verificato: "bat piena" su USB e 96 % appena staccata.
 
+**2026-10-12 — Tag con nomi e vocabolario.** I tag erano parole chiave generiche; ora il
+prompt chiede sempre persone e programmi nominati, 1-3 temi e il riuso dei tag esistenti
+(max 10). Vocabolario dei nomi nelle Impostazioni (Whisper `prompt`, istruzioni di Gemini,
+arricchimento) e fase `retag` per rifare solo i tag (pulsante e `secondbrain retag`).
+Emerso sull'audio vero di una nota: Groq Whisper scrive "Cloud" per "Claude" anche col
+vocabolario, Gemini lo scrive giusto da solo; per i nomi conviene Gemini come principale
+(scelta dell'autore, oggi resta Groq). Spec `docs/specs/2026-10-12-backend-tag-nomi-design.md`.
+Deploy sulla ZimaBoard insieme a "Da fare / Completati / menu", col vocabolario dell'autore
+copiato dal Mac e `retag --all`.
+
 **2026-10-12 — Note da fare e menu.** Ogni registrazione si spunta come fatta: esce
 dall'archivio e da "Da fare" e passa in "Completati" (spec
 `docs/specs/2026-10-12-backend-note-da-fare-design.md`); stato nel sidecar (`done_at`), nel
@@ -354,7 +360,7 @@ titolo di una riga apre e richiude il dettaglio; le voci dell'intestazione stann
 menu a scomparsa, senza "Ricerca". Lezione: la prima versione l'ho mandata subito sulla
 ZimaBoard; l'autore vuole provare prima in locale sul Mac (`docker compose up -d --build`
 in `backend/`, http://localhost:8000) e decide lui il deploy. Sulla ZimaBoard gira ancora
-quella prima versione (casella con titolo barrato, senza "Completati").
+quella prima versione fino al deploy della sera.
 
 **2026-10-12 — Tasti a click.** Tenere premuto per registrare era scomodo: ora il tasto
 sotto (PWR) registra e ferma a click, tre click portano in DEV MODE, il tasto sopra (USER,

@@ -83,10 +83,13 @@ def search(s: Session, q: str, tag: str | None, language: str,
     return [SearchHit(capture, highlight(raw)) for capture, raw in s.execute(stmt.limit(limit))]
 
 
-def tag_counts(s: Session) -> list[tuple[str, int]]:
-    """Tag delle note fuori dal cestino con il numero di note: per numero decrescente, poi nome."""
-    rows = (select(func.unnest(Capture.tags).label("tag"))
-            .where(Capture.trashed_at.is_(None)).subquery("rows"))
+def tag_counts(s: Session, exclude=None) -> list[tuple[str, int]]:
+    """Tag delle note fuori dal cestino con il numero di note: per numero decrescente, poi nome.
+    `exclude`: id di una nota da non contare (quella da ritaggare, i cui tag possono essere sbagliati)."""
+    where = [Capture.trashed_at.is_(None)]
+    if exclude is not None:
+        where.append(Capture.id != exclude)
+    rows = select(func.unnest(Capture.tags).label("tag")).where(*where).subquery("rows")
     stmt = (select(rows.c.tag, func.count().label("n")).group_by(rows.c.tag)
             .order_by(func.count().desc(), rows.c.tag))
     return [(row.tag, row.n) for row in s.execute(stmt)]

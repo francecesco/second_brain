@@ -98,6 +98,7 @@ Tutti come `docker compose exec app secondbrain ...`:
 | `gen-key` | genera una `SETTINGS_KEY` (non serve il database) |
 | `process <id>` | rimette in coda l'elaborazione AI di una registrazione (come "Rielabora") |
 | `process --backfill` | mette in coda, a priorità bassa, tutte le note fuori dal cestino senza trascrizione |
+| `retag --all` / `retag <id>` | rifà solo i tag (a priorità bassa) con le regole e il vocabolario attuali; trascrizione, titolo, riassunto e tag corretti a mano restano |
 | `worker` | il ciclo del worker (lo lancia il servizio `worker` del compose, non serve a mano) |
 
 Per pubblicare un firmware, il binario va prima copiato dentro il container:
@@ -161,6 +162,14 @@ non un `172.x`.
 Il servizio `worker` (stessa immagine dell'app) prende dalla coda una nota alla volta:
 la trascrive, poi chiede titolo, riassunto breve e tag, e scrive la nota nel vault
 (vedi sotto) e `<base>.ai.json` accanto al WAV. Ogni nota nuova entra in coda appena arriva.
+
+**Tag e vocabolario dei nomi.** I tag contengono sempre le persone e i programmi, prodotti
+e servizi nominati nella nota, più qualche tema; l'AI riusa i tag già presenti quando
+calzano. Nella scheda **Vocabolario dei nomi** delle Impostazioni si elencano, uno per riga,
+i nomi propri scritti come devono comparire (Costanza, Home Assistant, Claude…): vanno nel
+`prompt` di Whisper (Groq, OpenAI) e nelle istruzioni di Gemini, così la trascrizione li
+scrive giusti, e nei tag sempre nella stessa forma. Il pulsante "Rifai i tag delle note"
+(o `secondbrain retag --all`) li applica alle note già archiviate.
 
 **Configurazione**
 

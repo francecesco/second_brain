@@ -22,6 +22,21 @@
   </form>
 </section>
 
+<section class="card" id="vocabulary">
+  <h2>Vocabolario dei nomi</h2>
+  <p>Persone, programmi, prodotti e luoghi che nomini nelle note, scritti come devono comparire: aiutano la trascrizione a capirli e diventano tag sempre uguali. Un nome per riga.</p>
+  <form method="post" action="/settings/vocabulary" class="settings-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <textarea name="vocabulary" rows="8" aria-label="Vocabolario dei nomi, uno per riga" placeholder="Costanza&#10;Home Assistant&#10;Claude">{{ vocabulary|join('\n') }}</textarea>
+    <div class="actions"><button type="submit" class="pri" aria-label="Salva il vocabolario" title="Salva il vocabolario">{{ icon("save") }}<span class="label">Salva</span></button></div>
+  </form>
+  <p>Le note nuove usano subito il vocabolario. Per quelle già archiviate si possono rifare solo i tag: trascrizione, titolo, riassunto e tag corretti a mano restano.</p>
+  <form method="post" action="/settings/retag" class="actions">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit"{% if not retag_count %} disabled{% endif %}>{{ icon("tag") }}<span>Rifai i tag delle note ({{ retag_count }})</span></button>
+  </form>
+</section>
+
 <section class="card" id="vault">
   <h2>Vault Obsidian</h2>
   <p>Le note stanno in <code>{{ vault_dir }}/Captures/</code>: modificale in Obsidian, il worker le riprende entro un minuto.</p>

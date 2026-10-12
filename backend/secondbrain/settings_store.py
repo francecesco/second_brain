@@ -17,6 +17,9 @@ from .models import AiProvider, Setting
 from .notefile import MAX_MODEL_LEN
 
 PAUSED_KEY = "processing_paused"
+VOCABULARY_KEY = "vocabulary"  # nomi propri dell'autore (spec tag e nomi §3)
+MAX_VOCABULARY = 200
+MAX_NAME_LEN = 60
 LANGUAGE_KEY = "language"
 MASK_PREFIX = 4
 MASK_SUFFIX = 3
@@ -85,6 +88,30 @@ def set_setting(s: Session, key: str, value: Any) -> None:
     else:
         row.value = value
     s.flush()
+
+
+def clean_vocabulary(names) -> tuple[str, ...]:
+    """Spazi compattati, righe vuote e doppioni (senza badare alle maiuscole) tolti."""
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in names:
+        name = " ".join(str(raw).split())[:MAX_NAME_LEN].rstrip()
+        if name and name.casefold() not in seen:
+            seen.add(name.casefold())
+            cleaned.append(name)
+        if len(cleaned) == MAX_VOCABULARY:
+            break
+    return tuple(cleaned)
+
+
+def vocabulary(s: Session) -> tuple[str, ...]:
+    return clean_vocabulary(get_setting(s, VOCABULARY_KEY, []))
+
+
+def set_vocabulary(s: Session, names) -> tuple[str, ...]:
+    cleaned = clean_vocabulary(names)
+    set_setting(s, VOCABULARY_KEY, list(cleaned))
+    return cleaned
 
 
 def is_paused(s: Session) -> bool:

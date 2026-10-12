@@ -89,3 +89,30 @@ def test_check_models():
 
 def test_errors_carry_the_provider():
     assert str(ServiceError("groq", "HTTP 429: Rate limit")) == "groq: HTTP 429: Rate limit"
+
+
+def test_enrich_prompt_asks_for_people_and_programs_as_tags():
+    prompt = base.enrich_prompt("it")
+    assert "persone" in prompt and "programmi" in prompt and "10" in prompt
+    assert "generic" in prompt          # niente parole generiche
+    assert "Nomi propri noti" not in prompt and "Tag già usati" not in prompt
+
+
+def test_enrich_prompt_with_vocabulary_and_known_tags():
+    hints = base.Hints(names=("Claude", "Home Assistant", "Costanza"), known_tags=("promemoria", "casa"))
+    prompt = base.enrich_prompt("it", hints)
+    assert "Nomi propri noti" in prompt and "Claude, Home Assistant, Costanza" in prompt
+    assert "Tag già usati" in prompt and "promemoria, casa" in prompt
+
+
+def test_whisper_prompt_lists_the_names_and_stays_short():
+    assert base.whisper_prompt(base.NO_HINTS) is None
+    assert base.whisper_prompt(base.Hints(names=("Claude", "Costanza"))) == "Nomi propri: Claude, Costanza."
+    many = base.Hints(names=tuple(f"Nome{i:03d}" for i in range(300)))
+    text = base.whisper_prompt(many)
+    assert len(text) <= base.MAX_WHISPER_PROMPT_CHARS and text.endswith(".") and "Nome000" in text
+
+
+def test_transcribe_prompt_with_names():
+    assert "Claude" in base.transcribe_prompt("it", base.Hints(names=("Claude",)))
+    assert "Nomi propri" not in base.transcribe_prompt("it")

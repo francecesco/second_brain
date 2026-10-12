@@ -7,9 +7,10 @@ import httpx
 
 from .audio import AudioSource
 from .base import (CHECK_TIMEOUT, ENRICH_TIMEOUT, OK, TRANSCRIBE_TIMEOUT, CheckResult,
-                   ContentError, Enrichment, ProviderBase, ProviderError, ServiceError,
-                   Transcript, check_request_size, enrich_prompt, error_code, http_detail,
-                   json_body, parse_enrichment, prepare_audio, run_check)
+                   NO_HINTS, ContentError, Enrichment, Hints, ProviderBase, ProviderError,
+                   ServiceError, Transcript, check_request_size, enrich_prompt, error_code,
+                   http_detail, json_body, parse_enrichment, prepare_audio, run_check,
+                   whisper_prompt)
 
 # Sull'audio questi codici dicono "il file non va bene": nessun altro provider.
 AUDIO_CONTENT_STATUSES = (400, 413, 415, 422)
@@ -28,15 +29,16 @@ class OpenAICompatible(ProviderBase):
             return ContentError(self.name, detail)
         return ServiceError(self.name, detail)
 
-    def transcribe(self, audio: AudioSource, language: str) -> Transcript:
+    def transcribe(self, audio: AudioSource, language: str, hints: Hints = NO_HINTS) -> Transcript:
         path, mime = prepare_audio(self.name, audio, self.audio_formats)
         check_request_size(self.name, path.stat().st_size, self.max_bytes, what="audio")
+        data = {"model": self.transcribe_model, "language": language, "response_format": "json"}
+        vocabulary = whisper_prompt(hints)
+        if vocabulary:
+            data["prompt"] = vocabulary
         with open(path, "rb") as f:
-            response = self._send(
-                "POST", "/audio/transcriptions", timeout=TRANSCRIBE_TIMEOUT,
-                data={"model": self.transcribe_model, "language": language,
-                      "response_format": "json"},
-                files={"file": (path.name, f, mime)})
+            response = self._send("POST", "/audio/transcriptions", timeout=TRANSCRIBE_TIMEOUT,
+                                  data=data, files={"file": (path.name, f, mime)})
         if response.status_code != OK:
             raise self._error(response, audio=True)
         body = json_body(self.name, response)
@@ -45,12 +47,12 @@ class OpenAICompatible(ProviderBase):
             raise ServiceError(self.name, "trascrizione: risposta senza testo")
         return Transcript(text=text.strip(), model=self.transcribe_model, raw=body)
 
-    def enrich(self, text: str, language: str) -> Enrichment:
+    def enrich(self, text: str, language: str, hints: Hints = NO_HINTS) -> Enrichment:
         if not self.text_model:
             raise ServiceError(self.name, "modello di testo non impostato")
         payload = {
             "model": self.text_model,
-            "messages": [{"role": "system", "content": enrich_prompt(language)},
+            "messages": [{"role": "system", "content": enrich_prompt(language, hints)},
                          {"role": "user", "content": text}],
             "response_format": {"type": "json_object"},
         }

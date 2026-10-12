@@ -125,3 +125,11 @@ def test_pause_and_language(db):
     assert (store.is_paused(db), store.get_language(db)) == (True, "en")
     with pytest.raises(ValueError):
         store.set_language(db, "xx")
+
+
+def test_vocabulary_is_cleaned(db):
+    assert store.vocabulary(db) == ()
+    store.set_vocabulary(db, ["  Claude ", "", "Home  Assistant", "claude", "x" * 80])
+    assert store.vocabulary(db) == ("Claude", "Home Assistant", "x" * store.MAX_NAME_LEN)
+    store.set_vocabulary(db, [f"n{i}" for i in range(500)])
+    assert len(store.vocabulary(db)) == store.MAX_VOCABULARY

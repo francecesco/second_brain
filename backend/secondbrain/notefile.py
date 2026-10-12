@@ -18,7 +18,7 @@ EDITABLE_FIELDS = ("transcript", "summary", "tags")
 # nel `.md` è una nota illeggibile, non un DataError a metà rescan.
 MAX_TITLE_LEN = 200  # captures.title e captures.title_auto
 MAX_SUMMARY_LEN = 500
-MAX_TAGS = 8
+MAX_TAGS = 10  # persone e programmi nominati, piu' qualche tema (spec tag e nomi §3)
 MAX_TAG_LEN = 40  # elementi di captures.tags
 MAX_LANGUAGE_LEN = 8  # captures.language
 MAX_PROVIDER_LEN = 32  # captures.ai_provider, captures.ai_enrich_provider, ai_providers.name
@@ -305,6 +305,11 @@ def apply_enrichment(note: Note, title: str, summary: str | None, tags: tuple[st
         summary=note.summary if "summary" in note.edited else summary,
         tags=note.tags if "tags" in note.edited else tags,
         enrich_provider=provider, enrich_model=model, processed_at=at)
+
+
+def apply_tags(note: Note, tags: tuple[str, ...]) -> Note:
+    """Solo i tag nuovi (fase retag); quelli corretti a mano restano."""
+    return note if "tags" in note.edited else replace(note, tags=tags)
 
 
 def apply_edit(note: Note, field: str, value: str) -> Note:

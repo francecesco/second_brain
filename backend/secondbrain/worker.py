@@ -25,11 +25,11 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
-from . import jobs, notefile, notes, vault_sync
+from . import jobs, notefile, notes, search, vault_sync
 from . import settings_store as store
 from .ai import chain
 from .ai.audio import AudioError, AudioSource
-from .ai.base import ContentError
+from .ai.base import ContentError, Hints
 from .ai.registry import ProviderConfig
 from .archive import AI_SUFFIX, Archive
 from .clock import utcnow
@@ -37,6 +37,7 @@ from .models import Capture, Job
 from .usage import month_start, record_usage
 from .vault import Vault
 
+KNOWN_TAGS = 40  # tag gia' usati passati all'arricchimento (spec tag e nomi §4)
 log = logging.getLogger(__name__)
 
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -148,10 +149,12 @@ class Worker:
                 return
             stage, rel_path, text = start
             if stage == jobs.STAGE_TRANSCRIBE:
-                text = self._transcribe(lease, rel_path, configs, language)
+                text = self._transcribe(lease, rel_path, configs, language, self._hints())
                 if text is None:
                     return
-            self._enrich(lease, text, configs, language)
+            # Indizi riletti dopo la trascrizione: i tag gia' usati non contano questa nota.
+            self._enrich(lease, text, configs, language, self._hints(lease.capture_id),
+                         tags_only=stage == jobs.STAGE_RETAG)
         except Shutdown:
             self._release(lease)
             raise
@@ -164,6 +167,13 @@ class Worker:
         except Exception as exc:  # noqa: BLE001 - disco pieno, DB, bug: si riprova con backoff
             log.exception("elaborazione di %s interrotta da un errore locale", capture_id)
             self._fail(lease, f"errore locale: {type(exc).__name__}", permanent=False)
+
+    def _hints(self, capture_id: uuid.UUID | None = None) -> Hints:
+        """Vocabolario e tag piu' usati (spec tag e nomi §4), letti a ogni lavoro: una
+        modifica al vocabolario vale dalla nota successiva."""
+        with self.sessionmaker() as s:
+            known = tuple(tag for tag, _ in search.tag_counts(s, exclude=capture_id)[:KNOWN_TAGS])
+            return Hints(names=store.vocabulary(s), known_tags=known)
 
     def _hold(self, s: Session, lease: _Lease) -> tuple[Capture, Job] | None:
         """Nota e lavoro bloccati, in quest'ordine, se il risultato si può ancora scrivere.
@@ -196,6 +206,10 @@ class Worker:
                     and "transcript" in capture.edited):
                 stage = jobs.STAGE_ENRICH  # trascrizione corretta a mano: non si rifà
                 until = jobs.advance(s, lease.capture_id, stage, now).locked_until
+            if stage == jobs.STAGE_RETAG and not (text or "").strip():  # niente da ritaggare
+                jobs.mark_done(s, lease.capture_id, now)
+                s.commit()
+                return None
             if stage == jobs.STAGE_ENRICH and text is None:  # catalogo senza testo
                 jobs.release(s, lease.capture_id, now, stage=jobs.STAGE_TRANSCRIBE)
                 s.commit()
@@ -209,12 +223,12 @@ class Worker:
         return stage, capture.rel_path, text
 
     def _transcribe(self, lease: _Lease, rel_path: str, configs: list[ProviderConfig],
-                    language: str) -> str | None:
+                    language: str, hints: Hints) -> str | None:
         """Il testo da arricchire, o None se ci si ferma qui."""
         with tempfile.TemporaryDirectory(prefix=TEMP_PREFIX) as tmp:
             audio = AudioSource(self.archive.abs(rel_path), Path(tmp))
             config, transcript = chain.transcribe(configs, self.factory, audio, language,
-                                                  self._on_call)
+                                                  self._on_call, hints)
         now = self.clock()
         with self.sessionmaker() as s:
             held = self._hold(s, lease)
@@ -242,8 +256,9 @@ class Worker:
         return note.transcript or None
 
     def _enrich(self, lease: _Lease, text: str, configs: list[ProviderConfig],
-                language: str) -> None:
-        config, enrichment = chain.enrich(configs, self.factory, text, language, self._on_call)
+                language: str, hints: Hints, *, tags_only: bool = False) -> None:
+        config, enrichment = chain.enrich(configs, self.factory, text, language, self._on_call,
+                                          hints)
         now = self.clock()
         with self.sessionmaker() as s:
             held = self._hold(s, lease)
@@ -256,17 +271,20 @@ class Worker:
                 log.warning("nota %s senza trascrizione nel catalogo: di nuovo da trascrivere",
                             lease.capture_id)
                 return
-            note = notefile.apply_enrichment(  # rilegge `edited` sotto il lock
-                notes.note_from_capture(capture), enrichment.title, enrichment.summary,
-                enrichment.tags, provider=config.name, model=enrichment.model, at=now)
-            self._write_ai_section(capture.rel_path, "enrich",
+            if tags_only:  # retag: titolo, riassunto e provenienza restano
+                note = notefile.apply_tags(notes.note_from_capture(capture), enrichment.tags)
+            else:
+                note = notefile.apply_enrichment(  # rilegge `edited` sotto il lock
+                    notes.note_from_capture(capture), enrichment.title, enrichment.summary,
+                    enrichment.tags, provider=config.name, model=enrichment.model, at=now)
+            self._write_ai_section(capture.rel_path, "retag" if tags_only else "enrich",
                                    _ai_record(config.name, enrichment.model, now, enrichment.raw))
             notes.write_note(s, self.archive, capture, note, self.tz, vault=self.vault,
                              public_url=self.public_url)
             jobs.mark_done(s, lease.capture_id, now)
             s.commit()
             rel_path = capture.rel_path
-        log.info("elaborata %s con %s", rel_path, config.name)
+        log.info("%s %s con %s", "ritaggata" if tags_only else "elaborata", rel_path, config.name)
 
     def _write_ai_section(self, rel_wav: str, section: str, record: dict) -> None:
         """Aggiorna solo la sezione di questa fase; un `.ai.json` illeggibile si sostituisce."""

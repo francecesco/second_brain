@@ -157,3 +157,15 @@ def test_build_provider_picks_the_adapter():
     assert isinstance(gemini, Gemini) and gemini.base_url == PROVIDER_SPECS["gemini"].base_url
     assert isinstance(groq, OpenAICompatible) and groq.audio_formats == ("flac", "wav")
     assert groq.transcribe_model == "whisper-large-v3-turbo"
+
+
+def test_vocabulary_in_transcription_and_enrichment(audio):
+    from secondbrain.ai.base import Hints
+    hints = Hints(names=("Claude",), known_tags=("casa",))
+    rec = Recorder(answer("ok"), answer(json.dumps({"title": "T", "summary": "S", "tags": ["claude"]})))
+    p = make(rec)
+    p.transcribe(audio, "it", hints)
+    assert "Claude" in json.loads(rec.requests[0].content)["contents"][0]["parts"][0]["text"]
+    p.enrich("testo", "it", hints)
+    system = json.loads(rec.requests[1].content)["systemInstruction"]["parts"][0]["text"]
+    assert "Claude" in system and "casa" in system

@@ -8,7 +8,7 @@ from collections.abc import Callable, Sequence
 from typing import TypeVar
 
 from .audio import AudioSource
-from .base import ContentError, Enrichment, Provider, ServiceError, Transcript
+from .base import NO_HINTS, ContentError, Enrichment, Hints, Provider, ServiceError, Transcript
 from .registry import ProviderConfig
 
 log = logging.getLogger(__name__)
@@ -51,13 +51,15 @@ def _run(configs: Sequence[ProviderConfig], factory: ProviderFactory,
 
 
 def transcribe(configs: Sequence[ProviderConfig], factory: ProviderFactory, audio: AudioSource,
-               language: str, on_call: UsageCallback) -> tuple[ProviderConfig, Transcript]:
+               language: str, on_call: UsageCallback,
+               hints: Hints = NO_HINTS) -> tuple[ProviderConfig, Transcript]:
     seconds = audio.duration_s  # AudioError qui, prima di disturbare qualunque provider
     return _run(configs, factory, lambda c: c.transcribe_model,
-                lambda p: p.transcribe(audio, language), on_call, seconds)
+                lambda p: p.transcribe(audio, language, hints), on_call, seconds)
 
 
 def enrich(configs: Sequence[ProviderConfig], factory: ProviderFactory, text: str,
-           language: str, on_call: UsageCallback) -> tuple[ProviderConfig, Enrichment]:
+           language: str, on_call: UsageCallback,
+           hints: Hints = NO_HINTS) -> tuple[ProviderConfig, Enrichment]:
     return _run(configs, factory, lambda c: c.text_model,
-                lambda p: p.enrich(text, language), on_call, 0.0)
+                lambda p: p.enrich(text, language, hints), on_call, 0.0)
