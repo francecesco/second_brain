@@ -169,8 +169,9 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `SETTINGS_KEY` nuova generata lì, nuovo token del device in `secrets.h`),
   `ALLOW_UNAUTHENTICATED_LAN=false`, `PUBLIC_URL=https://secondbrain.cescohomelab.com`,
   `DEVICE_HOSTNAME` vuoto (con un solo hostname la UI darebbe 404). Release firmware
-  0.8.1 pubblicata lì. Le chiavi API dei provider AI vanno reinserite dalla pagina
-  Impostazioni: senza, il worker resta fermo. Sul Mac resta il backend di sviluppo
+  pubblicata lì. Chiavi API dei provider AI reinserite dall'autore il 2026-10-12: ciclo
+  completo verificato (upload dal device, trascrizione con Groq, nota con titolo nel vault
+  `/mnt/Storage1/secondbrain/vault/Captures/`). Sul Mac resta il backend di sviluppo
   (`backend/.env` e `backend/data/` locali e gitignored).
 - **Elaborazione AI** (spec `docs/specs/2026-09-29-backend-elaborazione-ai-design.md`):
   trascrizione, titolo, riassunto e tag con Groq e Gemini (chiavi inserite dall'autore
@@ -189,9 +190,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 ## Prossima sessione
 
 1. **Chiudere il deploy** (Task 14 del piano `docs/plans/2026-09-28-backend-archivio.md`):
-   chiavi API dalla pagina Impostazioni sulla ZimaBoard e verifica dell'elaborazione delle
-   due registrazioni già caricate; dal telefono su rete mobile login e blocco dopo 5
-   tentativi; `sudo reboot` della ZimaBoard con servizi e tunnel che tornano da soli;
+   dal telefono su rete mobile login e blocco dopo 5 tentativi; `sudo reboot` della ZimaBoard con servizi e tunnel che tornano da soli;
    backup (`pg_dump` del README e snapshot di `/mnt/Storage1/secondbrain`, compresa la
    `SETTINGS_KEY` del `.env`).
 2. **Vault con Syncthing** sulla ZimaBoard: `/mnt/Storage1/secondbrain/vault` condiviso col
