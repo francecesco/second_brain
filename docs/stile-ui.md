@@ -201,13 +201,19 @@ Prima di chiudere una modifica di stile:
 2. Screenshot headless con Chrome delle pagine toccate, in chiaro, scuro e a 390 px.
    Il modo più semplice: un test temporaneo che usa la fixture `recordings`, imposta
    titolo, tag e trascrizione su una cattura, salva le pagine come HTML con i link a
-   `/static/` riscritti in percorsi `file://`, e due copie del CSS in cui il blocco
+   `/static/` riscritti in percorsi `file://` (attenzione al `?v=` della versione, vedi
+   sotto), e due copie del CSS in cui il blocco
    `@media (prefers-color-scheme: dark)` diventa `@media all` (scuro) o `@media not all`
    (chiaro). Chrome headless su Mac segue il tema del sistema e non scende sotto ~500 px
    di finestra: per il telefono si mette la pagina in un `<iframe>` largo 390 px.
 3. Guardare gli screenshot davvero: intestazione su una riga, niente scroll
    orizzontale, LED e orario arancione dove previsto, contrasto nel tema scuro.
 4. `docker compose up -d --build` e controllo sul sito vero, ricaricando la pagina.
+
+**File statici versionati.** `base.html` carica CSS e htmx con `static_url(...)`, che
+aggiunge `?v=` con l'hash del contenuto: Cloudflare tiene in cache i `.css` per ore e,
+senza, dopo un deploy il tunnel serviva il foglio di stile vecchio con l'HTML nuovo
+(2026-10-12). Un file statico nuovo caricato da una pagina passa da `static_url`.
 
 ## Storico delle decisioni
 

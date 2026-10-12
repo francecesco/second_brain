@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Second Brain{% endblock %}</title>
-<link rel="stylesheet" href="/static/style.css">
-<script src="/static/htmx.min.js" defer></script>
+<link rel="stylesheet" href="{{ static_url('style.css') }}">
+<script src="{{ static_url('htmx.min.js') }}" defer></script>
 <script>
 document.addEventListener("htmx:responseError", function (evt) {
   var flash = document.getElementById("flash");

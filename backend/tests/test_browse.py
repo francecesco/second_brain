@@ -177,3 +177,14 @@ def test_detail_lists_the_vault_note_and_serves_it(recordings, db, settings):
     assert "Captures/2026/2026-09-23 21.15 Auto.md" in text and f'href="/captures/{cid}/note"' in text
     r = recordings.client.get(f"/captures/{cid}/note")
     assert r.status_code == 200 and "id: cap_20260923_191530" in r.text
+
+
+def test_static_files_are_versioned_by_content(recordings):
+    # Cloudflare tiene in cache i .css per ore: l'indirizzo cambia quando cambia il file.
+    import hashlib
+    from secondbrain.web.templating import STATIC_DIR
+    text = recordings.client.get("/browse").text
+    for name in ("style.css", "htmx.min.js"):
+        digest = hashlib.sha256((STATIC_DIR / name).read_bytes()).hexdigest()[:12]
+        assert f"/static/{name}?v={digest}" in text
+    assert 'href="/static/style.css"' not in text
