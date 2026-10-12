@@ -2,7 +2,7 @@
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from secondbrain import jobs, textnotes
 from secondbrain.archive import Archive
@@ -108,3 +108,64 @@ def test_effective_title_uses_provisional_title_for_text_notes(db, settings):
     assert effective_title(capture, ROME) == "Comprare il latte"
     capture.title_auto = "Spesa"
     assert effective_title(capture, ROME) == "Spesa"
+
+
+def test_vault_file_name_uses_provisional_title(db, settings):
+    capture, _ = create(db, settings, raw="Comprare il latte\ne il pane")
+    assert capture.note_path.endswith("Comprare il latte.md")
+
+
+def test_creation_waits_for_the_advisory_lock(db, settings):
+    import threading
+    from secondbrain.catalog import make_sessionmaker
+    sm = make_sessionmaker(db.get_bind())
+    done = threading.Event()
+    result = {}
+
+    def worker():
+        with sm() as s2:
+            result["r"] = textnotes.create_text_note(
+                s2, Archive(settings.archive_dir), "ciao", CID, NOW, tz=ROME, language="it",
+                vault=Vault(settings.vault_dir))
+        done.set()
+
+    with sm() as holder:
+        holder.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": textnotes.CREATE_LOCK_KEY})
+        t = threading.Thread(target=worker)
+        t.start()
+        assert not done.wait(1.0)          # bloccata finche' il lock e' tenuto
+        holder.commit()
+    assert done.wait(10)
+    t.join()
+    assert result["r"][1] is True
+
+
+def test_concurrent_double_submit_keeps_files(db, settings):
+    import threading
+    from secondbrain.catalog import make_sessionmaker
+    sm = make_sessionmaker(db.get_bind())
+    out, errors = [], []
+
+    def worker():
+        try:
+            with sm() as s2:
+                out.append(textnotes.create_text_note(
+                    s2, Archive(settings.archive_dir), "ciao", CID, NOW, tz=ROME, language="it",
+                    vault=Vault(settings.vault_dir)))
+        except Exception as e:  # noqa: BLE001
+            errors.append(e)
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(20)
+    assert not errors
+    assert sorted(created for _, created in out) == [False, True]
+    assert len(db.scalars(select(Capture)).all()) == 1
+    assert len(db.scalars(select(Device).where(Device.type == "web")).all()) == 1
+    capture = out[0][0]
+    archive = Archive(settings.archive_dir)
+    assert archive.abs(capture.rel_path).exists()
+    assert archive.read_sidecar(capture.rel_path)
+    assert Vault(settings.vault_dir).read_text(capture.note_path)

@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from . import catalog, jobs, naming, notes
@@ -29,6 +29,7 @@ TEXT_DEVICE_TYPE = "web"
 TEXT_DEVICE_NAME = "App"
 PROVISIONAL_TITLE_CHARS = 60
 ELLIPSIS = "…"
+CREATE_LOCK_KEY = 0x5B7E_0001   # advisory lock di transazione: una creazione alla volta
 
 
 class TextNoteError(ValueError):
@@ -96,10 +97,13 @@ def create_text_note(s: Session, archive: Archive, raw: str, capture_id: str, no
                      public_url: str | None = None) -> tuple[Capture, bool]:
     """(nota, creata). Stesso id e stesso testo di una nota esistente: quella, senza crearne
     un'altra (doppio invio del form). Commit incluso; se qualcosa fallisce i file si tolgono."""
-    text = normalize_text(raw)
+    text_ = normalize_text(raw)
+    # Serializza le creazioni (doppio invio quasi simultaneo, primo device "App"): la seconda
+    # aspetta il commit della prima e poi vede la riga; il lock cade con commit/rollback.
+    s.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": CREATE_LOCK_KEY})
     if not naming.is_valid_capture_id(capture_id):
         capture_id = new_capture_id(now)
-    data = text.encode("utf-8")
+    data = text_.encode("utf-8")
     sha = hashlib.sha256(data).hexdigest()
     device = app_device(s, now)
     for previous in catalog.find_captures(s, device.id, capture_id):
@@ -120,7 +124,7 @@ def create_text_note(s: Session, archive: Archive, raw: str, capture_id: str, no
         s.add(capture)
         s.flush()
         notes.write_note(s, archive, capture,
-                         Note(transcript=text, language=language, edited=("transcript",)),
+                         Note(transcript=text_, language=language, edited=("transcript",)),
                          tz, vault=vault, public_url=public_url)
         jobs.enqueue(s, capture.id, now, stage=jobs.STAGE_ENRICH)
         s.commit()
@@ -130,7 +134,7 @@ def create_text_note(s: Session, archive: Archive, raw: str, capture_id: str, no
         s.rollback()
         _cleanup(s, archive, vault, capture.id, capture.rel_path, note_path)
         raise
-    log.info("nota scritta %s (%d caratteri)", capture.rel_path, len(text))
+    log.info("nota scritta %s (%d caratteri)", capture.rel_path, len(text_))
     return capture, True
 
 
