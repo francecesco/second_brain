@@ -223,7 +223,7 @@ def test_sidecar_without_wav(archive, db, settings):
         '"duration_s": 1.0, "size_bytes": 32044, "sha256": "' + 'a' * 64 + '"}\n'
     )
     report = rescan(db, archive, NOW)
-    assert any("120000_aabbccddeeff" in p and "sidecar senza WAV" in p for p in report.problems)
+    assert any("120000_aabbccddeeff" in p and "sidecar senza sorgente" in p for p in report.problems)
     assert report.added == 0  # not imported
     db.commit()
     assert db.get(Capture, uuid.UUID("11111111-2222-3333-4444-555555555555")) is None

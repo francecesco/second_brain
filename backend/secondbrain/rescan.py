@@ -50,7 +50,7 @@ def _sync_trashed_at(archive: Archive, rel_wav: str, sidecar_data: dict,
 
 def _load(archive: Archive, rel_wav: str, now: datetime, report: RescanReport) -> dict | None:
     if not archive.abs(rel_wav).is_file():
-        report.problems.append(f"{rel_wav}: sidecar senza WAV")
+        report.problems.append(f"{rel_wav}: sidecar senza sorgente")
         return None
     in_trash = rel_wav.startswith(TRASH + "/")
     try:
@@ -183,8 +183,8 @@ def rescan(s: Session, archive: Archive, now: datetime, *, vault: Vault | None =
             report.removed += 1
     s.flush()
 
-    for rel_wav in archive.iter_wavs_without_sidecar():
-        report.problems.append(f"{rel_wav}: WAV senza sidecar, non importato")
+    for rel_wav in archive.iter_sources_without_sidecar():
+        report.problems.append(f"{rel_wav}: sorgente senza sidecar, non importata")
 
     linked = _link_vault(s, vault, entries, report) if vault is not None else set()
     to_queue: list[uuid.UUID] = []

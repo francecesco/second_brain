@@ -15,6 +15,9 @@ from .naming import unique_base
 INCOMING = ".incoming"
 TRASH = ".trash"
 SIDECAR_SUFFIX = ".json"
+WAV_SUFFIX = ".wav"
+TEXT_SUFFIX = ".txt"        # nota scritta dall'app (spec note scritte §4): sostituisce il WAV
+SOURCE_SUFFIXES = (WAV_SUFFIX, TEXT_SUFFIX)
 NOTE_SUFFIX = ".md"         # nota leggibile, verità per i campi AI (spec AI §6)
 AI_SUFFIX = ".ai.json"      # risposte grezze dei provider: due punti, quindi mai un sidecar
 
@@ -80,14 +83,15 @@ class Archive:
         directory = self.abs(dir_rel)
         return unique_base(base, lambda b: self._taken(directory, b))
 
-    def commit_capture(self, tmp: Path, dir_rel: str, base: str, sidecar: dict) -> str:
+    def commit_capture(self, tmp: Path, dir_rel: str, base: str, sidecar: dict,
+                       suffix: str = WAV_SUFFIX) -> str:
         directory = self.abs(dir_rel)
         directory.mkdir(parents=True, exist_ok=True)
-        rel_wav = f"{dir_rel}/{base}.wav"
-        self.write_sidecar(rel_wav, sidecar)
-        os.replace(tmp, directory / f"{base}.wav")
+        rel = f"{dir_rel}/{base}{suffix}"
+        self.write_sidecar(rel, sidecar)
+        os.replace(tmp, directory / f"{base}{suffix}")
         _fsync_dir(directory)
-        return rel_wav
+        return rel
 
     def _write_atomic(self, target: Path, data: bytes, suffix: str) -> None:
         """Scrittura in `.incoming/` e rename: chi legge vede il file vecchio o quello nuovo."""
@@ -141,7 +145,7 @@ class Archive:
             os.replace(src_dir / name, dest_dir / (new_base + name[len(base):]))
         _fsync_dir(dest_dir)
         self._prune(src_dir)
-        return f"{dest_dir_rel}/{new_base}.wav"
+        return f"{dest_dir_rel}/{new_base}{src.suffix}"
 
     def delete(self, rel_wav: str) -> None:
         path = self.abs(rel_wav)
@@ -156,15 +160,18 @@ class Archive:
             directory = directory.parent
 
     def iter_sidecar_rels(self) -> Iterator[str]:
-        """Percorso relativo del WAV per ogni sidecar `<base>.json`, cestino compreso."""
+        """Percorso relativo della sorgente (WAV o testo) per ogni sidecar `<base>.json`,
+        cestino compreso; se non c'è nessuna sorgente, il `.wav` (rescan lo segnala)."""
         for path in sorted(self.root.rglob("*" + SIDECAR_SUFFIX)):
             rel = path.relative_to(self.root)
             if rel.parts[0] == INCOMING or not path.is_file() or not _is_base_file(path):
                 continue
-            yield rel.with_suffix(".wav").as_posix()
+            source = next((rel.with_suffix(s) for s in SOURCE_SUFFIXES
+                           if (self.root / rel.with_suffix(s)).is_file()), rel.with_suffix(WAV_SUFFIX))
+            yield source.as_posix()
 
-    def iter_wavs_without_sidecar(self) -> Iterator[str]:
-        for path in sorted(self.root.rglob("*.wav")):
+    def iter_sources_without_sidecar(self) -> Iterator[str]:
+        for path in sorted(p for s in SOURCE_SUFFIXES for p in self.root.rglob("*" + s)):
             rel = path.relative_to(self.root)
             if rel.parts[0] == INCOMING or not _is_base_file(path):
                 continue

@@ -118,7 +118,7 @@ def test_iter_sidecars_and_orphan_wavs(archive):
                 f"{DAY}/c.wav", ".incoming/z.json"]:
         put(archive, rel)
     assert list(archive.iter_sidecar_rels()) == [".trash/2026/09/27/b.wav", f"{DAY}/a.wav"]
-    assert list(archive.iter_wavs_without_sidecar()) == [f"{DAY}/c.wav"]
+    assert list(archive.iter_sources_without_sidecar()) == [f"{DAY}/c.wav"]
 
 
 def test_write_text_writes_note_files_atomically(archive):
@@ -150,3 +150,36 @@ def test_write_text_cleans_up_its_tmp_on_failure(archive, monkeypatch):
     with pytest.raises(OSError):
         archive.write_text(f"{DAY}/x.wav", ".md", "testo")
     assert list(archive.incoming_dir.iterdir()) == []
+
+
+def test_commit_capture_text(archive):
+    tmp = archive.new_incoming()
+    tmp.write_bytes("ciao".encode())
+    rel = archive.commit_capture(tmp, DAY, "091530_app", {"a": 1}, suffix=".txt")
+    assert rel == f"{DAY}/091530_app.txt"
+    assert archive.abs(rel).read_text() == "ciao"
+    assert archive.read_sidecar(rel) == {"a": 1}
+
+
+def test_move_keeps_text_suffix(archive):
+    put(archive, f"{DAY}/091530_app.txt")
+    put(archive, f"{DAY}/091530_app.json", b"{}")
+    rel = archive.move(f"{DAY}/091530_app.txt", ".trash/" + DAY)
+    assert rel == f".trash/{DAY}/091530_app.txt"
+    assert archive.abs(rel).is_file()
+
+
+def test_iter_sidecar_rels_returns_existing_source(archive):
+    put(archive, f"{DAY}/091530_dev.wav"); put(archive, f"{DAY}/091530_dev.json", b"{}")
+    put(archive, f"{DAY}/101530_app.txt"); put(archive, f"{DAY}/101530_app.json", b"{}")
+    put(archive, f"{DAY}/111530_dev.json", b"{}")     # sidecar orfano
+    assert list(archive.iter_sidecar_rels()) == [
+        f"{DAY}/091530_dev.wav", f"{DAY}/101530_app.txt", f"{DAY}/111530_dev.wav"]
+
+
+def test_iter_sources_without_sidecar(archive):
+    put(archive, f"{DAY}/091530_dev.wav")
+    put(archive, f"{DAY}/101530_app.txt")
+    put(archive, f"{DAY}/101530_app.ai.json", b"{}")
+    assert list(archive.iter_sources_without_sidecar()) == [
+        f"{DAY}/091530_dev.wav", f"{DAY}/101530_app.txt"]
