@@ -71,17 +71,30 @@ class Enrichment:
 
 
 @dataclass(frozen=True)
+class Hints:
+    """Indizi per trascrizione e arricchimento (spec tag e nomi §3): i nomi propri del
+    vocabolario dell'autore e i tag gia' usati nell'archivio."""
+    names: tuple[str, ...] = ()
+    known_tags: tuple[str, ...] = ()
+
+
+NO_HINTS = Hints()
+# Whisper legge solo gli ultimi 224 token del prompt: oltre non serve mandare.
+MAX_WHISPER_PROMPT_CHARS = 800
+
+
+@dataclass(frozen=True)
 class CheckResult:
     ok: bool
     message: str
 
 
 class Transcriber(Protocol):
-    def transcribe(self, audio: AudioSource, language: str) -> Transcript: ...
+    def transcribe(self, audio: AudioSource, language: str, hints: Hints = NO_HINTS) -> Transcript: ...
 
 
 class Enricher(Protocol):
-    def enrich(self, text: str, language: str) -> Enrichment: ...
+    def enrich(self, text: str, language: str, hints: Hints = NO_HINTS) -> Enrichment: ...
 
 
 class Provider(Transcriber, Enricher, Protocol):
@@ -198,22 +211,50 @@ def json_body(provider: str, response: httpx.Response) -> dict[str, Any]:
     return body
 
 
-def enrich_prompt(language: str) -> str:
-    return (
+def enrich_prompt(language: str, hints: Hints = NO_HINTS) -> str:
+    prompt = (
         "Ricevi la trascrizione di una nota vocale. Rispondi solo con un oggetto JSON con "
         'tre chiavi: "title" (titolo breve su una riga, al massimo '
         f'{MAX_TITLE_LEN} caratteri), "summary" (riassunto di una o due frasi, al massimo '
-        f'{MAX_SUMMARY_LEN} caratteri) e "tags" (elenco da 1 a {MAX_TAGS} parole chiave '
-        f"minuscole, senza #). Scrivi titolo, riassunto e tag in {language_name(language)}."
+        f'{MAX_SUMMARY_LEN} caratteri) e "tags" (elenco da 1 a {MAX_TAGS} tag minuscoli, '
+        "senza #). Nei tag metti sempre, scritti per intero, tutte le persone e tutti i "
+        "programmi, app, prodotti, servizi e dispositivi nominati nella nota (per esempio "
+        '"home assistant", "marco"); poi da 1 a 3 temi della nota. Niente tag generici come '
+        "saluti, domande, idee, giorni o momenti della giornata. "
+        f"Scrivi titolo, riassunto e tag in {language_name(language)}."
     )
+    if hints.names:
+        prompt += (" Nomi propri noti, da scrivere esattamente così nei tag e nel testo quando "
+                   "compaiono, anche se la trascrizione li ha resi in modo simile e il contesto "
+                   f"lo rende chiaro: {', '.join(hints.names)}.")
+    if hints.known_tags:
+        prompt += (" Tag già usati nell'archivio, da riusare quando calzano invece di "
+                   f"inventarne di simili: {', '.join(hints.known_tags)}.")
+    return prompt
 
 
-def transcribe_prompt(language: str) -> str:
-    return (
+def transcribe_prompt(language: str, hints: Hints = NO_HINTS) -> str:
+    prompt = (
         f"Trascrivi fedelmente il parlato di questo audio in {language_name(language)}. "
         "Rispondi solo con il testo trascritto, senza commenti, titoli o marcatori di tempo. "
         "Se non c'è parlato rispondi con una stringa vuota."
     )
+    if hints.names:
+        prompt += f" Nomi propri che possono comparire, da scrivere così: {', '.join(hints.names)}."
+    return prompt
+
+
+def whisper_prompt(hints: Hints) -> str | None:
+    """Parametro `prompt` di Whisper: orienta la grafia dei nomi propri. None senza nomi."""
+    if not hints.names:
+        return None
+    text, budget = "Nomi propri: ", MAX_WHISPER_PROMPT_CHARS - 1
+    names: list[str] = []
+    for name in hints.names:
+        if len(text) + len(", ".join([*names, name])) > budget:
+            break
+        names.append(name)
+    return f"{text}{', '.join(names)}."
 
 
 def _strip_fence(content: str) -> str:

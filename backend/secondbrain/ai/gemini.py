@@ -8,8 +8,8 @@ import httpx
 
 from .audio import AudioSource
 from .base import (CHECK_TIMEOUT, ENRICH_TIMEOUT, OK, TRANSCRIBE_TIMEOUT, CheckResult,
-                   ContentError, Enrichment, ProviderBase, ProviderError, ServiceError,
-                   Transcript, check_request_size, enrich_prompt, error_message, http_detail,
+                   NO_HINTS, ContentError, Enrichment, Hints, ProviderBase, ProviderError,
+                   ServiceError, Transcript, check_request_size, enrich_prompt, error_message, http_detail,
                    json_body, parse_enrichment, prepare_audio, run_check, transcribe_prompt)
 
 AUDIO_CONTENT_STATUSES = (400, 413)
@@ -81,22 +81,22 @@ class Gemini(ProviderBase):
             raise ServiceError(self.name, f"risposta senza testo (finishReason: {finish})")
         return "".join(texts)
 
-    def transcribe(self, audio: AudioSource, language: str) -> Transcript:
+    def transcribe(self, audio: AudioSource, language: str, hints: Hints = NO_HINTS) -> Transcript:
         path, mime = prepare_audio(self.name, audio, self.audio_formats)
         data = base64.b64encode(path.read_bytes()).decode("ascii")
         payload = {"contents": [{"role": "user", "parts": [
-            {"text": transcribe_prompt(language)},
+            {"text": transcribe_prompt(language, hints)},
             {"inline_data": {"mime_type": mime, "data": data}},
         ]}]}
         body = self._generate(self.transcribe_model, payload, TRANSCRIBE_TIMEOUT, audio=True)
         return Transcript(text=self._text(body, audio=True).strip(), model=self.transcribe_model,
                           raw=body)
 
-    def enrich(self, text: str, language: str) -> Enrichment:
+    def enrich(self, text: str, language: str, hints: Hints = NO_HINTS) -> Enrichment:
         if not self.text_model:
             raise ServiceError(self.name, "modello di testo non impostato")
         payload = {
-            "systemInstruction": {"parts": [{"text": enrich_prompt(language)}]},
+            "systemInstruction": {"parts": [{"text": enrich_prompt(language, hints)}]},
             "contents": [{"role": "user", "parts": [{"text": text}]}],
             "generationConfig": {"responseMimeType": "application/json",
                                  "responseSchema": ENRICH_SCHEMA},

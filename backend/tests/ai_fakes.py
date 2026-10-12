@@ -5,7 +5,7 @@ import pytest
 from secondbrain import jobs, notes
 from secondbrain import settings_store as store
 from secondbrain.ai.audio import AudioSource
-from secondbrain.ai.base import CheckResult, Enrichment, Transcript
+from secondbrain.ai.base import NO_HINTS, CheckResult, Enrichment, Transcript
 from secondbrain.ai.registry import PROVIDER_SPECS
 from secondbrain.archive import Archive
 from secondbrain.vault import Vault
@@ -59,14 +59,17 @@ class FakeProvider:
         self.transcripts = list(transcripts)
         self.enrichments = list(enrichments)
         self.calls: list[tuple[str, str]] = []
+        self.hints: list = []   # indizi ricevuti, in ordine di chiamata
 
-    def transcribe(self, audio, language):
+    def transcribe(self, audio, language, hints=NO_HINTS):
         self.calls.append(("transcribe", language))
+        self.hints.append(hints)
         text = _next(self.transcripts, DEFAULT_TEXT)
         return Transcript(text=text, model=f"{self.name}-stt", raw={"text": text})
 
-    def enrich(self, text, language):
+    def enrich(self, text, language, hints=NO_HINTS):
         self.calls.append(("enrich", text))
+        self.hints.append(hints)
         title, summary, tags = _next(self.enrichments, DEFAULT_ENRICHMENT)
         return Enrichment(title=title, summary=summary, tags=tuple(tags),
                           model=f"{self.name}-llm", raw={"title": title})

@@ -13,7 +13,7 @@ from sqlalchemy.exc import OperationalError
 
 from secondbrain import jobs, library
 from secondbrain import settings_store as store
-from secondbrain.ai.base import ContentError, ServiceError
+from secondbrain.ai.base import NO_HINTS, ContentError, ServiceError
 from secondbrain.ai.registry import build_provider
 from secondbrain.archive import Archive
 from secondbrain.catalog import make_sessionmaker
@@ -399,9 +399,9 @@ def test_api_keys_never_leak_through_the_worker(env, db, caplog):
         def __init__(self, inner):
             self.inner, self.name = inner, inner.name
 
-        def transcribe(self, audio, language):
+        def transcribe(self, audio, language, hints=NO_HINTS):
             try:
-                return self.inner.transcribe(audio, language)
+                return self.inner.transcribe(audio, language, hints)
             except Exception as exc:
                 raised.append(f"{exc!s} {exc!r}")
                 raise
@@ -511,3 +511,51 @@ def test_worker_checks_the_vault_once_per_interval(env, db, settings, monkeypatc
     assert worker.maybe_check_vault() and len(calls) == 2
     assert store.get_setting(db, VAULT_CHECK_KEY, None)["notes"] == 0
     assert not env.worker.maybe_check_vault()   # senza vault configurato non fa niente
+
+
+def test_vocabulary_and_known_tags_reach_the_providers(env, db):
+    store.set_vocabulary(db, ["Claude", "Home Assistant"])
+    db.commit()
+    assert env.worker.run_once()
+    transcribe_hints, enrich_hints = env.groq.hints
+    assert transcribe_hints.names == ("Claude", "Home Assistant")
+    assert enrich_hints.names == ("Claude", "Home Assistant") and enrich_hints.known_tags == ()
+    upload(env.client, make_wav(fill=b"\x05\x00"), capture_id="cap_20260923_200000",
+           ts="2026-09-23T20:00:00Z")
+    assert env.worker.run_once()
+    assert env.groq.hints[-1].known_tags == ("casa", "lavoro")   # i tag della nota precedente
+
+
+def test_retag_changes_only_the_tags(env, db):
+    env.worker.run_once()
+    before = fresh(db, env)
+    title, summary, transcript = before.title_auto, before.summary, before.transcript
+    assert jobs.enqueue_retag(db, NOW) == 1
+    db.commit()
+    env.groq.enrichments = [("Altro titolo", "Altro riassunto", ("claude", "home assistant"))]
+    assert env.worker.run_once()
+    cap = fresh(db, env)
+    assert cap.tags == ["claude", "home assistant"]
+    assert (cap.title_auto, cap.summary, cap.transcript) == (title, summary, transcript)
+    assert len(stages(env.groq, "transcribe")) == 1                     # niente nuova trascrizione
+    assert "tags: [claude, home assistant]" in env.archive.read_text(cap.rel_path, ".md")
+    assert job_of(db, env).status == jobs.DONE
+
+
+def test_retag_skips_hand_edited_tags_trashed_and_queued_notes(env, db):
+    env.worker.run_once()
+    library.edit_ai_field(db, env.archive, ROME, env.cap_id, "tags", "mio")
+    assert jobs.enqueue_retag(db, NOW) == 0
+    upload(env.client, make_wav(fill=b"\x05\x00"), capture_id="cap_20260923_200000",
+           ts="2026-09-23T20:00:00Z")                                 # in coda per la trascrizione
+    db.commit()
+    assert jobs.enqueue_retag(db, NOW) == 0
+
+
+def test_cli_retag(env, db, monkeypatch, capsys, settings):
+    env.worker.run_once()
+    monkeypatch.setenv("DATABASE_URL", TEST_DB)
+    assert main(["retag", "--all"]) == 0
+    assert "1 note" in capsys.readouterr().out
+    job = job_of(db, env)
+    assert (job.stage, job.status, job.priority) == (jobs.STAGE_RETAG, jobs.QUEUED, jobs.PRIORITY_LOW)

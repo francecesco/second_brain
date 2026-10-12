@@ -240,6 +240,29 @@ def _process(args: argparse.Namespace) -> None:
     print(f"Registrazione {capture_id} in coda (fase {job.stage}).")
 
 
+def _retag(args: argparse.Namespace) -> None:
+    if args.all == (args.id is not None):
+        raise CliError("indica l'id di una registrazione oppure --all")
+    capture_id = None
+    if args.id is not None:
+        try:
+            capture_id = uuid.UUID(args.id)
+        except ValueError:
+            raise CliError(f"id non valido: {args.id!r}") from None
+    with open_session() as (s, _):
+        n = jobs.enqueue_retag(s, utcnow(), capture_id)
+        s.commit()
+    print(f"Messe in coda {n} note per rifare i tag (priorità bassa; saltate quelle con i tag "
+          "corretti a mano, senza testo o già in coda).")
+
+
+def _add_retag_command(sub) -> None:
+    cmd = sub.add_parser("retag", help="rifà solo i tag delle note (vocabolario e regole nuove)")
+    cmd.add_argument("id", nargs="?", help="id della registrazione (UUID)")
+    cmd.add_argument("--all", action="store_true", help="tutte le note con un testo")
+    cmd.set_defaults(func=_retag)
+
+
 def _add_process_command(sub) -> None:
     cmd = sub.add_parser("process", help="mette in coda l'elaborazione AI di una registrazione")
     cmd.add_argument("id", nargs="?", help="id della registrazione (UUID)")
@@ -290,7 +313,7 @@ def _add_gen_key_command(sub) -> None:
 COMMAND_GROUPS: tuple[Callable, ...] = (_add_device_commands, _add_rescan_command, _add_vault_commands,
                                         _add_firmware_commands, _add_password_command,
                                         _add_unlock_command, _add_trash_commands,
-                                        _add_gen_key_command, _add_process_command,
+                                        _add_gen_key_command, _add_process_command, _add_retag_command,
                                         _add_worker_command)
 
 

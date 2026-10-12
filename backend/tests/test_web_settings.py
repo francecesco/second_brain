@@ -183,3 +183,25 @@ def test_page_shows_the_vault_section(ui, db, settings):
     db.commit()
     text = ui.client.get("/settings").text
     assert str(settings.vault_dir) in text and "3 note" in text and "senza id nel frontmatter" in text
+
+
+def test_vocabulary_card_saves_one_name_per_line(ui, db):
+    c = ui.client
+    assert 'name="vocabulary"' in c.get("/settings").text
+    r = c.post("/settings/vocabulary", data=form(ui, vocabulary="Claude\n  Home Assistant \n\nclaude\nCostanza"),
+               follow_redirects=False)
+    assert (r.status_code, r.headers["location"]) == (303, "/settings")
+    db.expire_all()
+    assert store.vocabulary(db) == ("Claude", "Home Assistant", "Costanza")
+    assert "Claude\nHome Assistant\nCostanza</textarea>" in c.get("/settings").text
+
+
+def test_retag_button_queues_the_notes(recordings, db, settings):
+    from tests.ai_fakes import processed
+    from tests.helpers import capture_by
+    processed(db, settings, capture_by(db, "cap_20260923_191530").id, title="T")
+    c = recordings.client
+    assert "Rifai i tag delle note (1)" in c.get("/settings").text
+    r = c.post("/settings/retag", data={"csrf": recordings.csrf}, follow_redirects=False)
+    assert (r.status_code, r.headers["location"]) == (303, "/settings?queued=1")
+    assert c.post("/settings/retag").status_code == 403                  # CSRF

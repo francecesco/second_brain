@@ -136,3 +136,21 @@ def test_check():
     missing = make("groq", Recorder(httpx.Response(200, json={"data": [{"id": "altro"}]}))).check()
     assert not missing.ok and "openai/gpt-oss-120b" in missing.message
     assert not make("groq", Recorder(httpx.ConnectTimeout)).check().ok
+
+
+def test_vocabulary_goes_in_the_whisper_prompt(audio):
+    from secondbrain.ai.base import Hints
+    rec = Recorder(httpx.Response(200, json={"text": "ok"}), httpx.Response(200, json={"text": "ok"}))
+    p = make("groq", rec)
+    p.transcribe(audio, "it", Hints(names=("Claude", "Costanza")))
+    assert field("prompt", "Nomi propri: Claude, Costanza.") in rec.requests[0].content
+    p.transcribe(audio, "it")
+    assert b'name="prompt"' not in rec.requests[1].content
+
+
+def test_enrich_passes_the_hints_to_the_prompt():
+    from secondbrain.ai.base import Hints
+    rec = Recorder(chat(json.dumps({"title": "T", "summary": "S", "tags": ["claude"]})))
+    make("groq", rec).enrich("testo", "it", Hints(names=("Claude",)))
+    system = json.loads(rec.requests[0].content)["messages"][0]["content"]
+    assert "Claude" in system and "Nomi propri noti" in system
