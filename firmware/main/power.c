@@ -11,19 +11,10 @@
 
 static const char *TAG = "power";
 
-// Tasti e modalita' di boot (spec Fase 1a §4.2).
-//
-// BOARD_BTN_PWR (GPIO18) e' l'unico wake source dal deep sleep (RTC-capable, non
-// strapping): tenerlo premuto durante il reset e' sicuro. Se resta premuto per
-// tutti i primi 300 ms -> CAPTURE (registra finche' e' tenuto).
-//
-// BOARD_BTN_USER e' GPIO0, pin di strapping BOOT: se la ROM lo trova basso al
-// reset/wake il chip entra in download mode. Quindi NON va premuto nell'istante
-// del wake, ma SUBITO DOPO: la finestra per il DEV mode e' 1 s dall'avvio
-// dell'app (gesto: premi PWR, rilascia, premi USER).
-#define POWER_PWR_DEBOUNCE_SAMPLES 3
-#define POWER_PWR_DEBOUNCE_STEP_MS 50   // ~150ms totali (3 x 50ms): basta per il debounce, e ogni ms
-                                        // qui ritarda la registrazione
+// Tasti e modalita' di boot (spec tasti §3). PWR (GPIO18, tasto sotto) registra, USER
+// (GPIO0, tasto sopra) sincronizza: entrambi svegliano dal deep sleep (EXT1). GPIO0 e' un
+// pin di strapping, ma lo strapping si legge solo all'accensione: il wake dal deep sleep
+// con USER e' verificato sull'hardware il 2026-10-11 (nessuna modalita' download).
 
 void power_init(void)
 {
@@ -65,39 +56,25 @@ bool power_pwr_pressed(void)
     return BOARD_BTN_ACTIVE_LOW ? (lvl == 0) : (lvl == 1);
 }
 
-#define POWER_MODE_USER_WINDOW_US (1000 * 1000)  // finestra DEV per USER: 1 s dal boot
-
 boot_mode_t power_boot_mode(void)
 {
-    if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER) {
-        ESP_LOGI(TAG, "boot-mode: wake dal timer di sync -> TIMER");
+    esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+    if (cause == ESP_SLEEP_WAKEUP_TIMER) {
+        ESP_LOGI(TAG, "boot-mode: wake dal timer -> TIMER");
         return BOOT_TIMER_SYNC;
     }
-    // Fase 1: 6 campioni x 50 ms su entrambi i tasti.
-    bool pwr_held_all = true;
-    bool user_seen = false;
-    for (int i = 0; i < POWER_PWR_DEBOUNCE_SAMPLES; i++) {
-        if (power_user_pressed()) user_seen = true;
-        if (!power_pwr_pressed()) pwr_held_all = false;
-        vTaskDelay(pdMS_TO_TICKS(POWER_PWR_DEBOUNCE_STEP_MS));
+    if (cause == ESP_SLEEP_WAKEUP_EXT1) {
+        bool pwr = esp_sleep_get_ext1_wakeup_status() & (1ULL << BOARD_BTN_PWR);
+        ESP_LOGI(TAG, "boot-mode: wake da %s -> %s", pwr ? "PWR" : "USER", pwr ? "CAPTURE" : "SYNC_ONLY");
+        return pwr ? BOOT_CAPTURE : BOOT_SYNC_ONLY;
     }
-    if (user_seen) {
-        ESP_LOGI(TAG, "boot-mode: USER premuto nei primi %d ms -> DEV", POWER_PWR_DEBOUNCE_SAMPLES * POWER_PWR_DEBOUNCE_STEP_MS);
-        return BOOT_DEV;
-    }
-    if (pwr_held_all) {
-        ESP_LOGI(TAG, "boot-mode: PWR tenuto su %d campioni -> CAPTURE", POWER_PWR_DEBOUNCE_SAMPLES);
+    // Accensione o reset: con PWR giu' e' l'accensione a batteria col tasto della
+    // registrazione; altrimenti USB inserita, reset, riavvio dopo OTA o DEV.
+    if (power_pwr_pressed()) {
+        ESP_LOGI(TAG, "boot-mode: accensione con PWR premuto -> CAPTURE");
         return BOOT_CAPTURE;
     }
-    // Fase 2: PWR rilasciato (pressione breve o reset): finestra fino a 1 s per USER.
-    while (esp_timer_get_time() < POWER_MODE_USER_WINDOW_US) {
-        if (power_user_pressed()) {
-            ESP_LOGI(TAG, "boot-mode: USER premuto entro 1s -> DEV");
-            return BOOT_DEV;
-        }
-        vTaskDelay(pdMS_TO_TICKS(POWER_PWR_DEBOUNCE_STEP_MS));
-    }
-    ESP_LOGI(TAG, "boot-mode: nessun tasto tenuto -> SYNC_ONLY");
+    ESP_LOGI(TAG, "boot-mode: accensione senza tasti -> SYNC_ONLY");
     return BOOT_SYNC_ONLY;
 }
 
@@ -140,14 +117,9 @@ void power_cycle_deadline_cancel(void)
     if (s_deadline) esp_timer_stop(s_deadline);
 }
 
-// Wake da deep sleep: usiamo BOARD_BTN_PWR (GPIO18), NON BOARD_BTN_USER (GPIO0).
-//
-// GPIO0 e' il pin di strapping BOOT: se durante il risveglio/reset la ROM lo
-// trova basso, il chip entra in download mode invece di rilanciare il nostro
-// firmware. Tenere premuto un tasto collegato a GPIO0 per svegliare la scheda
-// romperebbe quindi il boot normale. BOARD_BTN_PWR (GPIO18) e' RTC-capable
-// sulla ESP32-S3 (RTC GPIO 0-21) e non e' un pin di strapping: e' la scelta
-// sicura per un wake-source EXT1.
+// Wake da deep sleep su PWR (GPIO18) e USER (GPIO0), entrambi RTC GPIO sulla ESP32-S3.
+// Il wake dal deep sleep non rilegge lo strapping: GPIO0 basso qui non porta in download
+// mode (verificato il 2026-10-11). Lo farebbe solo premuto durante un'accensione da zero.
 void power_deep_sleep(uint32_t timer_ms)
 {
     // In deep sleep il dominio digitale (e con esso la pull-up impostata da
@@ -155,9 +127,11 @@ void power_deep_sleep(uint32_t timer_ms)
     // durante il sonno serve una pull-up nel dominio RTC.
     rtc_gpio_pullup_en(BOARD_BTN_PWR);
     rtc_gpio_pulldown_dis(BOARD_BTN_PWR);
+    rtc_gpio_pullup_en(BOARD_BTN_USER);
+    rtc_gpio_pulldown_dis(BOARD_BTN_USER);
 
-    // Tasto attivo-basso -> wake quando il livello scende (EXT1, ANY_LOW).
-    ESP_ERROR_CHECK(esp_sleep_enable_ext1_wakeup(1ULL << BOARD_BTN_PWR,
+    // Tasti attivo-basso -> wake quando uno dei due scende (EXT1, ANY_LOW).
+    ESP_ERROR_CHECK(esp_sleep_enable_ext1_wakeup((1ULL << BOARD_BTN_PWR) | (1ULL << BOARD_BTN_USER),
                                                   ESP_EXT1_WAKEUP_ANY_LOW));
     if (timer_ms > 0) {
         esp_sleep_enable_timer_wakeup((uint64_t)timer_ms * 1000ULL);
@@ -170,7 +144,7 @@ void power_deep_sleep(uint32_t timer_ms)
     gpio_hold_en(BOARD_BAT_LATCH);
     gpio_deep_sleep_hold_en();
 
-    ESP_LOGI(TAG, "entering deep sleep; press PWR to wake");
+    ESP_LOGI(TAG, "entering deep sleep; PWR registra, USER sincronizza");
     esp_deep_sleep_start();
     // Non si torna qui: il risveglio riparte da un reset (nuovo app_main()).
 }

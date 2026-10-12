@@ -19,6 +19,12 @@
 // 4091 mV grezzi, sono i 4,20 V di fine carica del caricabatterie. Da rifare col multimetro.
 #define SB_BATTERY_MV_SCALE_PERMILLE 1027  // tensione corretta = grezza * 1,027
 
+// Tasti a click (spec tasti §3): campionamento, antirimbalzo e finestra del triplo click.
+#define SB_BUTTON_SAMPLE_MS        10
+#define SB_BUTTON_DEBOUNCE_SAMPLES 3      // 30 ms stabili per cambiare stato
+#define SB_DEV_CLICK_WINDOW_MS     2000   // dall'avvio dell'app: un click in piu' qui = DEV
+                                          // (l'app parte ~0,5 s dopo il click che sveglia)
+
 // Sorgente di alimentazione (stima: la scheda non segnala la USB). Soglie in mV corretti.
 #define SB_USB_VOLTAGE_MV          4230  // sopra si considera USB: una batteria vera non supera 4,20 V,
                                          // senza batteria si legge 4,25-4,29 V (4,14-4,18 grezzi)

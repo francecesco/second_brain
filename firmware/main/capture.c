@@ -2,7 +2,6 @@
 #include "audio.h"
 #include "wav.h"
 #include "config.h"
-#include "power.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,7 +28,6 @@ static const char *TAG = "capture";
 typedef struct {
     FILE *f;
     volatile bool stop_req;
-    volatile bool released;   // PWR rilasciato (2 campioni consecutivi): il task si e' fermato da solo
     volatile bool running;
     volatile bool hit_max;
     volatile esp_err_t err;
@@ -54,12 +52,7 @@ static void capture_task(void *arg)
         // un valore spurio (clic a fondo scala, visto il 2026-09-28).
         size_t skipped = 0;
         audio_read_block(buf, CAPTURE_SKIP_BYTES, &skipped, CAPTURE_READ_TIMEOUT_MS);
-        int not_pressed = 0;
         while (!c->stop_req) {
-            // Rilascio di PWR controllato QUI, ogni blocco (128 ms): il main puo' essere
-            // bloccato nel refresh dell'e-Paper per secondi, la registrazione no.
-            not_pressed = power_pwr_pressed() ? 0 : not_pressed + 1;
-            if (not_pressed >= 2) { c->released = true; break; }
             if (c->data_bytes >= max_bytes) { c->hit_max = true; break; }
             size_t want = CAPTURE_BLOCK_BYTES;
             if (max_bytes - c->data_bytes < want) want = max_bytes - c->data_bytes;
@@ -152,9 +145,9 @@ esp_err_t capture_stop(capture_result_t *out)
     out->hit_max = s_ctx.hit_max;
     out->err = err;
     out->peak = s_ctx.peak;
-    ESP_LOGI(TAG, "registrazione fermata: %lu byte, %lu ms audio su %lu ms reali, picco=%d, rilascio=%d, max=%d, err=%s",
+    ESP_LOGI(TAG, "registrazione fermata: %lu byte, %lu ms audio su %lu ms reali, picco=%d, max=%d, err=%s",
              (unsigned long)out->data_bytes, (unsigned long)out->duration_ms, (unsigned long)capture_elapsed_ms(),
-             out->peak, s_ctx.released, out->hit_max, esp_err_to_name(err));
+             out->peak, out->hit_max, esp_err_to_name(err));
     return err;
 }
 

@@ -82,6 +82,10 @@ void test_battery_present(void);
 void test_battery_charge_state(void);
 void test_battery_mv_calibrated(void);
 void test_screen_battery_fill(void);
+void test_click_det_counts_debounced_presses(void);
+void test_click_det_ignores_bounce(void);
+void test_click_det_wake_press_not_counted(void);
+void test_capture_gesture(void);
 void test_screen_status_draws_outcome_band(void);
 
 void app_main(void) {
@@ -124,6 +128,10 @@ void app_main(void) {
     RUN_TEST(test_battery_charge_state);
     RUN_TEST(test_battery_mv_calibrated);
     RUN_TEST(test_screen_battery_fill);
+    RUN_TEST(test_click_det_counts_debounced_presses);
+    RUN_TEST(test_click_det_ignores_bounce);
+    RUN_TEST(test_click_det_wake_press_not_counted);
+    RUN_TEST(test_capture_gesture);
     RUN_TEST(test_screen_status_draws_outcome_band);
     UNITY_END();
 }
