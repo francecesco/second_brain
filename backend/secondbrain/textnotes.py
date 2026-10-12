@@ -84,11 +84,17 @@ def read_source(archive: Archive, capture: Capture) -> str:
 
 
 def _write_incoming(archive: Archive, data: bytes):
+    """Il testo in `.incoming/`; se la scrittura fallisce (disco pieno) il file parziale si
+    toglie (spec note scritte §6)."""
     tmp = archive.new_incoming()
-    with open(tmp, "wb") as f:
-        f.write(data)
-        f.flush()
-        os.fsync(f.fileno())
+    try:
+        with open(tmp, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     return tmp
 
 

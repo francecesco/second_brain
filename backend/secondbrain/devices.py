@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from .models import Device
 from .naming import DEFAULT_DEVICE_TYPE, is_valid_device_id, is_valid_device_type
+from .textnotes import TEXT_DEVICE_TYPE
 
 TOKEN_BYTES = 32
 POWER_SOURCES = ("battery", "usb")
@@ -70,6 +71,11 @@ def _require(s: Session, device_id: str) -> Device:
 
 def regenerate_token(s: Session, device_id: str) -> str:
     device = _require(s, device_id)
+    if device.type == TEXT_DEVICE_TYPE:
+        # Il device "App" esiste solo per le note scritte: da `POST /captures` non si carica
+        # niente a suo nome (spec note scritte §4), quindi niente token.
+        raise DeviceError(f"dispositivo {device_id}: è quello delle note scritte dall'app, "
+                          "non carica registrazioni e non ha token")
     token = generate_token()
     device.token_hash = hash_token(token)
     s.flush()
@@ -99,6 +105,7 @@ def authenticate(s: Session, token: str | None, device_id: str, allow_unauth: bo
             raise AuthError(401, "token non valido")
         if device.id != device_id:
             raise AuthError(403, "X-Device-Id non corrisponde al token")
+        _refuse_app(device)
         return device
     if not allow_unauth:
         raise AuthError(401, "token mancante")
@@ -110,7 +117,14 @@ def authenticate(s: Session, token: str | None, device_id: str, allow_unauth: bo
                         token_hash=None, created_at=now)
         s.add(device)
         s.flush()
+    _refuse_app(device)
     return device
+
+
+def _refuse_app(device: Device) -> None:
+    """Il device "App" delle note scritte non carica registrazioni (spec note scritte §4)."""
+    if device.type == TEXT_DEVICE_TYPE:
+        raise AuthError(403, "dispositivo delle note scritte: non carica registrazioni")
 
 
 def authenticate_any(s: Session, token: str | None, allow_unauth: bool) -> Device | None:

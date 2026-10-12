@@ -10,12 +10,13 @@
   {% if error %}<p class="notice" role="alert" id="compose-error">{{ icon("fix") }}<span>{{ error }}</span></p>{% endif %}
   <div class="actions">
     <button type="submit" class="pri" aria-label="Salva" title="Salva (Ctrl+Invio)">{{ icon("save") }}<span class="label">Salva</span></button>
-    <a class="btn" href="/todo" aria-label="Annulla" title="Annulla">{{ icon("close") }}<span class="label">Annulla</span></a>
+    <a class="btn" href="/todo" id="compose-cancel" aria-label="Annulla" title="Annulla">{{ icon("close") }}<span class="label">Annulla</span></a>
   </div>
 </form>
 <script>
 // Bozza nel browser: si scrive a ogni tasto e la toglie base.html solo dopo un salvataggio
-// riuscito (redirect a /todo#salvata). Errori, sessione scaduta, rete: la bozza resta.
+// riuscito (redirect a /todo#salvata) o "Annulla" qui sotto. Errori, sessione scaduta,
+// rete: la bozza resta.
 (function () {
   var form = document.getElementById("compose"), area = document.getElementById("compose-text");
   var button = form.querySelector("button[type=submit]"), KEY = "sb-draft";
@@ -25,6 +26,9 @@
   });
   area.addEventListener("keydown", function (e) {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); form.requestSubmit(); }
+  });
+  document.getElementById("compose-cancel").addEventListener("click", function () {
+    try { localStorage.removeItem(KEY); } catch (e) {}  // testo scartato di proposito
   });
   form.addEventListener("submit", function () {
     button.disabled = true;  // niente doppio tocco; il capture_id copre comunque il doppio invio

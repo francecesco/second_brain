@@ -14,6 +14,13 @@ def test_new_page_has_form_and_capture_id(ui):
     assert 'name="capture_id" value="cap_20260928_120000"' in r.text
 
 
+def test_cancel_drops_the_draft(ui):
+    """"Annulla" toglie la bozza: la prossima "Nuova nota" non ripropone il testo scartato."""
+    r = ui.client.get("/new")
+    assert 'id="compose-cancel"' in r.text
+    assert 'getElementById("compose-cancel").addEventListener("click"' in r.text
+
+
 def test_header_has_new_note_button(ui):
     assert 'href="/new"' in ui.client.get("/todo").text
 

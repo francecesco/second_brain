@@ -125,3 +125,24 @@ def test_record_seen_and_rename(db):
         rename_device(db, DEV, "   ")
     with pytest.raises(DeviceError):
         rename_device(db, DEV2, "x")
+
+
+def _app_device(db):
+    db.add(Device(id="a1b2c3d4e5f6", name="App", type="web", token_hash=None, created_at=NOW))
+    db.flush()
+    return "a1b2c3d4e5f6"
+
+
+def test_app_device_never_gets_a_token(db):
+    """Il device "App" delle note scritte non carica da `POST /captures` (spec note scritte §4)."""
+    app_id = _app_device(db)
+    with pytest.raises(DeviceError, match="note scritte"):
+        regenerate_token(db, app_id)
+    assert db.get(Device, app_id).token_hash is None
+
+
+def test_app_device_cannot_upload_from_the_lan(db):
+    app_id = _app_device(db)
+    with pytest.raises(AuthError) as err:
+        authenticate(db, None, app_id, True, NOW)
+    assert err.value.status == 403

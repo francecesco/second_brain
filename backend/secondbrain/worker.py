@@ -203,11 +203,13 @@ class Worker:
                 return None
             capture, job = held
             stage, text, now, until = job.stage, capture.transcript, self.clock(), lease.until
-            if stage == jobs.STAGE_TRANSCRIBE and text is None and textnotes.is_text_capture(capture):
-                # Nota scritta senza `.md` (es. dopo rescan): il testo e' il `.txt`, niente
-                # provider audio (spec note scritte §5).
-                note = replace(notes.note_from_capture(capture),
-                               transcript=textnotes.read_source(self.archive, capture),
+            if stage == jobs.STAGE_TRANSCRIBE and textnotes.is_text_capture(capture):
+                # Nota scritta in fase transcribe (es. dopo rescan senza `.md`, o con un `.md`
+                # la cui riga `edited` e' stata tolta in Obsidian): mai il provider audio
+                # (spec note scritte §5). Il testo gia' in catalogo vince (puo' avere
+                # correzioni), altrimenti il `.txt`.
+                source = text if (text or "").strip() else textnotes.read_source(self.archive, capture)
+                note = replace(notes.note_from_capture(capture), transcript=source,
                                edited=_edited((*capture.edited, "transcript")),
                                language=capture.language or store.get_language(s))
                 notes.write_note(s, self.archive, capture, note, self.tz, vault=self.vault,

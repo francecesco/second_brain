@@ -234,3 +234,72 @@ def test_trash_and_restore_keep_the_text_source(db, settings):
     db.commit()
     assert db.get(Capture, capture.id).rel_path.endswith(".txt")
     assert archive.abs(db.get(Capture, capture.id).rel_path).is_file()
+
+
+def test_failed_write_leaves_nothing_in_incoming(db, settings, monkeypatch):
+    """Disco pieno a metà scrittura: il file temporaneo si toglie (spec note scritte §6)."""
+    real_fsync = textnotes.os.fsync
+
+    def boom(fd):
+        raise OSError(28, "No space left on device")
+    monkeypatch.setattr(textnotes.os, "fsync", boom)
+    with pytest.raises(OSError):
+        create(db, settings)
+    monkeypatch.setattr(textnotes.os, "fsync", real_fsync)
+    incoming = Archive(settings.archive_dir).incoming_dir
+    assert not incoming.exists() or not any(incoming.iterdir())
+    assert db.scalar(select(Capture)) is None
+
+
+def test_rescan_into_an_empty_catalog_keeps_a_single_app_device(db, settings):
+    capture, _ = create(db, settings)
+    app_id = capture.device_id
+    db.execute(Job.__table__.delete())
+    db.execute(Capture.__table__.delete())
+    db.execute(Device.__table__.delete())
+    db.commit()
+    db.expunge_all()
+    report = rescan(db, Archive(settings.archive_dir), NOW, vault=Vault(settings.vault_dir))
+    db.commit()
+    devices = db.scalars(select(Device)).all()
+    assert [(d.id, d.type, d.name, d.token_hash) for d in devices] == [(app_id, "web", "App", None)]
+    assert app_id not in report.devices_created
+    again, created = create(db, settings, raw="un'altra", cid="cap_20260928_120001")
+    assert created and again.device_id == app_id
+
+
+def test_rescan_keeps_the_note_of_a_text_capture(db, settings):
+    """Con il `.md` presente vince il `.md`: le correzioni restano, niente trascrizione."""
+    capture, _ = create(db, settings)
+    vault = Vault(settings.vault_dir)
+    note_path = capture.note_path
+    corrected = vault.read_text(note_path).replace("Chiamare Costanza", "Chiamare Costanza oggi")
+    vault.write_text(note_path, corrected)
+    db.execute(Job.__table__.delete())
+    db.execute(Capture.__table__.delete())
+    db.commit()
+    db.expunge_all()
+    report = rescan(db, Archive(settings.archive_dir), NOW, vault=vault)
+    db.commit()
+    db.expire_all()
+    capture = db.get(Capture, capture.id)
+    assert capture.transcript == "Chiamare Costanza oggi per Home Assistant"
+    assert capture.note_path == note_path and "transcript" in capture.edited
+    assert report.queued == 0 and db.get(Job, capture.id) is None
+
+
+def test_worker_never_transcribes_a_text_note_even_without_edited(db, settings, worker_env):
+    """Nota scritta in fase transcribe con il testo ma senza `transcript` in `edited` (es.
+    rescan di un `.md` riordinato in Obsidian): niente audio, il testo corretto resta."""
+    worker, groq = worker_env
+    capture, _ = create(db, settings)
+    capture.transcript = "Testo corretto a mano"
+    capture.edited = []
+    db.get(Job, capture.id).stage = jobs.STAGE_TRANSCRIBE
+    db.commit()
+    assert worker.run_once()
+    db.expire_all()
+    capture = db.get(Capture, capture.id)
+    assert capture.transcript == "Testo corretto a mano"
+    assert "transcript" in capture.edited and capture.title_auto
+    assert [c[0] for c in groq.calls] == ["enrich"]
