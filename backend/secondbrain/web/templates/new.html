@@ -14,13 +14,11 @@
   </div>
 </form>
 <script>
-// Bozza nel browser: si scrive a ogni tasto e si toglie solo dopo un salvataggio riuscito
-// (flag "sb-draft-sent", letto da base.html sulla pagina successiva). Una risposta 422 o
-// 500 torna qui: il flag si azzera e la bozza resta.
+// Bozza nel browser: si scrive a ogni tasto e la toglie base.html solo dopo un salvataggio
+// riuscito (redirect a /todo#salvata). Errori, sessione scaduta, rete: la bozza resta.
 (function () {
   var form = document.getElementById("compose"), area = document.getElementById("compose-text");
-  var button = form.querySelector("button[type=submit]"), KEY = "sb-draft", SENT = "sb-draft-sent";
-  try { sessionStorage.removeItem(SENT); } catch (e) {}
+  var button = form.querySelector("button[type=submit]"), KEY = "sb-draft";
   if (!area.value) { try { var draft = localStorage.getItem(KEY); if (draft) { area.value = draft; } } catch (e) {} }
   area.addEventListener("input", function () {
     try { if (area.value) { localStorage.setItem(KEY, area.value); } else { localStorage.removeItem(KEY); } } catch (e) {}
@@ -29,7 +27,6 @@
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); form.requestSubmit(); }
   });
   form.addEventListener("submit", function () {
-    try { sessionStorage.setItem(SENT, "1"); } catch (e) {}
     button.disabled = true;  // niente doppio tocco; il capture_id copre comunque il doppio invio
   });
   // Tornando indietro dalla cronologia la pagina può riapparire col pulsante disabilitato.

@@ -1,6 +1,8 @@
 """Pagina /new (spec note scritte §3)."""
 from sqlalchemy import select
 
+from secondbrain import jobs
+from secondbrain.archive import Archive
 from secondbrain.models import Capture
 from tests.helpers import capture_by
 
@@ -19,7 +21,7 @@ def test_header_has_new_note_button(ui):
 def test_save_redirects_to_todo_and_creates_note(ui, db):
     r = ui.client.post("/new", data={"csrf": ui.csrf, "text": "Comprare il latte",
                                      "capture_id": "cap_20260928_120000"}, follow_redirects=False)
-    assert (r.status_code, r.headers["location"]) == (303, "/todo")
+    assert (r.status_code, r.headers["location"]) == (303, "/todo#salvata")
     page = ui.client.get("/todo").text
     assert "Comprare il latte" in page and "3 parole" in page
     assert "/audio" not in page
@@ -65,3 +67,38 @@ def test_trash_has_no_listen_link_for_text_note(ui, db):
 def test_new_note_button_is_current_on_new_page(ui):
     assert 'aria-current="page"' in ui.client.get("/new").text
     assert 'aria-current="page"' not in ui.client.get("/todo").text
+
+
+def _form(ui, text="Comprare il latte"):
+    return {"csrf": ui.csrf, "text": text, "capture_id": "cap_20260928_120000"}
+
+
+def test_disk_error_is_500_and_keeps_the_text(ui, db, monkeypatch):
+    def broken(*args, **kwargs):
+        raise OSError("disco pieno")
+    monkeypatch.setattr(Archive, "commit_capture", broken)
+    r = ui.client.post("/new", data=_form(ui))
+    assert r.status_code == 500 and "Comprare il latte" in r.text and "disco?" in r.text
+    assert db.scalar(select(Capture)) is None
+
+
+def test_unexpected_error_is_500_and_keeps_the_text(ui, db, monkeypatch):
+    def broken(*args, **kwargs):
+        raise RuntimeError("database giù")
+    monkeypatch.setattr(jobs, "enqueue", broken)
+    r = ui.client.post("/new", data=_form(ui))
+    assert r.status_code == 500 and "Comprare il latte" in r.text and "Salvataggio non riuscito" in r.text
+    assert db.scalar(select(Capture)) is None
+
+
+def test_double_submit_creates_one_note(ui, db):
+    first = ui.client.post("/new", data=_form(ui), follow_redirects=False)
+    second = ui.client.post("/new", data=_form(ui), follow_redirects=False)
+    assert first.status_code == second.status_code == 303
+    assert len(db.scalars(select(Capture)).all()) == 1
+
+
+def test_draft_is_cleared_only_after_a_confirmed_save(ui):
+    """La bozza si toglie solo col segno del redirect riuscito, non su qualunque pagina."""
+    page = ui.client.get("/login").text
+    assert 'location.hash === "#salvata"' in page and "sb-draft-sent" not in page
