@@ -64,8 +64,9 @@ Riuscita: dal telefono, in pochi secondi la nota è salvata; dopo un minuto ha t
   `transcript` = testo, `edited: ["transcript"]`, lingua dalle impostazioni, provider di
   trascrizione vuoto; lavoro accodato in fase `enrich`. Se il commit fallisce, i file si
   tolgono con la stessa regola dell'upload (`_cleanup_after_commit_failure`).
-- **`rescan`**: per una nota `.txt` senza `.md` la trascrizione (con `edited: ["transcript"]`)
-  si ricostruisce dal `.txt`; se il `.md` c'è vince lui, perché contiene le correzioni.
+- **`rescan`**: una nota `.txt` senza `.md` va in coda come ogni nota senza `.md`; il worker
+  (rete di sicurezza, §5) ricostruisce la trascrizione dal `.txt` e la arricchisce. Un solo
+  percorso di codice. Se il `.md` c'è vince lui, perché contiene le correzioni.
 - **UI**: `/captures/{id}/audio` di una nota scritta → 404; niente player nel dettaglio né
   "Ascolta" nel cestino; nella riga "App · N parole" al posto di durata e dimensione.
 
