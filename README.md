@@ -1,7 +1,7 @@
 # Second Brain
 
-Dispositivo personale e-Paper per la **cattura vocale rapida**: tieni premuto un tasto,
-parli, rilasci. La registrazione finisce su microSD e, appena il device trova una rete
+Dispositivo personale e-Paper per la **cattura vocale rapida**: un click, parli, un altro
+click. La registrazione finisce su microSD e, appena il device trova una rete
 Wi-Fi conosciuta, viene caricata su un backend di casa che la trascrive e la salva come
 nota Markdown in un vault Obsidian. Nessun audio verso il cloud.
 
@@ -24,7 +24,7 @@ Le decisioni di progetto sono in `docs/specs/`, i piani di lavoro in `docs/plans
 | Audio | codec ES8311 (I2C + I2S), microfono analogico, 16 kHz mono 16 bit; altoparlante su header MX1.25, amplificatore su GPIO46 (attivo alto) |
 | Storage | microSD via SDMMC 1-bit, FAT32 con nomi lunghi |
 | Sensori | SHTC3 (temperatura/umidità), RTC PCF85063, tensione batteria (ADC) |
-| Tasti | **PWR** (GPIO18, unico wake source) e **USER** (GPIO0, pin di strapping) |
+| Tasti | **PWR** (GPIO18, tasto sotto: registra) e **USER** (GPIO0, tasto sopra: sincronizza; pin di strapping); entrambi svegliano dal deep sleep |
 | Batteria | LiPo 3,7 V su connettore **MX1.25 2 pin** (attenzione a polarità e tipo di connettore), caricabatterie ETA6098 a bordo. GPIO17 mantiene l'alimentazione da batteria (va tenuto alto, anche in deep sleep) |
 
 La pin-map completa è in `firmware/main/board.h`. La scheda è la variante **B/N V2**
@@ -32,37 +32,42 @@ La pin-map completa è in `firmware/main/board.h`. La scheda è la variante **B/
 
 ## Come si usa il device
 
-Il device dorme in deep sleep e mostra l'ultimo stato. Tutto parte dal tasto **PWR**.
+Il device dorme in deep sleep e mostra l'ultimo stato. Il tasto **sotto (PWR)** registra,
+quello **sopra (USER)** sincronizza.
 
 | Gesto | Cosa succede |
 |---|---|
-| **PWR breve** (rilascio entro ~150 ms) | **SYNC**: Wi-Fi, ora via NTP se serve, upload della coda, controllo OTA, schermata di stato, sleep. Circa 10–15 s. |
-| **PWR tenuto** (oltre 150 ms) | **REGISTRA** finché lo tieni. Un **beep** dopo ~1,7 s dalla pressione dice "parla ora"; poi compare "* REC" con il nome del file. Al rilascio la registrazione si ferma entro ~0,2 s, un **beep più lungo** conferma il salvataggio, compare "Salvato m:ss" e parte il SYNC. |
-| PWR tenuto ma registrazione sotto 1 s | Registrazione **scartata** ("Scartato"), nessun beep finale. |
-| PWR tenuto oltre 10 minuti | La registrazione si ferma da sola ("Max 10:00") e viene salvata. |
-| **PWR, rilascio, poi USER entro 1 s** | **DEV MODE**: Wi-Fi, server `POST /ota` e `GET /status`, niente registrazione, resta sveglio. |
-| **PWR mentre è in DEV MODE** | Riavvia in modalità normale (esegue un SYNC e dorme). |
-| USER in qualunque altro momento | Nessun effetto. |
-| Alimentazione collegata / reset | Come PWR breve (SYNC). |
+| **Click sotto** | **REGISTRA**. Un **beep** dopo ~1,7 s dal click dice "parla ora"; poi compare "* REC" con il nome del file. |
+| **Click sotto** durante la registrazione | Stop: un **beep più lungo** conferma il salvataggio, compare "Salvato m:ss" e parte il SYNC. |
+| Registrazione sotto 1 s | **Scartata** ("Scartato"), nessun beep finale. |
+| Registrazione oltre 10 minuti | Si ferma da sola ("Max 10:00") e viene salvata. |
+| **Tre click sotto** (anche due) entro 2 s dall'avvio | **DEV MODE**: la registrazione appena partita è scartata; Wi-Fi, server `POST /ota` e `GET /status`, resta sveglio. Il secondo click di un triplo click spesso cade mentre il device si avvia: per questo basta un click in più nei primi 2 s, e lo stop vale dopo. |
+| **Click sopra** | **SYNC**: Wi-Fi, ora via NTP se serve, upload della coda, controllo OTA, schermata di stato, sleep. Circa 6–15 s. |
+| **Click sopra** in DEV MODE | Riavvia in modalità normale (SYNC e sleep). |
+| Tasto sopra durante una registrazione, tasto sotto durante un SYNC | Nessun effetto. |
+| Alimentazione collegata / reset | SYNC. A batteria e a scheda spenta del tutto solo **PWR** la riaccende: va tenuto ~1 s, finché il firmware non aggancia l'alimentazione (GPIO17), poi registra. |
 
-Attenzione: **USER non va tenuto premuto nell'istante in cui si preme PWR**. È il pin di
-boot del chip: se è basso al reset, il device entra in modalità download USB e non parte.
-Rilasciare tutto e premere solo PWR per ripartire.
+Attenzione: **USER (sopra) non va tenuto premuto mentre la scheda si accende da zero**
+(USB inserita, reset). È il pin di boot del chip: basso in quell'istante porta in modalità
+download USB. Dal deep sleep invece sveglia normalmente (verificato).
 
-Schermata di stato a fine ciclo (font 7×12, 24 colonne):
+Schermata di stato a fine ciclo:
 
 ```
-10:13          v0.3.0      ora locale e versione firmware
-wifi: Advenias             rete a cui si è collegato, oppure "wifi: assente"
-coda: 0  USB               catture in attesa e alimentazione: "USB" oppure "bat 78%"
-sync ok                    esito: "N inviate", "server ko", "Salvato 0:07 / no sync", ...
+10:13                 77% [###]   ora locale; percentuale e icona della batteria
+---------------------------------   (fulmine se in carica, "USB" senza batteria)
+FASTWEB-45H7P7                     rete a cui si è collegato, oppure "nessuna rete"
+coda: 0                            registrazioni in attesa
+[ sync ok ]                        esito su fascia nera: "N inviate", "server ko", "Salvato 0:07", ...
 ```
+
+La versione del firmware compare solo nella schermata DEV MODE. Anteprima delle schermate
+sul Mac senza flash: `firmware/tools/screen_preview.c` (istruzioni in `CLAUDE.md`).
 
 Se la SD manca o è piena il device lo dice ("SD assente", "SD piena") e non registra.
 Sotto il 10 % di batteria non registra e non accende il Wi-Fi; sotto il 30 % non fa OTA
-(solo a batteria). La scheda non segnala la presenza della USB: il firmware la deduce da
-tensione, stabilità delle letture e collegamento dati USB, vedi `battery_policy.c`. Limite
-noto: una batteria appena carica appare come "USB" finché non scende sotto 4,10 V.
+(solo a batteria). La scheda non segnala la presenza della USB né la carica: il firmware le
+deduce da tensione, stabilità delle letture e collegamento dati USB, vedi `battery_policy.c`.
 Se un ciclo si blocca per più di 5 minuti, il device si forza in deep sleep.
 
 ## Come funziona il firmware
@@ -94,7 +99,7 @@ scrive l'audio dall'I2S alla SD mentre il task principale aggiorna il display.
   token è impostato.
 - **Wake periodico**: il device si risveglia da solo ogni 5 min (anche a coda vuota) per
   inviare la coda, controllare l'OTA e aggiornare lo stato; a batteria sotto il 10 % si
-  sveglia solo da PWR. Dopo un wake da timer lo schermo si aggiorna solo se cambiano esito,
+  sveglia solo dai tasti. Dopo un wake da timer lo schermo si aggiorna solo se cambiano esito,
   coda, rete, stato di carica o la percentuale di almeno 2 punti.
 
 Contratto di upload, che il backend dovrà implementare:

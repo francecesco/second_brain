@@ -34,7 +34,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `wifi_select.c`, `ota_manifest.c`, `wifi_bssid.c`) con test unity sull'host in
   `host_test/`. Prima il test che fallisce, poi l'implementazione. Test host:
   `cd firmware/host_test && idf.py build && timeout 10 ./build/host_test.elf`
-  (l'eseguibile non termina da solo). Al 2026-10-11 sono 39 e devono restare verdi.
+  (l'eseguibile non termina da solo). Al 2026-10-12 sono 43 e devono restare verdi.
 - Build senza warning (`-Werror` su format-truncation è attivo).
 - Ogni task del piano finisce con una verifica sull'hardware (log seriale o esito visibile)
   prima del commit; se la verifica scopre un bug, il fix va nello stesso commit o nel
@@ -88,9 +88,17 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   la batteria i campioni sono stabili (spread ~12 mV), senza erano sparsi su 2,9–4,18 V.
   Mantenimento a batteria (GPIO17) verificato il 2026-10-11: acceso al rilascio di PWR e
   di nuovo sveglio dopo il deep sleep, solo a batteria.
-- Per catturare il log di un ciclo normale con il cavo: script Python che aspetta la
-  comparsa di `/dev/cu.usbmodem1101` e legge, poi l'utente preme PWR. Per il flash si aspetta
-  che la porta resti stabile qualche secondo (DEV MODE), altrimenti sparisce a metà.
+- Per catturare il log di un ciclo con il cavo: script Python che aspetta la comparsa di
+  `/dev/cu.usbmodem1101` e legge, poi l'utente preme un tasto (o si aspetta il wake da 5 min).
+- **Flash senza DEV MODE**: basta che il device sia sveglio (click di USER o wake del timer):
+  appena compare la porta, `esptool` direttamente sui binari già compilati (da `build/`:
+  `python -m esptool --chip esp32s3 -p /dev/cu.usbmodem1101 -b 460800 --before default_reset
+  --after hard_reset write_flash @flash_args`, ritentando se la porta non è ancora pronta) lo
+  mette in modalità download prima che torni a dormire. `idf.py flash` invece ricompila e
+  perde l'attimo. "Porta stabile 8 s" non vuol dire DEV MODE: un ciclo col Wi-Fi dura ~11 s.
+- **`version.txt` si rimette a 0.1.0 solo dopo il flash**: rimesso prima, `idf.py flash`
+  ricompila una "0.1.0" e al primo ciclo l'OTA la riporta alla release pubblicata
+  (successo il 2026-10-11).
 - Trappola OTA: se sul server resta pubblicata una versione più alta di quella flashata
   (`secondbrain firmware list` sul backend, `ota_serve/firmware/manifest.json` con
   `capture_server.py`), il device si aggiorna a quel binario al primo ciclo. Dopo un flash
@@ -125,17 +133,23 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   (`font_grotesk.c`, generato da `firmware/tools/gen_font.py` dal woff2 della UI web).
   Anteprima sul Mac senza flash: `cc -I main tools/screen_preview.c main/screen.c
   main/font_grotesk.c -o /tmp/preview && /tmp/preview <dir>` scrive un PBM per caso.
-- Per riavviare un device fermo in DEV MODE: pressione di PWR (dal firmware 0.4.0), oppure
-  push di un firmware, oppure `esptool ... --after hard_reset chip_id` con il cavo dati.
+- Tasti (dal firmware 0.8.3, spec `docs/specs/2026-10-11-firmware-tasti-click-design.md`):
+  **sotto = PWR** (click registra, click ferma; un click in più nei primi 2 s = DEV MODE),
+  **sopra = USER** (click sincronizza; in DEV MODE riavvia). GPIO0 sveglia dal deep sleep
+  senza modalità download (verificato), ma non va premuto durante un'accensione da zero.
+- Per riavviare un device fermo in DEV MODE: click del tasto sopra (USER, dal firmware 0.8.3;
+  prima era PWR), oppure push di un firmware, oppure `esptool ... --after hard_reset chip_id`
+  con il cavo dati.
 
 ## Stato al 2026-10-11
 
 - Tutto su `master`, compreso il backend (`backend-fase1b` e `backend-elaborazione-ai` uniti).
   `origin` (`github.com/francecesco/second_brain`, pubblico) allineato a `master` il
   2026-10-11 (push su richiesta dell'autore).
-- **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.8.1 (build
-  del codice corrente di `master`, inviata via `POST /ota` il 2026-10-11 e pubblicata
-  come release corrente sulla ZimaBoard; `version.txt` in git resta 0.1.0), con
+- **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.8.3 (build
+  del codice corrente di `master` coi tasti a click, flashata via cavo il 2026-10-12; sulla
+  ZimaBoard la release pubblicata è ancora la 0.8.1, più bassa, quindi niente downgrade;
+  `version.txt` in git resta 0.1.0), con
   `SERVER_BASE_URL "https://secondbrain.cescohomelab.com"` e il token generato sulla
   ZimaBoard. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
   (spec `docs/specs/2026-10-07-firmware-https-token-design.md`): un solo URL per tutte le
@@ -183,7 +197,10 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
    `SETTINGS_KEY` del `.env`).
 2. **Vault con Syncthing** sulla ZimaBoard: `/mnt/Storage1/secondbrain/vault` condiviso col
    Mac, prova con Obsidian vero.
-3. Batteria: scarica completa per la curva della percentuale e misura del consumo per
+3. **Tasti a click a batteria**: click sotto registra/ferma con upload, triplo click DEV,
+   click sopra sync, tutto senza USB; poi pubblicare la 0.8.3 sulla ZimaBoard per l'OTA.
+   Non provata l'accensione a batteria da scheda spenta del tutto (PWR tenuto ~1 s).
+4. Batteria: scarica completa per la curva della percentuale e misura del consumo per
    decidere se il wake ogni 5 min regge.
 
 ## Storico
@@ -327,6 +344,16 @@ deciso con anteprime renderizzate sul Mac, poi verificato sul device (0.8.0). Po
 batteria ferma all'83-86 % da ore su USB: era carica, ma l'ADC leggeva ~110 mV in meno
 (partitore e tolleranza). Fattore ×1,027 ricavato dal massimo in carica, soglia USB a
 4,23 V e "piena" a 4,15 V; verificato: "bat piena" su USB e 96 % appena staccata.
+
+**2026-10-12 — Tasti a click.** Tenere premuto per registrare era scomodo: ora il tasto
+sotto (PWR) registra e ferma a click, tre click portano in DEV MODE, il tasto sopra (USER,
+GPIO0) sveglia e sincronizza ed esce dalla DEV MODE. Prima verificato che GPIO0 come
+sorgente di wake non porta il chip in modalità download. Emerso: il secondo click di un
+triplo click cade durante l'avvio (~0,5 s) e non si vede, quindi conta come DEV qualunque
+click in più nei primi 2 s. I click li conta un task che campiona PWR ogni 10 ms (il main
+resta bloccato nel refresh dell'e-Paper). Verificato su USB: registrazione di 8 s senza
+perdite con upload dall'ufficio, triplo click con scarto e DEV, uscita con USER, sync con
+USER. Flash senza DEV MODE con `esptool` appena il device si sveglia.
 
 **2026-10-11 — Deploy sulla ZimaBoard.** Backend in Docker sulla ZimaBoard, partito da
 zero, dati su `/mnt/Storage1/secondbrain`, porta 8100 (8000 e 8080 occupate da altre
