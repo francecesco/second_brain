@@ -63,7 +63,8 @@ button, .btn {
   background: var(--panel); border: 1px solid var(--line); border-radius: 2px; box-shadow: 0 2px 0 var(--line);
   padding: .35rem .7rem; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; line-height: 1.4;
 }
-button:hover { border-color: var(--fg); box-shadow: 0 2px 0 var(--fg); }
+button:hover, .btn:hover { border-color: var(--fg); box-shadow: 0 2px 0 var(--fg); }
+.btn:hover { color: var(--fg); }
 button:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--line); }
 button:disabled { cursor: default; color: var(--mute); border-color: var(--line); box-shadow: 0 2px 0 var(--line); opacity: .6; transform: none; }
 button.pri { background: var(--acc); color: var(--acc-fg); border-color: var(--acc); box-shadow: 0 2px 0 var(--acc-edge); }
@@ -129,6 +130,14 @@ mark { background: var(--mark-bg); color: inherit; border-radius: 2px; padding: 
 .top nav .on { color: var(--acc); border-left-color: var(--acc); }
 .top nav form { border-top: 1px solid var(--line); margin-top: .3rem; padding-top: .3rem; }
 .search-open { display: none; cursor: pointer; }
+/* "Nuova nota": l'azione principale dell'intestazione, l'unico tasto pieno della barra. */
+.top .new-note { display: inline-flex; align-items: center; gap: .4rem; min-height: 2.5rem; padding: 0 .8rem;
+  background: var(--acc); color: var(--acc-fg); border: 1px solid var(--acc); border-radius: 2px; box-shadow: 0 2px 0 var(--acc-edge);
+  font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; }
+.top .new-note:hover { color: var(--acc-fg); filter: brightness(1.08); }
+.top .new-note:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--acc-edge); }
+/* Su /new il tasto pieno è "Salva": qui la voce dice solo "sei qui", come la voce di menu attiva. */
+.top .new-note.on { background: var(--panel); color: var(--acc); border-color: var(--line); box-shadow: 0 2px 0 var(--line); filter: none; }
 
 /* Pannelli: albero a sinistra, contenuto a destra. */
 .layout { display: flex; gap: 8px; padding: 8px; min-height: calc(100vh - 3rem); }
@@ -218,6 +227,12 @@ a.tag:hover { border-color: var(--acc); color: var(--acc); }
 .transcript { white-space: pre-wrap; }
 .provenance { color: var(--mute); font-size: .75em; }
 
+/* Nota scritta (/new) */
+.compose { display: grid; gap: .6rem; max-width: 48rem; }
+.compose textarea { width: 100%; min-height: 14rem; resize: vertical; }
+.compose .notice { margin: 0; }
+.compose .actions :is(button, .btn) { min-height: 2.5rem; padding: 0 .9rem; }
+
 /* Tabelle: cestino, dispositivi */
 .table-wrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; }
@@ -258,7 +273,10 @@ td .actions { margin: 0; }
   #tree-toggle:checked ~ ul { display: grid; }
   main { padding: .9rem; }
   .row .meta { margin-left: 0; width: 100%; }
-  .top .brand .label, .actions .label, .top .dots { display: none; }
+  .top .brand .label, .actions .label, .top .new-note .label, .top .dots { display: none; }
+  .top .new-note { padding: 0 .75rem; }
+  .top .new-note .icon { width: 1.1rem; height: 1.1rem; }
+  .compose .actions .label { display: inline; }
   .menu .current { display: none; }
   .top nav { min-width: 14rem; }
   .search-open { display: inline-flex; }

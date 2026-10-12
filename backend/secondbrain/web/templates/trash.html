@@ -12,7 +12,7 @@
   <td>{{ device_names.get(c.device_id, c.device_id) }}</td>
   <td>{{ local(c.trashed_at) }}</td>
   <td class="actions">
-    <a href="/captures/{{ c.id }}/audio" aria-label="Ascolta" title="Ascolta">{{ icon("listen") }}<span class="label">Ascolta</span></a>
+    {% if not is_text_capture(c) %}<a href="/captures/{{ c.id }}/audio" aria-label="Ascolta" title="Ascolta">{{ icon("listen") }}<span class="label">Ascolta</span></a>{% endif %}
     <form method="post" action="/trash/{{ c.id }}/restore"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" aria-label="Ripristina" title="Ripristina">{{ icon("restore") }}<span class="label">Ripristina</span></button></form>
     <form method="post" action="/trash/{{ c.id }}/delete" onsubmit="return confirm('Eliminare definitivamente? Non si può annullare.')"><input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit" aria-label="Elimina" title="Elimina">{{ icon("delete") }}<span class="label">Elimina</span></button></form>
   </td>

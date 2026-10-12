@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from .. import catalog
 from ..models import Capture, WebSession
+from ..textnotes import is_text_capture
 from .context import base_context, clean_device, page_context
 from .deps import get_db, require_login
 from .templating import MONTHS, templates, weekday_label
@@ -100,6 +101,8 @@ def capture_note(request: Request, capture_id: uuid.UUID, db: Session = Depends(
 def capture_audio(request: Request, capture_id: uuid.UUID, db: Session = Depends(get_db),
                   session: WebSession = Depends(require_login)):
     capture = _capture(db, capture_id)
+    if is_text_capture(capture):
+        raise HTTPException(404, "nota scritta, senza audio")
     path = request.app.state.archive.abs(capture.rel_path)
     if not path.is_file():
         raise HTTPException(404, "audio non trovato sul disco")

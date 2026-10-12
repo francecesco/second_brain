@@ -12,6 +12,8 @@ document.addEventListener("htmx:responseError", function (evt) {
   flash.textContent = evt.detail.xhr.responseText || "Errore";
   flash.hidden = false;
 });
+// Nota scritta salvata (new.html alza il flag all'invio): fuori da /new la bozza non serve più.
+try { if (sessionStorage.getItem("sb-draft-sent") && location.pathname !== "/new") { localStorage.removeItem("sb-draft"); sessionStorage.removeItem("sb-draft-sent"); } } catch (e) {}
 // Clic sul titolo di una riga: apre il dettaglio, o lo richiude se e' gia' aperto.
 function toggleDetail(button) {
   var detail = document.getElementById(button.getAttribute("aria-controls"));

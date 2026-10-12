@@ -19,6 +19,7 @@
   </form>
   {% set fix_label = "Da sistemare (" ~ estimated_count ~ ")" if estimated_count else "Da sistemare" %}
   {% set section_labels = {"browse": "Archivio", "todo": "Da fare", "done": "Completati", "tags": "Tag", "fix": "Da sistemare", "trash": "Cestino", "devices": "Dispositivi", "settings": "Impostazioni", "search": "Ricerca"} %}
+  <a class="new-note{% if section == 'new' %} on{% endif %}" href="/new"{% if section == 'new' %} aria-current="page"{% endif %} aria-label="Nuova nota" title="Nuova nota">{{ icon("pencil") }}<span class="label">Nuova nota</span></a>
   <details class="menu">
     <summary aria-label="Menu" title="Menu">{{ icon("menu") }}<span class="current">{{ section_labels.get(section, "Menu") }}</span></summary>
     <nav>

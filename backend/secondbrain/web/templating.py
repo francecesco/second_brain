@@ -11,6 +11,7 @@ from ..ai.base import redact
 from ..notefile import MAX_MODEL_LEN, MAX_SUMMARY_LEN, MAX_TITLE_LEN
 from ..notes import default_title, effective_title
 from ..search import MAX_QUERY_LEN
+from ..textnotes import is_text_capture
 
 WEB_DIR = Path(__file__).parent
 STATIC_DIR = WEB_DIR / "static"
@@ -88,6 +89,7 @@ templates.env.globals["weekday_short"] = weekday_short
 templates.env.globals["day_month_label"] = day_month_label
 templates.env.globals["default_title"] = default_title
 templates.env.globals["display_title"] = display_title
+templates.env.globals["is_text_capture"] = is_text_capture
 templates.env.globals["reprocess_confirm"] = reprocess_confirm
 templates.env.globals["DETAIL_FIELDS"] = DETAIL_FIELDS
 templates.env.globals["static_url"] = static_url
