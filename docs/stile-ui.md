@@ -124,6 +124,26 @@ d'accento. I pulsanti con sola icona tengono l'etichetta in `<span class="label"
 sparisce sotto i 700 px. Dentro `.row-main` e `.top nav` i pulsanti sono "nudi" (niente
 bordo né ombra): sono righe e voci di menu, non tasti.
 
+**Misure dei pulsanti.** Una sola taglia per tutti i tasti: `button`, `a.btn`, il
+`summary` del menu e "Nuova nota". Padding `.35rem .7rem`, etichetta a 10,5 px (maiuscolo,
+spaziatura 0,12 em, peso 600), `line-height` 1,4, icona a 1,1 em (la regola `.icon`, mai
+ingrandita), bordo 1 px e ombra di 2 px: circa 30 px di altezza, la stessa dei campi
+dell'intestazione. Regole:
+
+- un tasto si distingue per **colore** (pieno d'accento, stato `on`), **mai per misura**:
+  niente `min-height`, padding o icone propri. Un tasto nuovo parte da `button`/`.btn` e
+  cambia solo i colori;
+- sotto i 700 px cambia solo l'etichetta, che sparisce; padding e icona restano uguali;
+- nella stessa riga (intestazione, `.actions`) tutti i tasti hanno la stessa altezza;
+- unica eccezione: i moduli di composizione (`.compose .actions`), dove "Salva" e
+  "Annulla" sono alti 2,5 rem con l'etichetta visibile anche al telefono, per il
+  bersaglio al tocco nel corpo della pagina. Non vale per l'intestazione;
+- al massimo un tasto pieno per vista (vedi "Dove va l'arancione").
+
+**Link con forma di pulsante** (`a.btn`). Stesso aspetto e stesse misure di `button`
+(bordo, hover, altezza), per azioni di navigazione che non inviano un modulo: "Annulla"
+nella pagina Nuova nota, con icona. Mai pieno.
+
 **Campi.** `input`, `select`, `textarea`: fondo `--bg` (incassato rispetto al pannello),
 bordo 1 px, raggio 2 px. Nelle card delle impostazioni, che hanno già fondo `--bg`, i
 campi passano a `--panel`. Il focus è un anello di 2 px d'accento.
@@ -217,11 +237,6 @@ aggiunge `?v=` con l'hash del contenuto: Cloudflare tiene in cache i `.css` per 
 senza, dopo un deploy il tunnel serviva il foglio di stile vecchio con l'HTML nuovo
 (2026-10-12). Un file statico nuovo caricato da una pagina passa da `static_url`.
 
-**Link con forma di pulsante** (`a.btn`). Stesso aspetto di `button` (bordo, hover, altezza),
-per azioni di navigazione che non inviano un modulo: "Annulla" nella pagina Nuova nota,
-con icona. Mai pieno. Nei moduli di composizione (`.compose .actions`) i pulsanti sono
-alti 2,5 rem per il bersaglio al tocco.
-
 ## Storico delle decisioni
 
 - **2026-10-06** — Direzione scelta tra tre mockup (pannello alla Teenage Engineering,
@@ -235,3 +250,6 @@ alti 2,5 rem per il bersaglio al tocco.
 - **2026-10-12** — Pulsante "Nuova nota" nell'intestazione, unico pieno arancione della
   barra, nello stato `on` su `/new` perché lì "Salva" è il pulsante pieno; "Annulla" come
   link `a.btn`; icona matita riusata.
+- **2026-10-12** — "Nuova nota" alto 40 px e con l'icona ingrandita al telefono stonava
+  accanto a "Menu": riportato alle misure comuni dei tasti, regole scritte in "Misure dei
+  pulsanti" (un tasto si distingue per colore, mai per misura).
