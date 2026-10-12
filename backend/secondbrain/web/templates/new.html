@@ -1,0 +1,40 @@
+{% extends "finder.html" %}
+{% from "_icons.html" import icon %}
+{% block main %}
+<form method="post" action="/new" class="compose" id="compose">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="capture_id" value="{{ capture_id }}">
+  <label for="compose-text" class="lab">Testo della nota</label>
+  <textarea id="compose-text" name="text" rows="10" maxlength="{{ MAX_TEXT_NOTE_CHARS }}" autofocus required
+            placeholder="Scrivi qui: titolo e tag li aggiunge l'elaborazione"{% if error %} aria-invalid="true" aria-describedby="compose-error"{% endif %}>{{ text }}</textarea>
+  {% if error %}<p class="notice" role="alert" id="compose-error">{{ icon("fix") }}<span>{{ error }}</span></p>{% endif %}
+  <div class="actions">
+    <button type="submit" class="pri" aria-label="Salva" title="Salva (Ctrl+Invio)">{{ icon("save") }}<span class="label">Salva</span></button>
+    <a class="btn" href="/todo" id="compose-cancel" aria-label="Annulla" title="Annulla">{{ icon("close") }}<span class="label">Annulla</span></a>
+  </div>
+</form>
+<script>
+// Bozza nel browser: si scrive a ogni tasto e la toglie base.html solo dopo un salvataggio
+// riuscito (redirect a /todo#salvata) o "Annulla" qui sotto. Errori, sessione scaduta,
+// rete: la bozza resta.
+(function () {
+  var form = document.getElementById("compose"), area = document.getElementById("compose-text");
+  var button = form.querySelector("button[type=submit]"), KEY = "sb-draft";
+  if (!area.value) { try { var draft = localStorage.getItem(KEY); if (draft) { area.value = draft; } } catch (e) {} }
+  area.addEventListener("input", function () {
+    try { if (area.value) { localStorage.setItem(KEY, area.value); } else { localStorage.removeItem(KEY); } } catch (e) {}
+  });
+  area.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); form.requestSubmit(); }
+  });
+  document.getElementById("compose-cancel").addEventListener("click", function () {
+    try { localStorage.removeItem(KEY); } catch (e) {}  // testo scartato di proposito
+  });
+  form.addEventListener("submit", function () {
+    button.disabled = true;  // niente doppio tocco; il capture_id copre comunque il doppio invio
+  });
+  // Tornando indietro dalla cronologia la pagina può riapparire col pulsante disabilitato.
+  window.addEventListener("pageshow", function () { button.disabled = false; });
+})();
+</script>
+{% endblock %}

@@ -87,6 +87,8 @@ Sì, e solo qui:
 - orario della riga di cui è aperto il dettaglio (`.row:has(> .detail:not(:empty)) .time`);
 - titolo di una riga o di un risultato al passaggio del mouse;
 - pulsante principale (`button.pri`), uno per modulo: salva, entra;
+- pulsante "Nuova nota" nell'intestazione: l'unico elemento pieno arancione della barra. Su
+  `/new` è nello stato `on` (non pieno), così "Salva" resta l'unico pulsante pieno della vista;
 - LED "in corso" (`.led.run`) e icona "fallita" (`.status.failed`);
 - avvisi (`.notice`, `#flash`): bordo sinistro, icona e link;
 - marcatore "corretto a mano" (`.edited`), badge "data stimata" (`.badge`), errori di
@@ -121,6 +123,31 @@ il bordo diventa `--fg`, alla pressione il tasto scende di 1 px. `button.pri` è
 d'accento. I pulsanti con sola icona tengono l'etichetta in `<span class="label">`, che
 sparisce sotto i 700 px. Dentro `.row-main` e `.top nav` i pulsanti sono "nudi" (niente
 bordo né ombra): sono righe e voci di menu, non tasti.
+
+**Misure dei pulsanti.** Una sola taglia per tutti i tasti: `button`, `a.btn`, il
+`summary` del menu e "Nuova nota". Padding `.35rem .7rem`, etichetta a 10,5 px (maiuscolo,
+spaziatura 0,12 em, peso 600), `line-height` 1,4, icona a 1,1 em (la regola `.icon`, mai
+ingrandita), bordo 1 px e ombra di 2 px: circa 30 px di altezza, la stessa dei campi
+dell'intestazione. Regole:
+
+- un tasto si distingue per **colore** (pieno d'accento, stato `on`), **mai per misura**:
+  niente `min-height`, padding o icone propri. Un tasto nuovo parte da `button`/`.btn` e
+  cambia solo i colori;
+- sotto i 700 px cambia solo l'etichetta, che sparisce; padding e icona restano uguali;
+- nella stessa riga (intestazione, `.actions`) tutti i tasti hanno la stessa altezza;
+- nessuna eccezione per pagina o modulo: anche "Salva"/"Annulla" di Nuova nota ed
+  "Entra" del login hanno la taglia comune. La **larghezza** può seguire il layout del
+  modulo ("Entra" occupa tutta la riga del login), l'altezza no;
+- al massimo un tasto pieno per vista (vedi "Dove va l'arancione").
+
+Non sono tasti, e quindi non seguono la taglia: le righe (`.row-main`) e le voci del menu
+(`.top nav`), già descritte sopra, e la matita "modifica" accanto ai titoli dei campi del
+dettaglio (`.pencil`), un'icona nuda in linea col testo, senza bordo né ombra finché non
+ci si passa sopra.
+
+**Link con forma di pulsante** (`a.btn`). Stesso aspetto e stesse misure di `button`
+(bordo, hover, altezza), per azioni di navigazione che non inviano un modulo: "Annulla"
+nella pagina Nuova nota, con icona. Mai pieno.
 
 **Campi.** `input`, `select`, `textarea`: fondo `--bg` (incassato rispetto al pannello),
 bordo 1 px, raggio 2 px. Nelle card delle impostazioni, che hanno già fondo `--bg`, i
@@ -225,3 +252,11 @@ senza, dopo un deploy il tunnel serviva il foglio di stile vecchio con l'HTML nu
 - **2026-10-07** — Albero a tessere ispirato ai menu a schede di Nothing, contatori in
   Doto, stessa forma per le tessere della griglia; bordo d'accento solo sulla voce più
   profonda.
+- **2026-10-12** — Pulsante "Nuova nota" nell'intestazione, unico pieno arancione della
+  barra, nello stato `on` su `/new` perché lì "Salva" è il pulsante pieno; "Annulla" come
+  link `a.btn`; icona matita riusata.
+- **2026-10-12** — "Nuova nota" alto 40 px e con l'icona ingrandita al telefono stonava
+  accanto a "Menu": riportato alle misure comuni dei tasti, regole scritte in "Misure dei
+  pulsanti" (un tasto si distingue per colore, mai per misura). Tolte anche le misure
+  proprie di "Salva"/"Annulla" in Nuova nota (2,5 rem, etichetta sempre visibile) e di
+  "Entra" nel login (padding maggiorato).

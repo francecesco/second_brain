@@ -44,8 +44,16 @@ def default_title(recorded_at_utc: datetime, tz: ZoneInfo) -> str:
 
 
 def effective_title(capture: Capture, tz: ZoneInfo) -> str:
-    """Titolo mostrato: manuale, altrimenti automatico, altrimenti il default per fascia."""
-    return capture.title or capture.title_auto or default_title(capture.recorded_at, tz)
+    """Titolo mostrato: manuale, altrimenti automatico, altrimenti per una nota scritta
+    l'inizio del testo, altrimenti il default per fascia."""
+    if capture.title or capture.title_auto:
+        return capture.title or capture.title_auto
+    from .textnotes import is_text_capture, provisional_title
+    if is_text_capture(capture) and capture.transcript:
+        title = provisional_title(capture.transcript)
+        if title:
+            return title
+    return default_title(capture.recorded_at, tz)
 
 
 def note_meta(capture: Capture, tz: ZoneInfo, public_url: str | None) -> NoteMeta:

@@ -16,7 +16,7 @@ import tempfile
 import threading
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
-from . import jobs, notefile, notes, search, vault_sync
+from . import jobs, notefile, notes, search, textnotes, vault_sync
 from . import settings_store as store
 from .ai import chain
 from .ai.audio import AudioError, AudioSource
@@ -34,6 +34,7 @@ from .ai.registry import ProviderConfig
 from .archive import AI_SUFFIX, Archive
 from .clock import utcnow
 from .models import Capture, Job
+from .notefile import _edited
 from .usage import month_start, record_usage
 from .vault import Vault
 
@@ -202,6 +203,19 @@ class Worker:
                 return None
             capture, job = held
             stage, text, now, until = job.stage, capture.transcript, self.clock(), lease.until
+            if stage == jobs.STAGE_TRANSCRIBE and textnotes.is_text_capture(capture):
+                # Nota scritta in fase transcribe (es. dopo rescan senza `.md`, o con un `.md`
+                # la cui riga `edited` e' stata tolta in Obsidian): mai il provider audio
+                # (spec note scritte §5). Il testo gia' in catalogo vince (puo' avere
+                # correzioni), altrimenti il `.txt`.
+                source = text if (text or "").strip() else textnotes.read_source(self.archive, capture)
+                note = replace(notes.note_from_capture(capture), transcript=source,
+                               edited=_edited((*capture.edited, "transcript")),
+                               language=capture.language or store.get_language(s))
+                notes.write_note(s, self.archive, capture, note, self.tz, vault=self.vault,
+                                 public_url=self.public_url)
+                text, stage = note.transcript, jobs.STAGE_ENRICH
+                until = jobs.advance(s, lease.capture_id, stage, now).locked_until
             if (stage == jobs.STAGE_TRANSCRIBE and text is not None
                     and "transcript" in capture.edited):
                 stage = jobs.STAGE_ENRICH  # trascrizione corretta a mano: non si rifà

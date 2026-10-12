@@ -23,6 +23,7 @@ from .settings_store import SecretBox
 from .web import actions as web_actions
 from .web import ai as web_ai
 from .web import browse as web_browse
+from .web import compose as web_compose
 from .web import login as web_login
 from .web import search as web_search
 from .web import settings as web_settings
@@ -109,6 +110,7 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
     app.include_router(web_login.router)
     app.include_router(web_browse.router)
     app.include_router(web_actions.router)
+    app.include_router(web_compose.router)
     app.include_router(web_ai.router)
     app.include_router(web_search.router)
     app.include_router(web_settings.router)

@@ -13,12 +13,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import jobs
-from .archive import NOTE_SUFFIX, TRASH, Archive
+from .archive import NOTE_SUFFIX, TEXT_SUFFIX, TRASH, Archive
 from .models import Capture, Device
 from .naming import DEFAULT_DEVICE_TYPE, parse_day_dir
 from .notefile import NoteError, parse_note, parse_note_id
 from .notes import empty_ai_fields, lock_capture, note_fields
 from .search import refresh_search_vector
+from .textnotes import TEXT_DEVICE_NAME, TEXT_DEVICE_TYPE
 from .sidecar import sidecar_to_fields, capture_to_sidecar
 from .vault import CAPTURES_DIR, Vault
 
@@ -50,7 +51,7 @@ def _sync_trashed_at(archive: Archive, rel_wav: str, sidecar_data: dict,
 
 def _load(archive: Archive, rel_wav: str, now: datetime, report: RescanReport) -> dict | None:
     if not archive.abs(rel_wav).is_file():
-        report.problems.append(f"{rel_wav}: sidecar senza WAV")
+        report.problems.append(f"{rel_wav}: sidecar senza sorgente")
         return None
     in_trash = rel_wav.startswith(TRASH + "/")
     try:
@@ -82,12 +83,21 @@ def _note_fields(archive: Archive, rel_wav: str, report: RescanReport) -> tuple[
         return None, False
 
 
-def _ensure_device(s: Session, device_id: str, now: datetime, report: RescanReport) -> None:
-    if s.get(Device, device_id) is None:
-        s.add(Device(id=device_id, name=device_id, type=DEFAULT_DEVICE_TYPE,
+def _ensure_device(s: Session, device_id: str, rel_path: str, now: datetime,
+                   report: RescanReport) -> None:
+    if s.get(Device, device_id) is not None:
+        return
+    if rel_path.endswith(TEXT_SUFFIX):
+        # Il device "App" delle note scritte: torna col suo tipo, così `app_device` lo
+        # ritrova invece di crearne un secondo; non ha token per scelta, non va segnalato.
+        s.add(Device(id=device_id, name=TEXT_DEVICE_NAME, type=TEXT_DEVICE_TYPE,
                      token_hash=None, created_at=now))
         s.flush()
-        report.devices_created.append(device_id)
+        return
+    s.add(Device(id=device_id, name=device_id, type=DEFAULT_DEVICE_TYPE,
+                 token_hash=None, created_at=now))
+    s.flush()
+    report.devices_created.append(device_id)
 
 
 def _restore_from_catalog(archive: Archive, capture: Capture, report: RescanReport) -> dict:
@@ -183,13 +193,13 @@ def rescan(s: Session, archive: Archive, now: datetime, *, vault: Vault | None =
             report.removed += 1
     s.flush()
 
-    for rel_wav in archive.iter_wavs_without_sidecar():
-        report.problems.append(f"{rel_wav}: WAV senza sidecar, non importato")
+    for rel_wav in archive.iter_sources_without_sidecar():
+        report.problems.append(f"{rel_wav}: sorgente senza sidecar, non importata")
 
     linked = _link_vault(s, vault, entries, report) if vault is not None else set()
     to_queue: list[uuid.UUID] = []
     for values in entries.values():
-        _ensure_device(s, values["device_id"], now, report)
+        _ensure_device(s, values["device_id"], values["rel_path"], now, report)
         # Riga già esistente: prima il lock (`notes.lock_capture`, lo stesso che tengono UI e
         # worker mentre scrivono i campi AI), poi la lettura del `.md`. Letto prima, un `.md`
         # scritto dal worker nel frattempo verrebbe sovrascritto con i campi vuoti.

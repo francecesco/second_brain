@@ -173,6 +173,9 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   completo verificato (upload dal device, trascrizione con Groq, nota con titolo nel vault
   `/mnt/Storage1/secondbrain/vault/Captures/`). Sul Mac resta il backend di sviluppo
   (`backend/.env` e `backend/data/` locali e gitignored).
+- **Note scritte** (spec `docs/specs/2026-10-12-backend-note-scritte-design.md`): sul
+  branch `backend-note-scritte`, non ancora in `master` né sulla ZimaBoard (aspettano la
+  prova locale e l'ok dell'autore).
 - **Elaborazione AI** (spec `docs/specs/2026-09-29-backend-elaborazione-ai-design.md`):
   trascrizione, titolo, riassunto e tag con Groq e Gemini (chiavi inserite dall'autore
   nella pagina Impostazioni, cifrate con `SETTINGS_KEY` del `backend/.env` del Mac), worker
@@ -387,6 +390,16 @@ Teenage Engineering, dot matrix alla Nothing, 1-bit come il device): vinta la pr
 dose moderata di arancione. CSS scritto a mano su variabili, font squadrati vendorizzati (Space Grotesk, Space Mono, Doto),
 LED di stato, voce di menu attiva. Linee guida in `docs/stile-ui.md`. Branch
 `backend-stile-pannello`, fuso in `master` il 2026-10-07.
+
+**2026-10-12 — Note scritte dall'app** (`docs/specs/2026-10-12-backend-note-scritte-design.md`).
+Pulsante "Nuova nota" nell'intestazione, pagina `/new`, testo salvato come `<base>.txt`
+nell'archivio sotto il dispositivo "App" (tipo `web`), già trascritto a mano con il lavoro
+in fase `enrich`: l'AI aggiunge solo titolo, riassunto e tag. Emersi in revisione: due
+doppi invii simultanei facevano cancellare al perdente i file del vincitore (advisory lock
+di Postgres sulla creazione); la bozza nel browser si toglieva anche con la sessione
+scaduta (ora solo sul segno `#salvata` dopo il redirect); su `/new` il pulsante della barra
+è nello stato `on` perché "Salva" sia l'unico pieno. 597 test backend. Sul branch
+`backend-note-scritte`; prova dell'autore in locale e deploy ancora da fare.
 
 ## Idee future e cose rimandate
 
