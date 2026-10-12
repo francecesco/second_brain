@@ -1,7 +1,7 @@
 # Backend — Note scritte dall'app — Design / Spec
 
 **Data:** 2026-10-12
-**Stato:** implementata sul branch `backend-note-scritte` il 2026-10-12; 597 test del
+**Stato:** implementata sul branch `backend-note-scritte` il 2026-10-12; 604 test del
 backend verdi, screenshot a 1280 e 390 px (chiaro e scuro) fatti. Provata in locale
 dall'autore: **non ancora**. Deploy sulla ZimaBoard: **dopo l'ok dell'autore**. Deviazioni
 emerse: creazione serializzata con un advisory lock di Postgres (due doppi invii
@@ -11,6 +11,11 @@ scaduta non la perde); su `/new` il pulsante dell'intestazione è nello stato `o
 pieno, per lasciare "Salva" come unico pieno; errore imprevisto o del disco: 500 con il
 testo mantenuto; "Annulla" come link `a.btn`; rescan di una nota scritta senza `.md` la
 rimette in coda e il worker ricostruisce la trascrizione dal `.txt` senza provider audio.
+Dalla revisione finale: `rescan` su un catalogo vuoto ricrea il device "App" col suo tipo e
+nome (prima diventava un `epaper154` e la nota successiva creava un secondo "App"); la rete
+di sicurezza del worker vale per ogni nota `.txt` in `transcribe`, anche con il testo ma
+senza `transcript` in `edited`; "Annulla" toglie anche la bozza; il file temporaneo si
+toglie se la scrittura fallisce; `devices.py` rifiuta token e upload in LAN per il tipo `web`.
 
 ## 1. Obiettivo
 
@@ -44,7 +49,7 @@ Riuscita: dal telefono, in pochi secondi la nota è salvata; dopo un minuto ha t
   (`MAX_TEXT_NOTE_CHARS`), circa 10 minuti di parlato. In errore la pagina torna con il testo
   nel campo (422).
 - **Bozza**: il testo non salvato si tiene in `localStorage` (con try/catch, è solo una
-  comodità) e si cancella al salvataggio riuscito.
+  comodità) e si cancella al salvataggio riuscito o con "Annulla".
 - **Doppio invio**: la pagina genera un `capture_id` nel formato del device
   (`cap_AAAAMMGG_HHMMSS`, istante UTC di apertura della pagina) in un campo nascosto; vale la
   logica dei doppioni di `POST /captures`: stesso id e stesso `sha256` → nessuna nota nuova,
@@ -54,8 +59,12 @@ Riuscita: dal telefono, in pochi secondi la nota è salvata; dopo un minuto ha t
 
 - **Dispositivo "App"**: riga in `devices` con tipo `web` (`TEXT_DEVICE_TYPE`), nome "App",
   id esadecimale di 12 caratteri generato, creata al primo salvataggio e ritrovata per tipo.
-  Senza token: da `POST /captures` non si carica niente a suo nome. Nella pagina Dispositivi
-  si rinomina ma non c'è "Rigenera token".
+  Senza token: da `POST /captures` non si carica niente a suo nome. `devices.py` lo
+  garantisce per il tipo `web`: `regenerate_token` (`secondbrain device token`) rifiuta con
+  un `DeviceError`, `authenticate` risponde 403 anche all'upload in LAN senza token. La
+  pagina Dispositivi non ha mai avuto "Rigenera token": il device si rinomina come gli altri.
+  `rescan` su un catalogo senza la riga la ricrea con tipo `web` e nome "App" (la riconosce
+  dal `.txt`) e non la elenca tra i dispositivi creati senza token.
 - **File**: nella cartella del giorno `<base>.txt` (originale UTF-8, immutabile, testo come
   scritto con i fine riga normalizzati a `\n`) e `<base>.json`, il sidecar con i campi di
   oggi: `duration_s = 0`, `size_bytes` e `sha256` del `.txt`, `recorded_at` = istante del
@@ -72,7 +81,8 @@ Riuscita: dal telefono, in pochi secondi la nota è salvata; dopo un minuto ha t
 - **Nota e lavoro**, nella stessa transazione della riga del catalogo: nota `.md` nel vault con
   `transcript` = testo, `edited: ["transcript"]`, lingua dalle impostazioni, provider di
   trascrizione vuoto; lavoro accodato in fase `enrich`. Se il commit fallisce, i file si
-  tolgono con la stessa regola dell'upload (`_cleanup_after_commit_failure`).
+  tolgono con la stessa regola dell'upload (`textnotes._cleanup`: solo se la riga non c'è
+  davvero); il file temporaneo in `.incoming/` si toglie anche se fallisce la scrittura.
 - **`rescan`**: una nota `.txt` senza `.md` va in coda come ogni nota senza `.md`; il worker
   (rete di sicurezza, §5) ricostruisce la trascrizione dal `.txt` e la arricchisce. Un solo
   percorso di codice. Se il `.md` c'è vince lui, perché contiene le correzioni.
@@ -84,7 +94,8 @@ Riuscita: dal telefono, in pochi secondi la nota è salvata; dopo un minuto ha t
 - La nota scritta nasce in fase `enrich`; il worker la arricchisce come una trascrizione
   (regole dei nomi, vocabolario, tag noti).
 - **Rete di sicurezza**: se una nota `.txt` arriva in fase `transcribe`, il worker non chiama
-  i provider audio: legge il `.txt`, lo applica come trascrizione corretta a mano e passa a
+  i provider audio: tiene la trascrizione del catalogo se c'è (può avere correzioni),
+  altrimenti legge il `.txt`; la segna corretta a mano (`transcript` in `edited`) e passa a
   `enrich`.
 - "Rielabora" rifà l'arricchimento senza toccare il testo (`edited` contiene `transcript`);
   `retag`, correzioni a mano e modifiche da Obsidian funzionano come oggi.
@@ -105,13 +116,13 @@ Riuscita: dal telefono, in pochi secondi la nota è salvata; dopo un minuto ha t
 
 ## 7. Modifiche
 
-- `archive.py` (sorgente `.wav`/`.txt`), `rescan.py`, `naming.py` (costanti), nuovo modulo
-  `textnotes.py` (device "App", creazione della nota, titolo provvisorio), `notes.py`
-  (`effective_title` col titolo provvisorio), `worker.py` (rete di sicurezza), `devices`
-  (niente rigenerazione per `web`).
-- Web: nuovo `web/compose.py` (GET/POST `/new`), audio 404 per `.txt`, template `new.html`,
-  `finder.html` (pulsante), `_row.html`, `_detail.html`, `trash.html`, `devices.html`,
-  `_icons.html` (matita), `style.css`.
+- `archive.py` (sorgente `.wav`/`.txt`), `rescan.py` (device "App" ricreato col suo tipo),
+  nuovo modulo `textnotes.py` (costanti, device "App", creazione della nota, titolo
+  provvisorio), `notes.py` (`effective_title` col titolo provvisorio), `worker.py` (rete di
+  sicurezza), `devices.py` (niente token né upload per il tipo `web`), `app.py` (router).
+- Web: nuovo `web/compose.py` (GET/POST `/new`), audio 404 per `.txt` (`browse.py`),
+  `templating.py`, template `new.html`, `base.html` (bozza tolta dopo il salvataggio),
+  `finder.html` (pulsante), `_row.html`, `_detail.html`, `trash.html`, `style.css`.
 - Documentazione: `README.md` del backend, `docs/stile-ui.md` (pulsante d'azione
   nell'intestazione), `CLAUDE.md`.
 
