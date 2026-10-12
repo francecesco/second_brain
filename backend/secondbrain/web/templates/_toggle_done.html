@@ -1,0 +1,3 @@
+{# Risposta alla spunta: la riga sparisce dalla lista (htmx la sostituisce con niente),
+   contatori del menu e albero si aggiornano out-of-band. #}
+{% with oob=True %}{% include "_nav_counts.html" %}{% include "_tree.html" %}{% endwith %}

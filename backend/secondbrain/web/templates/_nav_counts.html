@@ -1,0 +1,5 @@
+{% from "_icons.html" import icon %}
+{% set todo_label = "Da fare (" ~ todo_count ~ ")" %}
+{% set done_label = "Completati (" ~ done_count ~ ")" %}
+<a id="nav-todo"{% if section == "todo" %} class="on"{% endif %} href="/todo{{ qs }}" aria-label="{{ todo_label }}" title="{{ todo_label }}"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>{{ icon("todo") }}<span class="label">{{ todo_label }}</span></a>
+<a id="nav-done"{% if section == "done" %} class="on"{% endif %} href="/done{{ qs }}" aria-label="{{ done_label }}" title="{{ done_label }}"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>{{ icon("done") }}<span class="label">{{ done_label }}</span></a>

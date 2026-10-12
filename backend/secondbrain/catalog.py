@@ -47,32 +47,37 @@ def _active(stmt, device_id: str | None):
     return stmt.where(Capture.device_id == device_id) if device_id else stmt
 
 
+def _open(stmt):
+    """Le completate escono dall'archivio e stanno nella vista "Completati" (spec note da fare §2)."""
+    return stmt.where(Capture.done_at.is_(None))
+
+
 def _counts(s: Session, stmt) -> list[tuple[int, int]]:
     return [(int(key), int(n)) for key, n in s.execute(stmt)]
 
 
 def year_counts(s: Session, device_id: str | None = None) -> list[tuple[int, int]]:
     stmt = select(_YEAR, func.count()).group_by(_YEAR).order_by(_YEAR.desc())
-    return _counts(s, _active(stmt, device_id))
+    return _counts(s, _open(_active(stmt, device_id)))
 
 
 def month_counts(s: Session, year: int, device_id: str | None = None) -> list[tuple[int, int]]:
     stmt = (select(_MONTH, func.count()).where(_YEAR == year)
             .group_by(_MONTH).order_by(_MONTH))
-    return _counts(s, _active(stmt, device_id))
+    return _counts(s, _open(_active(stmt, device_id)))
 
 
 def day_counts(s: Session, year: int, month: int,
                device_id: str | None = None) -> list[tuple[int, int]]:
     stmt = (select(_DAY, func.count()).where(_YEAR == year, _MONTH == month)
             .group_by(_DAY).order_by(_DAY))
-    return _counts(s, _active(stmt, device_id))
+    return _counts(s, _open(_active(stmt, device_id)))
 
 
 def list_day(s: Session, day: date, device_id: str | None = None) -> list[Capture]:
     stmt = (select(Capture).where(Capture.day == day).order_by(Capture.recorded_at)
             .options(selectinload(Capture.job)))  # lo stato di ogni riga, in una query sola
-    return list(s.scalars(_active(stmt, device_id)))
+    return list(s.scalars(_open(_active(stmt, device_id))))
 
 
 def count_estimated(s: Session) -> int:
@@ -84,6 +89,30 @@ def list_estimated(s: Session) -> list[Capture]:
     stmt = (select(Capture).where(Capture.date_estimated.is_(True))
             .order_by(Capture.recorded_at.desc()).options(selectinload(Capture.job)))
     return list(s.scalars(_active(stmt, None)))
+
+
+def count_todo(s: Session, device_id: str | None = None) -> int:
+    """Registrazioni ancora da fare (spec note da fare §2): non spuntate, non nel cestino."""
+    return s.scalar(_open(_active(select(func.count()).select_from(Capture), device_id)))
+
+
+def list_todo(s: Session, device_id: str | None = None) -> list[Capture]:
+    stmt = select(Capture).order_by(Capture.recorded_at.desc()).options(selectinload(Capture.job))
+    return list(s.scalars(_open(_active(stmt, device_id))))
+
+
+def _done(stmt):
+    return stmt.where(Capture.done_at.is_not(None))
+
+
+def count_done(s: Session, device_id: str | None = None) -> int:
+    return s.scalar(_done(_active(select(func.count()).select_from(Capture), device_id)))
+
+
+def list_done(s: Session, device_id: str | None = None) -> list[Capture]:
+    """Completate, dall'ultima spuntata."""
+    stmt = select(Capture).order_by(Capture.done_at.desc()).options(selectinload(Capture.job))
+    return list(s.scalars(_done(_active(stmt, device_id))))
 
 
 def list_trashed(s: Session) -> list[Capture]:

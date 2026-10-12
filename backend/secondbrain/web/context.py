@@ -33,6 +33,8 @@ def base_context(request: Request, db: Session, session: WebSession,
         "device_names": {d.id: d.name for d in devices},
         "qs": f"?device={device}" if device else "",
         "estimated_count": catalog.count_estimated(db),
+        "todo_count": catalog.count_todo(db, device),
+        "done_count": catalog.count_done(db, device),
     }
 
 

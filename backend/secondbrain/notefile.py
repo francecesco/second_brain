@@ -61,6 +61,7 @@ class NoteMeta:
     duration_s: float
     title: str | None
     url: str | None
+    done: bool = False   # spuntata nell'app (spec note da fare §3): `completata`, mai riletto
 
 
 def _one_line(value: str) -> str:
@@ -117,6 +118,8 @@ def render_note(note: Note, tz: ZoneInfo, meta: NoteMeta | None = None) -> str:
         front["tags"] = list(note.tags)
     if meta is not None and meta.url:
         front["url"] = meta.url
+    if meta is not None:
+        front["completata"] = meta.done
     if note.language:
         front["language"] = note.language
     if note.provider:
