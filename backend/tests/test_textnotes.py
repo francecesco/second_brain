@@ -4,11 +4,16 @@ from zoneinfo import ZoneInfo
 import pytest
 from sqlalchemy import select, text
 
-from secondbrain import jobs, textnotes
+from secondbrain import jobs, library, textnotes
+from secondbrain import settings_store as store
 from secondbrain.archive import Archive
+from secondbrain.catalog import make_sessionmaker
 from secondbrain.models import Capture, Device, Job
 from secondbrain.notes import effective_title
+from secondbrain.rescan import rescan
 from secondbrain.vault import Vault
+from secondbrain.worker import Worker
+from tests.ai_fakes import FakeFactory, FakeProvider, configure_providers
 from tests.helpers import NOW
 
 ROME = ZoneInfo("Europe/Rome")
@@ -169,3 +174,63 @@ def test_concurrent_double_submit_keeps_files(db, settings):
     assert archive.abs(capture.rel_path).exists()
     assert archive.read_sidecar(capture.rel_path)
     assert Vault(settings.vault_dir).read_text(capture.note_path)
+
+
+@pytest.fixture
+def worker_env(db, settings, clock):
+    box = store.SecretBox(settings.settings_key)
+    configure_providers(db, box, NOW)
+    groq, gemini = FakeProvider("groq"), FakeProvider("gemini")
+    worker = Worker(sessionmaker=make_sessionmaker(db.get_bind()),
+                    archive=Archive(settings.archive_dir), tz=ROME, box=box,
+                    factory=FakeFactory(groq=groq, gemini=gemini), clock=clock,
+                    vault=Vault(settings.vault_dir))
+    return worker, groq
+
+
+def test_worker_enriches_a_text_note_without_transcribing(db, settings, worker_env):
+    worker, groq = worker_env
+    capture, _ = create(db, settings)
+    assert worker.run_once()
+    db.expire_all()
+    capture = db.get(Capture, capture.id)
+    assert capture.transcript == "Chiamare Costanza per Home Assistant"
+    assert capture.title_auto and capture.processed_at
+    assert [c[0] for c in groq.calls] == ["enrich"]
+
+
+def test_reprocess_never_transcribes_a_text_note(db, settings, worker_env):
+    worker, groq = worker_env
+    capture, _ = create(db, settings)
+    worker.run_once()
+    library.reprocess(db, capture.id, NOW)
+    db.commit()
+    worker.run_once()
+    assert [c[0] for c in groq.calls] == ["enrich", "enrich"]
+
+
+def test_rescan_without_note_rebuilds_text_through_the_worker(db, settings, worker_env):
+    worker, groq = worker_env
+    capture, _ = create(db, settings)
+    vault = Vault(settings.vault_dir)
+    vault.delete(capture.note_path)                   # nota persa
+    db.delete(db.get(Job, capture.id)); db.commit()
+    report = rescan(db, Archive(settings.archive_dir), NOW, vault=vault)
+    db.commit()
+    assert report.queued == 1 and not [p for p in report.problems if ".txt" in p]
+    assert worker.run_once()
+    db.expire_all()
+    capture = db.get(Capture, capture.id)
+    assert capture.transcript == "Chiamare Costanza per Home Assistant"
+    assert capture.edited == ["transcript"] and capture.title_auto
+    assert "transcribe" not in [c[0] for c in groq.calls]
+
+
+def test_trash_and_restore_keep_the_text_source(db, settings):
+    capture, _ = create(db, settings, vault=False)
+    archive = Archive(settings.archive_dir)
+    library.trash_capture(db, archive, capture.id, NOW)
+    library.restore_capture(db, archive, capture.id)
+    db.commit()
+    assert db.get(Capture, capture.id).rel_path.endswith(".txt")
+    assert archive.abs(db.get(Capture, capture.id).rel_path).is_file()
