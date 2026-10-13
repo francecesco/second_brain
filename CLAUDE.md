@@ -141,7 +141,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   prima era PWR), oppure push di un firmware, oppure `esptool ... --after hard_reset chip_id`
   con il cavo dati.
 
-## Stato al 2026-10-11
+## Stato al 2026-10-13
 
 - Tutto su `master`, compreso il backend (`backend-fase1b` e `backend-elaborazione-ai` uniti).
   `origin` (`github.com/francecesco/second_brain`, pubblico) allineato a `master` il
@@ -206,6 +206,12 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 
 ## Prossima sessione
 
+0. **Home Assistant in produzione**: se non è già fatto, URL, token e scelte (calendari,
+   sensori, lista) nelle Impostazioni di `https://secondbrain.cescohomelab.com`; poi
+   controllare la schermata "Oggi" sul device e quante volte ridisegna in un giorno.
+   Sottoprogetti successivi (in quest'ordine): pannello "Oggi" nella web app, calendario e
+   lista come contesto per l'AI delle note, lista della spesa sul device con una
+   combinazione di tasti.
 1. **Chiudere il deploy** (Task 14 del piano `docs/plans/2026-09-28-backend-archivio.md`):
    dal telefono su rete mobile login e blocco dopo 5 tentativi; `sudo reboot` della ZimaBoard con servizi e tunnel che tornano da soli;
    backup (`pg_dump` del README e snapshot di `/mnt/Storage1/secondbrain`, compresa la
