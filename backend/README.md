@@ -240,7 +240,7 @@ compare nella card; i sensori più vecchi di 30 minuti portano "agg. HH:MM" nell
 
 **Endpoint.** `GET /digest/today` (token del device, solo hostname dei dispositivi o
 quello unico) risponde `200` con l'immagine 1 bit 200×136 grezza (3.400 byte, MSB prima,
-1 = bianco) e un `ETag`; `304` se `If-None-Match` coincide; `204` se Home Assistant non è
+1 = nero) e un `ETag`; `304` se `If-None-Match` coincide; `204` se Home Assistant non è
 configurato. L'anteprima della card è `GET /settings/homeassistant/preview.png` (con login).
 
 **Immagine.** La disegna Pillow (`pillow` in `pyproject.toml`) col font Space Grotesk Bold
