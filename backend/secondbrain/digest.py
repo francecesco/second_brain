@@ -1,7 +1,7 @@
 """Immagine "Oggi" per il device: 200×136 punti in bianco e nero, dall'istantanea di HA.
 
-Solo la giornata di oggi (eventi non ancora finiti), la spesa in una riga e i sensori,
-in caratteri grandi: sul pannello da 1,54" quelli da 12-15 px non si leggevano.
+Solo la giornata di oggi (eventi non ancora finiti, senza titolo: "oggi" è implicito) e i
+sensori, divisi da un filetto; la spesa non è nell'immagine. In caratteri grandi: sul pannello da 1,54" quelli da 12-15 px non si leggevano.
 
 Il device disegna da sé l'intestazione (ora, batteria) e il piede; il backend disegna la
 fascia centrale con lo stesso Space Grotesk della UI web. `lines` decide il contenuto,
@@ -26,7 +26,8 @@ from .ha_store import Snapshot
 WIDTH, HEIGHT = 200, 136
 PACKED_BYTES = WIDTH * HEIGHT // 8      # 3400
 STALE_AFTER = timedelta(minutes=30)
-MAX_TODAY = 3
+MAX_TODAY = 4
+TOP_GAP = 3                             # la fascia nera del device sta sopra: un po' d'aria
 # I testi arrivano da Home Assistant e i calendari possono essere condivisi da fuori: tetti
 # su lunghezze e quantità prima di misurare o ordinare, perché render() resti rapido.
 MAX_TEXT_CHARS = 200
@@ -41,12 +42,12 @@ SENSOR_SEP = " · "
 # stile → (dimensione del font in px, altezza della riga, distanza della linea di base dal
 # bordo alto della riga). Scelte guardando le anteprime composte nella schermata del device:
 # sotto i 20 px il grassetto esce con tratti da 1 punto e sembra un light (19 è già più
-# chiaro), a 20 le aste sono da 2 punti come l'ora dell'intestazione. Con righe da 20 OGGI,
-# 3 eventi, la spesa e due sensori stanno nei 136 punti (134). La linea di base del titolo a
-# 12 lascia la prima fila bianca; quella delle righe a 15 tiene le discendenti (4 punti)
-# dentro la riga.
+# chiaro), a 20 le aste sono da 2 punti come l'ora dell'intestazione. Con righe da 20,
+# 4 eventi, il filetto e due sensori stanno nei 136 punti (132 con l'aria in alto). La linea
+# di base delle righe a 15 tiene le discendenti (4 punti) dentro la riga. "rule" è il
+# filetto: 1 punto di nero con 4 di bianco sopra e 4 sotto (testo vuoto, dimensione 0).
 STYLES = {
-    "head": (16, 14, 12),
+    "rule": (0, 9, 4),
     "item": (20, 20, 15),
     "small": (14, 14, 11),
 }
@@ -182,12 +183,11 @@ def _sensor_value(sensor: ha.SensorValue) -> str:
     return text + (unit if unit in NO_SPACE_UNITS else f" {unit}")
 
 
-def lines(snapshot: Snapshot, now: datetime, tz: ZoneInfo, *,
-          shopping: bool) -> list[tuple[str, str]]:
-    """Righe (stile, testo) prima dell'impaginazione; stile in head, item, small.
+def lines(snapshot: Snapshot, now: datetime, tz: ZoneInfo) -> list[tuple[str, str]]:
+    """Righe (stile, testo) prima dell'impaginazione; stile in item, rule, small.
 
-    Solo il calendario di oggi. `shopping` dice se nella configurazione c'è una lista
-    scelta: senza, niente riga "Spesa". Due sensori stanno su una riga solo se ci entrano.
+    Solo il calendario di oggi, poi (se ci sono sensori) il filetto e i sensori; la spesa
+    non è nell'immagine. Due sensori stanno su una riga solo se ci entrano.
     `now` deve avere il fuso (aware), altrimenti ValueError.
     """
     if now.tzinfo is None or now.utcoffset() is None:
@@ -195,19 +195,16 @@ def lines(snapshot: Snapshot, now: datetime, tz: ZoneInfo, *,
     reading = snapshot.reading
     events = reading.events if reading else ()
     today = now.astimezone(tz).date()
-    rows: list[tuple[str, str]] = [("head", "OGGI")]
+    rows: list[tuple[str, str]] = []
     today_items = _today_events(events, today, now, tz, MAX_TODAY)
     rows += [("item", t) for t in today_items] or [("item", EMPTY_DAY)]
-
-    if shopping:
-        count = len(reading.shopping) if reading else 0
-        text = "vuota" if count == 0 else "1 articolo" if count == 1 else f"{count} articoli"
-        rows.append(("item", f"Spesa: {text}"))
 
     sensors = (reading.sensors if reading else ())[:MAX_SENSORS]
     values = [v for v in (" ".join(f"{_clean(s.label, 40)} {_sensor_value(s)}".split())
                           for s in sensors) if v]
     font = _font(STYLES["item"][0])
+    if values:
+        rows.append(("rule", ""))
     while values:
         pair = SENSOR_SEP.join(values[:2])
         if len(values) > 1 and _width(pair, font) <= MAX_TEXT_W:
@@ -247,22 +244,23 @@ def _fit(text: str, font: ImageFont.FreeTypeFont) -> str:
     return text[:low].rstrip() + ELLIPSIS
 
 
-def render(snapshot: Snapshot, now: datetime, tz: ZoneInfo, *, shopping: bool) -> Image.Image:
+def render(snapshot: Snapshot, now: datetime, tz: ZoneInfo) -> Image.Image:
     """Immagine modo "1" 200×136. Le righe che non stanno si tolgono dal fondo del
     contenuto; la riga "agg." resta sempre in basso. `now` deve avere il fuso."""
-    rows = lines(snapshot, now, tz, shopping=shopping)
+    rows = lines(snapshot, now, tz)
     small = [r for r in rows if r[0] == "small"]
     body = [r for r in rows if r[0] != "small"]
-    # se la prima riga sporgerebbe sopra y = 0 (es. maiuscola accentata), si scende quanto basta
-    top = 0
+    # un po' d'aria sotto la fascia del device; se la prima riga sporgerebbe sopra y = 0
+    # (es. maiuscola accentata), si scende quanto basta
+    top = TOP_GAP
     if body:
         size, _, baseline = STYLES[body[0][0]]
         font = _font(size)
-        top = max(0, 1 - (baseline + font.getbbox(_fit(body[0][1], font), mode="1", anchor="ls")[1]))
+        top = max(TOP_GAP, 1 - (baseline + font.getbbox(_fit(body[0][1], font), mode="1", anchor="ls")[1]))
     room = HEIGHT - top - sum(STYLES[s][1] for s, _ in small)
     while body and sum(STYLES[s][1] for s, _ in body) > room:
         body.pop()
-    while body and body[-1][0] == "head":       # niente titolo senza righe sotto
+    while body and body[-1][0] == "rule":       # niente filetto senza sensori sotto
         body.pop()
 
     image = Image.new("1", (WIDTH, HEIGHT), 1)
@@ -271,8 +269,11 @@ def render(snapshot: Snapshot, now: datetime, tz: ZoneInfo, *, shopping: bool) -
     y = top
     for style, text in body:
         size, height, baseline = STYLES[style]
-        font = _font(size)
-        draw.text((MARGIN_X, y + baseline), _fit(text, font), font=font, fill=0, anchor="ls")
+        if style == "rule":
+            draw.line((MARGIN_X, y + baseline, WIDTH - MARGIN_X - 1, y + baseline), fill=0)
+        else:
+            font = _font(size)
+            draw.text((MARGIN_X, y + baseline), _fit(text, font), font=font, fill=0, anchor="ls")
         y += height
     y = HEIGHT
     for style, text in reversed(small):

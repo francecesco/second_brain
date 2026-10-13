@@ -16,8 +16,7 @@ def _image(request: Request):
         snapshot = ha_store.get_snapshot(s)
     if config is None or snapshot.reading is None:
         return None
-    return digest.render(snapshot, state.clock(), state.settings.tz_archive,
-                         shopping=config.shopping_list is not None)
+    return digest.render(snapshot, state.clock(), state.settings.tz_archive)
 
 
 def _matches(header: str | None, tag: str) -> bool:
