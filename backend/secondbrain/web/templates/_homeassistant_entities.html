@@ -1,0 +1,26 @@
+{% from "_icons.html" import icon %}
+{# nome e entity_id; senza friendly_name (o se non più in Home Assistant) solo l'entity_id #}
+{% macro entity(c) %}{% if c.name != c.entity_id %}{{ c.name }} {% endif %}<span class="mono">{{ c.entity_id }}</span>{% if c.missing %} <span class="count">non trovata</span>{% endif %}{% endmacro %}
+<form method="post" action="/settings/homeassistant/choices" class="settings-form ha-entities">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <fieldset>
+    <legend class="lab">Calendari</legend>
+    {% for c in calendars %}<label class="check"><input type="checkbox" name="calendars" value="{{ c.entity_id }}"{% if c.checked %} checked{% endif %}> <span>{{ entity(c) }}</span></label>
+    {% else %}<p>Nessun calendario in Home Assistant.</p>{% endfor %}
+  </fieldset>
+  <fieldset>
+    <legend class="lab">Sensori</legend>
+    {% for c in sensors %}<div class="ha-sensor">
+      <label class="check"><input type="checkbox" name="sensors" value="{{ c.entity_id }}"{% if c.checked %} checked{% endif %}> <span>{{ entity(c) }}</span></label>
+      <input name="label_{{ c.entity_id }}" value="{{ c.label }}" maxlength="{{ max_label }}" placeholder="etichetta breve" aria-label="Etichetta di {{ c.name }}">
+    </div>
+    {% else %}<p>Nessun sensore in Home Assistant.</p>{% endfor %}
+  </fieldset>
+  <fieldset>
+    <legend class="lab">Lista della spesa</legend>
+    <label class="check"><input type="radio" name="shopping_list" value=""{% if no_list %} checked{% endif %}> <span>Nessuna</span></label>
+    {% for c in lists %}<label class="check"><input type="radio" name="shopping_list" value="{{ c.entity_id }}"{% if c.checked %} checked{% endif %}> <span>{{ entity(c) }}</span></label>
+    {% endfor %}
+  </fieldset>
+  <div class="actions"><button type="submit" class="pri" aria-label="Salva le scelte" title="Salva le scelte">{{ icon("save") }}<span class="label">Salva le scelte</span></button></div>
+</form>
