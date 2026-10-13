@@ -50,7 +50,22 @@ void test_screen_today_alert_footer(void) {
     for (int i = 0; i < ROW_BYTES; i++) TEST_ASSERT_EQUAL_HEX8(0xFF, fb[(SCREEN_H - 1) * ROW_BYTES + i]);
     st.alert = false;
     screen_render_today(fb, &st, digest);
-    int black = 0;
-    for (int i = 0; i < ROW_BYTES; i++) black += fb[(SCREEN_H - 1) * ROW_BYTES + i] == 0xFF;
-    TEST_ASSERT_TRUE(black < ROW_BYTES);
+    // senza alert il piede e' bianco con il testo in nero: qualche pixel nero, non tutto
+    int black = 0, all_black = 0;
+    for (int y = SCREEN_H - 34; y < SCREEN_H; y++)
+        for (int i = 0; i < ROW_BYTES; i++) {
+            black += fb[y * ROW_BYTES + i] != 0x00;
+            all_black += fb[y * ROW_BYTES + i] == 0xFF;
+        }
+    TEST_ASSERT_TRUE(black > 0);
+    TEST_ASSERT_TRUE(all_black < 34 * ROW_BYTES);
+}
+
+void test_screen_today_null_digest(void) {
+    static uint8_t fb[SCREEN_FB_BYTES];
+    const screen_status_t st = { "15:45", SCREEN_BAT_DISCHARGING, 77, "Casa", 0, "sync ok", false };
+    memset(fb, 0xFF, sizeof(fb));
+    screen_render_today(fb, &st, NULL);
+    for (int y = SB_DIGEST_Y; y < SB_DIGEST_Y + SB_DIGEST_H; y++)
+        for (int i = 0; i < ROW_BYTES; i++) TEST_ASSERT_EQUAL_HEX8(0x00, fb[y * ROW_BYTES + i]);
 }

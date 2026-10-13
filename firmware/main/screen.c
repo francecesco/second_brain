@@ -181,12 +181,15 @@ void screen_render_today(uint8_t *fb, const screen_status_t *st, const uint8_t *
     // l'immagine del backend ha lo stesso formato del framebuffer: copia di righe intere
     if (digest) memcpy(&fb[SB_DIGEST_Y * (SCREEN_W / 8)], digest, SB_DIGEST_BYTES);
 
-    // piede: "coda N | rete | esito", in negativo su fascia nera se c'e' un allarme
+    // piede: "esito | coda N | rete" (la rete, tagliata in fondo, e' la parte meno importante);
+    // senza rete "no wifi | coda N": l'esito sarebbe solo "no sync", che ripeterebbe lo stesso
     int foot_y = SCREEN_H - FOOT_H;
     if (st->alert) rect(fb, 0, foot_y, SCREEN_W, FOOT_H, true);
     char line[96];
-    snprintf(line, sizeof(line), "coda %d | %s | %s", st->queue,
-             st->network ? st->network : "no wifi", st->outcome ? st->outcome : "");
+    if (st->network)
+        snprintf(line, sizeof(line), "%s | coda %d | %s", st->outcome ? st->outcome : "", st->queue, st->network);
+    else
+        snprintf(line, sizeof(line), "no wifi | coda %d", st->queue);
     const font_t *f = &font_grotesk_16;
     draw_text(fb, f, MARGIN, foot_y + (FOOT_H - f->height) / 2, line, SCREEN_W - 2 * MARGIN, !st->alert);
 }

@@ -92,6 +92,7 @@ void test_capture_gesture(void);
 void test_screen_status_draws_outcome_band(void);
 void test_screen_today_digest_rows_copied(void);
 void test_screen_today_alert_footer(void);
+void test_screen_today_null_digest(void);
 
 void app_main(void) {
     UNITY_BEGIN();
@@ -143,5 +144,6 @@ void app_main(void) {
     RUN_TEST(test_screen_status_draws_outcome_band);
     RUN_TEST(test_screen_today_digest_rows_copied);
     RUN_TEST(test_screen_today_alert_footer);
+    RUN_TEST(test_screen_today_null_digest);
     UNITY_END();
 }

@@ -48,11 +48,14 @@ int main(int argc, char **argv)
     if (!loaded)
         for (int y = 0; y < SB_DIGEST_H; y++)
             if ((y / 8) % 2 == 0) memset(&digest[y * (SB_DIGEST_W / 8)], 0xAA, SB_DIGEST_W / 8);
-    const screen_status_t today = { "15:45", SCREEN_BAT_DISCHARGING, 77, "FASTWEB-45H7P7", 0, "sync ok", false };
+    const screen_status_t today = { "15:45", SCREEN_BAT_DISCHARGING, 77, "FASTWEB-45HT2K", 0, "sync ok", false };
     screen_status_t alert = { "07:30", SCREEN_BAT_DISCHARGING, 8, NULL, 3, "no sync", true };
+    const screen_status_t alert_net = { "07:30", SCREEN_BAT_DISCHARGING, 8, "FASTWEB-45HT2K", 3, "token ko", true };
     screen_render_today(fb, &today, digest);
     save(dir, "today", fb);
     screen_render_today(fb, &alert, digest);
     save(dir, "today-alert", fb);
+    screen_render_today(fb, &alert_net, digest);
+    save(dir, "today-alert-rete", fb);
     return 0;
 }

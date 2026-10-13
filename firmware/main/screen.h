@@ -33,7 +33,8 @@ void screen_render_status(uint8_t *fb, const screen_status_t *st);
 
 // Schermata "Oggi": intestazione come screen_render_status (ora e batteria), immagine del
 // backend (SB_DIGEST_W x SB_DIGEST_H, formato del framebuffer) da y = SB_DIGEST_Y, piede su
-// una riga "coda N | rete | esito" (rete "no wifi" se NULL), in negativo se alert.
+// una riga "esito | coda N | rete" (tagliata in fondo, quindi si perde la rete), senza rete
+// "no wifi | coda N"; in negativo se alert.
 void screen_render_today(uint8_t *fb, const screen_status_t *st, const uint8_t *digest);
 
 // Righe di testo centrate verticalmente (DEV MODE, REC, messaggi brevi).
