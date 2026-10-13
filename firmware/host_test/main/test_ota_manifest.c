@@ -93,6 +93,7 @@ void test_screen_status_draws_outcome_band(void);
 void test_screen_today_digest_rows_copied(void);
 void test_screen_today_alert_footer(void);
 void test_screen_today_null_digest(void);
+void test_screen_today_no_network_shows_capture_outcome(void);
 
 void app_main(void) {
     UNITY_BEGIN();
@@ -145,5 +146,6 @@ void app_main(void) {
     RUN_TEST(test_screen_today_digest_rows_copied);
     RUN_TEST(test_screen_today_alert_footer);
     RUN_TEST(test_screen_today_null_digest);
+    RUN_TEST(test_screen_today_no_network_shows_capture_outcome);
     UNITY_END();
 }

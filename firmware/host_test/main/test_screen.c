@@ -69,3 +69,16 @@ void test_screen_today_null_digest(void) {
     for (int y = SB_DIGEST_Y; y < SB_DIGEST_Y + SB_DIGEST_H; y++)
         for (int i = 0; i < ROW_BYTES; i++) TEST_ASSERT_EQUAL_HEX8(0x00, fb[y * ROW_BYTES + i]);
 }
+
+void test_screen_today_no_network_shows_capture_outcome(void) {
+    static uint8_t a[SCREEN_FB_BYTES], b[SCREEN_FB_BYTES], c[SCREEN_FB_BYTES];
+    screen_status_t st = { "15:45", SCREEN_BAT_DISCHARGING, 77, NULL, 1, "SD piena", false };
+    screen_render_today(a, &st, NULL);
+    st.outcome = "no sync";
+    screen_render_today(b, &st, NULL);
+    st.outcome = NULL;
+    screen_render_today(c, &st, NULL);
+    // l'esito della cattura cambia il piede; "no sync" resta "no wifi | coda N"
+    TEST_ASSERT_TRUE(memcmp(a, b, SCREEN_FB_BYTES) != 0);
+    TEST_ASSERT_EQUAL_MEMORY(b, c, SCREEN_FB_BYTES);
+}

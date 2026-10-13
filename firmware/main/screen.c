@@ -182,12 +182,15 @@ void screen_render_today(uint8_t *fb, const screen_status_t *st, const uint8_t *
     if (digest) memcpy(&fb[SB_DIGEST_Y * (SCREEN_W / 8)], digest, SB_DIGEST_BYTES);
 
     // piede: "esito | coda N | rete" (la rete, tagliata in fondo, e' la parte meno importante);
-    // senza rete "no wifi | coda N": l'esito sarebbe solo "no sync", che ripeterebbe lo stesso
+    // senza rete "no wifi | coda N": l'esito sarebbe solo "no sync", che ripeterebbe lo stesso;
+    // se invece c'e' un esito di cattura ("Salvato 0:07", "SD piena", ...) quello vince
     int foot_y = SCREEN_H - FOOT_H;
     if (st->alert) rect(fb, 0, foot_y, SCREEN_W, FOOT_H, true);
     char line[96];
     if (st->network)
         snprintf(line, sizeof(line), "%s | coda %d | %s", st->outcome ? st->outcome : "", st->queue, st->network);
+    else if (st->outcome && st->outcome[0] && strcmp(st->outcome, "no sync") != 0)
+        snprintf(line, sizeof(line), "%s | coda %d", st->outcome, st->queue);
     else
         snprintf(line, sizeof(line), "no wifi | coda %d", st->queue);
     const font_t *f = &font_grotesk_16;

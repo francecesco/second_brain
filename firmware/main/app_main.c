@@ -278,13 +278,16 @@ static void show_status(const cycle_state_t *st, const uint8_t *digest)
     char bl[20];
     battery_label(bl, sizeof(bl));
     snprintf(l3, sizeof(l3), "coda: %d  %s", st->remaining, bl);
+    // SD assente (alert): spiega la fascia nera al posto di "sync ok"; i guasti di rete e i
+    // messaggi di cattura hanno la precedenza perche' dicono di piu' sul ciclo
     // Senza rete l'esito della cattura vince su "no sync": "nessuna rete" e' gia' sopra.
     if (st->capture_msg[0] && !st->wifi_ok) strlcpy(l4, st->capture_msg, sizeof(l4));
-    else if (!st->wifi_ok) strlcpy(l4, "no sync", sizeof(l4));
+    else if (!st->wifi_ok) strlcpy(l4, st->sd_ok ? "no sync" : "SD assente", sizeof(l4));
     else if (st->auth_error) strlcpy(l4, "token ko", sizeof(l4));
     else if (st->server_error) strlcpy(l4, "server ko", sizeof(l4));
     else if (st->sent > 0) snprintf(l4, sizeof(l4), "%d inviate", st->sent);
     else if (st->capture_msg[0]) strlcpy(l4, st->capture_msg, sizeof(l4));
+    else if (!st->sd_ok) strlcpy(l4, "SD assente", sizeof(l4));
     else strlcpy(l4, "sync ok", sizeof(l4));
     ESP_LOGI(TAG, "stato: [%s] [%s] [%s] [%s]", l1, l2, l3, l4);
     const power_state_t *ps = battery_last();
