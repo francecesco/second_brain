@@ -12,7 +12,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ingest, library, ota
+from . import digest_api, ingest, library, ota
 from .archive import Archive
 from .vault import Vault
 from .catalog import make_engine, make_sessionmaker
@@ -32,7 +32,7 @@ from .web.templating import STATIC_DIR
 
 log = logging.getLogger(__name__)
 
-DEVICE_PATHS = ("/captures", "/firmware/")
+DEVICE_PATHS = ("/captures", "/firmware/", "/digest/")
 PURGE_INTERVAL_S = 24 * 3600
 
 
@@ -59,7 +59,7 @@ async def _purge_loop(app: FastAPI) -> None:
 
 
 def _is_device_path(path: str) -> bool:
-    return path == DEVICE_PATHS[0] or path.startswith(DEVICE_PATHS[1])
+    return path == DEVICE_PATHS[0] or path.startswith(DEVICE_PATHS[1:])
 
 
 def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> FastAPI:
@@ -104,6 +104,7 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
 
     app.include_router(ingest.router)
     app.include_router(ota.router)
+    app.include_router(digest_api.router)
 
     mimetypes.add_type("font/woff2", ".woff2")  # l'immagine slim non lo conosce: senza, il font esce come octet-stream
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
