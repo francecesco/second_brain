@@ -22,6 +22,11 @@ WIDTH, HEIGHT = 200, 136
 PACKED_BYTES = WIDTH * HEIGHT // 8      # 3400
 STALE_AFTER = timedelta(minutes=30)
 MAX_TODAY, MAX_TOMORROW = 3, 2
+# I testi arrivano da Home Assistant e i calendari possono essere condivisi da fuori: tetti
+# su lunghezze e quantità prima di misurare o ordinare, perché render() resti rapido.
+MAX_TEXT_CHARS = 200
+MAX_DATE_CHARS = 40
+MAX_EVENTS, MAX_SENSORS = 500, 20
 
 FONT_PATH = Path(__file__).parent / "assets" / "SpaceGrotesk-Bold.ttf"
 MARGIN_X = 4
@@ -42,21 +47,27 @@ NO_SPACE_UNITS = ("°C", "°F", "°", "%")
 
 @lru_cache(maxsize=None)
 def _font(size: int) -> ImageFont.FreeTypeFont:
-    return ImageFont.truetype(str(FONT_PATH), size)
+    # BASIC: stessi byte con o senza raqm installato (l'ETag dipende dall'immagine)
+    return ImageFont.truetype(str(FONT_PATH), size, layout_engine=ImageFont.Layout.BASIC)
+
+
+def _clean(text: str, limit: int = MAX_TEXT_CHARS) -> str:
+    """Testo su una riga, spazi compattati, al massimo `limit` caratteri."""
+    return " ".join(str(text)[:limit * 4].split())[:limit]
 
 
 # --- contenuto ---------------------------------------------------------------------------
 
 def _date(value: str) -> date | None:
     try:
-        return date.fromisoformat(value[:10])
+        return date.fromisoformat(value[:MAX_DATE_CHARS][:10])
     except ValueError:
         return None
 
 
 def _datetime(value: str, tz: ZoneInfo) -> datetime | None:
     try:
-        when = datetime.fromisoformat(value)
+        when = datetime.fromisoformat(value[:MAX_DATE_CHARS])
     except ValueError:
         return None
     return (when if when.tzinfo else when.replace(tzinfo=tz)).astimezone(tz)
@@ -68,18 +79,20 @@ def _day_events(events, day: date, now: datetime, tz: ZoneInfo, *, today: bool,
 
     Tutto il giorno: inizio ≤ giorno < fine (fine esclusiva, come la manda HA). A orario,
     oggi: non ancora finito e iniziato prima di domani (compresi quelli in corso o a
-    cavallo della mezzanotte); domani: solo quelli che iniziano domani, per non ripetere
-    quelli già in "OGGI".
+    cavallo della mezzanotte); quelli iniziati prima di oggi e ancora in corso si mostrano
+    senza ora, come quelli di tutto il giorno. Domani: solo quelli che iniziano domani (anche
+    di tutto il giorno), per non ripetere quelli già in "OGGI".
     """
     day_start = datetime.combine(day, time(), tz)
     day_end = datetime.combine(day + timedelta(days=1), time(), tz)
     found: list[tuple] = []
-    for event in events:
+    for event in events[:MAX_EVENTS]:
+        summary, calendar = _clean(event.summary), _clean(event.calendar)
         if event.all_day:
             start = _date(event.start)
             end = _date(event.end) or (start + timedelta(days=1) if start else None)
-            if start and start <= day < end:
-                found.append((0, day_start, event.summary, event.calendar, event.summary))
+            if start and start <= day < end and (today or start == day):
+                found.append((0, day_start, summary, calendar, summary))
             continue
         start, end = _datetime(event.start, tz), _datetime(event.end, tz)
         if start is None:
@@ -89,15 +102,16 @@ def _day_events(events, day: date, now: datetime, tz: ZoneInfo, *, today: bool,
             keep = end > now and start < day_end
         else:
             keep = day_start <= start < day_end
-        if keep:
-            found.append((1, start, event.summary, event.calendar,
-                          f"{start:%H:%M} {event.summary}"))
+        if keep and start < day_start:
+            found.append((0, day_start, summary, calendar, summary))
+        elif keep:
+            found.append((1, start, summary, calendar, f"{start:%H:%M} {summary}"))
     found.sort(key=lambda f: f[:4])
     return [f[4] for f in found[:limit]]
 
 
 def _sensor_value(sensor: ha.SensorValue) -> str:
-    state = sensor.state.strip()
+    state = _clean(sensor.state, 40)
     try:
         number = float(state)
     except ValueError:
@@ -106,9 +120,10 @@ def _sensor_value(sensor: ha.SensorValue) -> str:
         return state
     text = state if state.lstrip("-").isdigit() else f"{number:.1f}"
     text = text.replace(".", ",")
-    if not sensor.unit:
+    unit = _clean(sensor.unit or "", 20)
+    if not unit:
         return text
-    return text + (sensor.unit if sensor.unit in NO_SPACE_UNITS else f" {sensor.unit}")
+    return text + (unit if unit in NO_SPACE_UNITS else f" {unit}")
 
 
 def lines(snapshot: Snapshot, now: datetime, tz: ZoneInfo, *,
@@ -116,7 +131,10 @@ def lines(snapshot: Snapshot, now: datetime, tz: ZoneInfo, *,
     """Righe (stile, testo) prima dell'impaginazione; stile in head, item, small.
 
     `shopping` dice se nella configurazione c'è una lista scelta: senza, niente "SPESA".
+    `now` deve avere il fuso (aware), altrimenti ValueError.
     """
+    if now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("digest: serve un `now` con il fuso orario")
     reading = snapshot.reading
     events = reading.events if reading else ()
     today = now.astimezone(tz).date()
@@ -134,7 +152,8 @@ def lines(snapshot: Snapshot, now: datetime, tz: ZoneInfo, *,
         text = "vuota" if count == 0 else "1 articolo" if count == 1 else f"{count} articoli"
         rows += [("head", "SPESA"), ("item", text)]
 
-    values = [f"{s.label} {_sensor_value(s)}" for s in (reading.sensors if reading else ())]
+    sensors = (reading.sensors if reading else ())[:MAX_SENSORS]
+    values = [f"{_clean(s.label, 40)} {_sensor_value(s)}" for s in sensors]
     rows += [("item", SENSOR_SEP.join(values[i:i + 2])) for i in range(0, len(values), 2)]
 
     if snapshot.fetched_at is not None and now - snapshot.fetched_at > STALE_AFTER:
@@ -146,16 +165,22 @@ def lines(snapshot: Snapshot, now: datetime, tz: ZoneInfo, *,
 
 def _fit(text: str, font: ImageFont.FreeTypeFont) -> str:
     """Il testo, o il suo inizio più "…", entro `MAX_TEXT_W`."""
+    text = _clean(text)
     if font.getlength(text) <= MAX_TEXT_W:
         return text
-    while text and font.getlength(text.rstrip() + ELLIPSIS) > MAX_TEXT_W:
-        text = text[:-1]
-    return text.rstrip() + ELLIPSIS
+    low, high = 0, len(text)        # il prefisso più lungo che sta con "…" (ricerca binaria)
+    while low < high:
+        mid = (low + high + 1) // 2
+        if font.getlength(text[:mid].rstrip() + ELLIPSIS) <= MAX_TEXT_W:
+            low = mid
+        else:
+            high = mid - 1
+    return text[:low].rstrip() + ELLIPSIS
 
 
 def render(snapshot: Snapshot, now: datetime, tz: ZoneInfo, *, shopping: bool) -> Image.Image:
     """Immagine modo "1" 200×136. Le righe che non stanno si tolgono dal fondo del
-    contenuto; la riga "agg." resta sempre in basso."""
+    contenuto; la riga "agg." resta sempre in basso. `now` deve avere il fuso."""
     rows = lines(snapshot, now, tz, shopping=shopping)
     small = [r for r in rows if r[0] == "small"]
     body = [r for r in rows if r[0] != "small"]

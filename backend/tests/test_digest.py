@@ -1,6 +1,8 @@
+import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+import pytest
 from PIL import Image
 
 from secondbrain import digest
@@ -135,3 +137,37 @@ def test_preview_png_is_scaled():
     image = digest.render(snap(), NOW, TZ, shopping=False)
     png = digest.preview_png(image, scale=3)
     assert png.startswith(b"\x89PNG")
+
+
+def test_tomorrow_does_not_repeat_all_day_events_of_today():
+    events = [ev("Vacanza", "2026-10-12", "2026-10-16"),
+              ev("Carta", "2026-10-14", "2026-10-15"),
+              ev("Palestra", at("18:00", 14), at("19:00", 14))]
+    rows = digest.lines(snap(events), NOW, TZ, shopping=False)
+    assert rows == [("head", "OGGI"), ("item", "Vacanza"), ("head", "DOMANI"),
+                    ("item", "Carta"), ("item", "18:00 Palestra")]
+
+
+def test_timed_event_started_yesterday_has_no_time():
+    events = [ev("Turno", "2026-10-12T22:00:00+02:00", at("11:00")),
+              ev("Riunione", at("09:30"), at("10:30"))]
+    rows = digest.lines(snap(events), NOW, TZ, shopping=False)
+    assert rows[1:3] == [("item", "Turno"), ("item", "09:30 Riunione")]
+
+
+def test_naive_now_is_refused():
+    with pytest.raises(ValueError):
+        digest.lines(snap(), NOW.replace(tzinfo=None), TZ, shopping=False)
+
+
+def test_huge_inputs_render_fast():
+    events = [ev("x" * 1_000_000, at("15:00"), at("16:00"))]
+    events += [ev(f"Evento {i}", at("17:00"), at("18:00")) for i in range(10_000)]
+    data = snap(events, [f"voce {i}" for i in range(1000)],
+                [sensor("casa", "1" * 100_000, "°C" * 1000)] * 50)
+    started = time.perf_counter()
+    image = digest.render(data, NOW, TZ, shopping=True)
+    packed = digest.pack(image)
+    assert time.perf_counter() - started < 1.0
+    assert len(packed) == digest.PACKED_BYTES
+    assert max(_black_columns(image)) <= 196
