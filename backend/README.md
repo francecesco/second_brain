@@ -208,6 +208,56 @@ sesto tentativo fallito la nota resta "fallita".
 **Correzioni a mano nel `.md`** (es. da Obsidian): le riprende il worker entro un minuto
 (vedi "Vault Obsidian"); `secondbrain rescan` resta per la ricostruzione completa.
 
+## Home Assistant
+
+Il backend legge da Home Assistant il calendario di oggi, alcuni sensori e una lista della
+spesa e ne compone la schermata "Oggi" del device (spec
+`../docs/specs/2026-10-13-homeassistant-oggi-design.md`). Sola lettura: non scrive mai su
+Home Assistant.
+
+**Collegamento.** In Home Assistant: Profilo (in basso a sinistra) → Sicurezza → "Token di
+accesso di lunga durata" → Crea token, e copiarlo subito (non lo mostra più). Nelle
+**Impostazioni** del backend, card **Connessione Home Assistant** (serve `SETTINGS_KEY`):
+
+- **URL** (`http://homeassistant.local:8123`, o l'indirizzo raggiungibile dal container) e
+  **token**, cifrato come le chiavi API e mostrato solo mascherato. Cambiando l'URL il token
+  va reinserito (altrimenti il vecchio token seguirebbe l'indirizzo nuovo); con lo stesso
+  URL il campo vuoto lo lascia com'è.
+- **Prova** controlla URL e token senza salvare e dice cosa non va (token rifiutato,
+  timeout, certificato, "serve Home Assistant 2023.12 o successivo").
+- **Carica entità da Home Assistant** elenca le entità: i **calendari** (caselle), fino a
+  **6 sensori** (si scrive per cercare nei suggerimenti per nome o `entity_id`, accanto
+  compare il nome di Home Assistant; l'**etichetta** breve è quella che finisce sul
+  device) e la **lista della spesa** (una sola). Salvando le scelte l'immagine si
+  aggiorna.
+- Sotto: ultima lettura (con eventi, articoli e sensori trovati) o ultimo errore con
+  l'ora, **Aggiorna ora**, l'anteprima dell'immagine e **Scollega** (cancella URL, token
+  e scelte; il device torna alla schermata di stato).
+
+**Aggiornamento.** Il worker legge Home Assistant ogni 5 minuti e subito dopo un salvataggio
+o "Aggiorna ora". Se una lettura fallisce l'ultima istantanea resta quella buona e l'errore
+compare nella card; i sensori più vecchi di 30 minuti portano "agg. HH:MM" nell'immagine.
+
+**Endpoint.** `GET /digest/today` (token del device, solo hostname dei dispositivi o
+quello unico) risponde `200` con l'immagine 1 bit 200×136 grezza (3.400 byte, MSB prima,
+1 = bianco) e un `ETag`; `304` se `If-None-Match` coincide; `204` se Home Assistant non è
+configurato. L'anteprima della card è `GET /settings/homeassistant/preview.png` (con login).
+
+**Immagine.** La disegna Pillow (`pillow` in `pyproject.toml`) col font Space Grotesk Bold
+incluso in `secondbrain/assets/SpaceGrotesk-Bold.ttf`: il layout si cambia qui e al device
+basta il sync, senza riflashare. Testo a 20 px; solo gli eventi di oggi (massimo 4: prima
+quelli di tutto il giorno o iniziati prima, poi per ora), filetto, sensori uno per riga;
+emoji e caratteri che il font non ha vengono tolti, i titoli lunghi finiscono con "…". La
+lista della spesa è letta e salvata ma non compare nell'immagine.
+
+**Se non funziona.** Gli errori della prova e della lettura sono scritti in italiano nella
+card. "token rifiutato (401)": token sbagliato, scaduto o cancellato in Home Assistant.
+"irraggiungibile" o timeout: dal container l'URL va raggiunto con l'indirizzo di rete (non
+`localhost`); controllare porta e firewall. "non trovata" / "non trovato" accanto a una
+scelta: l'entità salvata non esiste più in Home Assistant (rinominata o cancellata), va
+scelta di nuovo. Il device non mostra "Oggi" finché `GET /digest/today` non risponde `200`
+(con `204` resta la schermata di stato).
+
 ## Vault Obsidian
 
 Le note delle registrazioni vivono in `DATA_DIR/vault/Captures/<anno>/` come

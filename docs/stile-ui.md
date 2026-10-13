@@ -86,9 +86,11 @@ Sì, e solo qui:
   voce più profonda, non sugli antenati) e punto del marchio;
 - orario della riga di cui è aperto il dettaglio (`.row:has(> .detail:not(:empty)) .time`);
 - titolo di una riga o di un risultato al passaggio del mouse;
-- pulsante principale (`button.pri`), uno per modulo: salva, entra;
+- pulsante principale (`button.pri`), uno per modulo: salva, entra (in una vista con più
+  moduli separati, come le Impostazioni, uno per modulo);
 - pulsante "Nuova nota" nell'intestazione: l'unico elemento pieno arancione della barra. Su
-  `/new` è nello stato `on` (non pieno), così "Salva" resta l'unico pulsante pieno della vista;
+  `/new` è nello stato `on` (non pieno), così "Salva" resta l'unico pulsante pieno della vista
+  (che ha un solo modulo);
 - LED "in corso" (`.led.run`) e icona "fallita" (`.status.failed`);
 - avvisi (`.notice`, `#flash`): bordo sinistro, icona e link;
 - marcatore "corretto a mano" (`.edited`), badge "data stimata" (`.badge`), errori di
@@ -100,7 +102,7 @@ No:
 - tag, briciole, intestazioni di sezione, bordi dei pannelli;
 - contatori, salvo quello della voce corrente dell'albero, che segue il suo testo;
 - link normali: sono in `--fg` e passano a `--acc` solo al passaggio del mouse;
-- più di un pulsante pieno nella stessa vista.
+- più di un pulsante pieno nello stesso modulo.
 
 ## Componenti
 
@@ -138,7 +140,8 @@ dell'intestazione. Regole:
 - nessuna eccezione per pagina o modulo: anche "Salva"/"Annulla" di Nuova nota ed
   "Entra" del login hanno la taglia comune. La **larghezza** può seguire il layout del
   modulo ("Entra" occupa tutta la riga del login), l'altezza no;
-- al massimo un tasto pieno per vista (vedi "Dove va l'arancione").
+- al massimo un tasto pieno per modulo (vedi "Dove va l'arancione"); una vista con un solo
+  modulo ne ha quindi uno solo.
 
 Non sono tasti, e quindi non seguono la taglia: le righe (`.row-main`) e le voci del menu
 (`.top nav`), già descritte sopra, e la matita "modifica" accanto ai titoli dei campi del
@@ -192,6 +195,15 @@ coprire quel caso.
 **Card** (impostazioni). `.card`: fondo `--bg` dentro il pannello, bordo, `h2` in
 etichetta. I moduli dentro usano `.settings-form` (griglia a una colonna, larghezza
 massima 32 rem) e `.actions` per i pulsanti.
+
+**Righe con suggerimenti** (`.ha-sensor`, card Home Assistant). Un `<input list>` con
+`<datalist>` per scegliere tra centinaia di voci scrivendo; accanto, in `--mute`, il nome
+leggibile della voce scelta (le opzioni portano `label`), e `.count` "non trovato" se la
+voce salvata non esiste più. Il server rivalida sempre il valore.
+
+**Anteprima di un'immagine a bassa risoluzione** (`.ha-preview`). Raddoppiata (400 px) con
+`image-rendering: pixelated`, bordo hairline, `max-width: 100%`: i pixel restano quadrati
+come sul device.
 
 **Tabelle** (cestino, dispositivi). `th` in etichetta con hairline in `--fg` sotto
 l'intestazione, `td` con hairline in `--line`, avvolte in `.table-wrap` per lo scroll
@@ -260,3 +272,6 @@ senza, dopo un deploy il tunnel serviva il foglio di stile vecchio con l'HTML nu
   pulsanti" (un tasto si distingue per colore, mai per misura). Tolte anche le misure
   proprie di "Salva"/"Annulla" in Nuova nota (2,5 rem, etichetta sempre visibile) e di
   "Entra" nel login (padding maggiorato).
+- **2026-10-13** — Card Home Assistant: righe con `datalist` e nome in `--mute`, anteprima
+  pixelata 2×. Corretta la regola dei pulsanti pieni: uno per modulo (le Impostazioni hanno
+  più moduli separati, ognuno col suo "Salva"), non uno per vista.

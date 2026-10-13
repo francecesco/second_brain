@@ -177,6 +177,16 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   dal pulsante "Nuova nota" si scrive una nota che segue la pipeline delle registrazioni.
   Provata dall'autore in locale, in `master` e **sulla ZimaBoard dal 2026-10-12** (backup
   del DB prima del deploy in `/mnt/Storage1/secondbrain/backup/`).
+- **Home Assistant e schermata Oggi** (spec `docs/specs/2026-10-13-homeassistant-oggi-design.md`,
+  branch `homeassistant-oggi`, non ancora in `master` né sulla ZimaBoard): card
+  "Connessione Home Assistant" nelle Impostazioni (URL e token di lunga durata cifrati,
+  calendari, fino a 6 sensori con etichetta, lista della spesa), lettura del worker ogni
+  5 min con istantanea tenuta sugli errori, `GET /digest/today` (immagine 1 bit 200×136 di
+  3.400 byte con ETag, `304`, `204`), composta con Pillow e Space Grotesk. Firmware: nuova
+  schermata "Oggi" con fasce nere (ora e batteria, `esito | coda N | rete`), download con
+  `If-None-Match` e copia su SD; release firmware **da rilasciare**. Verificata sul device
+  dall'ufficio col backend del Mac il 2026-10-13. La lista della spesa è letta ma non
+  mostrata.
 - **Elaborazione AI** (spec `docs/specs/2026-09-29-backend-elaborazione-ai-design.md`):
   trascrizione, titolo, riassunto e tag con Groq e Gemini (chiavi inserite dall'autore
   nella pagina Impostazioni, cifrate con `SETTINGS_KEY` del `backend/.env` del Mac), worker
@@ -404,6 +414,30 @@ proprie e stonavano, ora tutti i tasti hanno una sola taglia (regole in `docs/st
 pubblicata sulla ZimaBoard il 2026-10-12. Lezione: Tailscale verso la ZimaBoard può non
 rispondere; in casa `ssh -o HostName=192.168.1.71 zima`.
 
+**2026-10-13 — Home Assistant e schermata Oggi** (`docs/specs/2026-10-13-homeassistant-oggi-design.md`,
+piano in 10 task). Il backend legge da Home Assistant calendari, sensori e lista della
+spesa (token di lunga durata cifrato, worker ogni 5 min) e compone un'immagine 1 bit
+200×136 che il device scarica con `GET /digest/today` e mostra tra una fascia nera
+d'intestazione e una di piede. Scelta A (immagine renderizzata dal server, il device
+la mostra e basta): ha ripagato, perché dopo le prove sul device il layout è cambiato
+quattro volte (solo oggi, caratteri a 20 px, niente emoji, niente titolo "OGGI", filetto
+tra eventi e sensori, spesa tolta) senza riflashare, solo ridistribuendo il backend.
+Emerso in revisione: il token seguiva un URL cambiato (credenziale girata a un altro
+host: ora cambiando l'URL va reinserito il token); titoli e conteggi dei calendari esterni
+senza tetto potevano bloccare il render (tetti su testi, eventi e sensori, test con titolo
+da 1 MB); il piede senza rete perdeva l'esito (ora `no wifi | coda N` o l'esito della
+cattura, `! ` sugli avvisi, "SD assente" come esito); con il server irraggiungibile il
+ciclo durava 43 s (21 s di OTA + 17 s di download): se l'OTA non ha risposto non si prova
+il download. Richieste dell'autore dopo averla vista sul device: sensori cercati scrivendo
+(`datalist`) invece di un menu, solo oggi, caratteri più grandi, via le emoji (il font
+mostrava `[?]`), via il titolo, spesa non mostrata. Verificato sull'hardware: download
+nuovo in ~0,13 s con ETag, `304` con copia su SD all'avvio, ridisegno ai wake da timer solo
+con ETag cambiato, caso server irraggiungibile con schermata di stato classica.
+686 test backend, 52 host. Lezioni: mai due `pytest` insieme sul database di test
+condiviso (implementatore e revisore si sono pestati due volte); per provare il device
+contro il backend del Mac l'IP del Mac cambia, 192.168.1.43 a casa e 192.168.0.104 in
+ufficio (da rimettere in `secrets.h` a ogni cambio di rete).
+
 ## Idee future e cose rimandate
 
 - **Integrazione con Obsidian sospesa** (decisione dell'autore, 2026-10-13): il backend
@@ -413,8 +447,14 @@ rispondere; in casa `ssh -o HostName=192.168.1.71 zima`.
 - **Backend dopo l'elaborazione AI**: adattatore locale (faster-whisper o altro) passando a
   un NAS più potente; divisione in pezzi dell'audio oltre i limiti dei provider (serve solo
   alzando la durata massima); Daily notes e arricchimento con il PiAgent nel vault.
-- **Fase 2 — display glanceable**: `GET /digest.bmp` 200×200 1-bit renderizzato dal
-  server, cache su SD, mostrato al posto della schermata di stato.
+- **Home Assistant, sotto-progetti 2 e 3**: pannello "Oggi" nella web app (la stessa
+  vista dell'immagine, con la spesa e i dettagli) e contesto AI (calendario e sensori
+  passati all'arricchimento delle note).
+- **Lista della spesa sul device** con una combinazione di tasti (è già letta e salvata dal
+  backend, ma l'immagine Oggi non la mostra).
+- **Arrotondare i sensori** se ridisegnano troppo: con un decimale ogni variazione cambia
+  l'ETag e fa ridisegnare l'e-Paper ai wake da timer; da decidere dopo aver osservato
+  quanti refresh all'ora (aperto con l'autore).
 - **Refresh parziale e-Paper**: contatore che scorre durante la registrazione, meno
   lampeggi.
 - **Batteria** (collegata, 1000 mAh, mantenimento verificato): consumo in deep sleep e per
