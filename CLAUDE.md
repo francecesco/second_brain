@@ -146,9 +146,9 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - Tutto su `master`, compreso il backend (`backend-fase1b` e `backend-elaborazione-ai` uniti).
   `origin` (`github.com/francecesco/second_brain`, pubblico) allineato a `master` il
   2026-10-11 (push su richiesta dell'autore).
-- **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.8.3 (build
-  del codice corrente di `master` coi tasti a click, flashata via cavo e pubblicata come
-  release corrente sulla ZimaBoard il 2026-10-12; `version.txt` in git resta 0.1.0), con
+- **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.9.0 (build
+  del codice corrente di `master` con la schermata "Oggi", flashata via cavo e pubblicata
+  come release corrente sulla ZimaBoard il 2026-10-13; `version.txt` in git resta 0.1.0), con
   `SERVER_BASE_URL "https://secondbrain.cescohomelab.com"` e il token generato sulla
   ZimaBoard. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
   (spec `docs/specs/2026-10-07-firmware-https-token-design.md`): un solo URL per tutte le
@@ -169,7 +169,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `SETTINGS_KEY` nuova generata lì, nuovo token del device in `secrets.h`),
   `ALLOW_UNAUTHENTICATED_LAN=false`, `PUBLIC_URL=https://secondbrain.cescohomelab.com`,
   `DEVICE_HOSTNAME` vuoto (con un solo hostname la UI darebbe 404). Release firmware
-  0.8.3 pubblicata lì. Chiavi API dei provider AI reinserite dall'autore il 2026-10-12: ciclo
+  0.9.0 pubblicata lì (2026-10-13). Chiavi API dei provider AI reinserite dall'autore il 2026-10-12: ciclo
   completo verificato (upload dal device, trascrizione con Groq, nota con titolo nel vault
   `/mnt/Storage1/secondbrain/vault/Captures/`). Sul Mac resta il backend di sviluppo
   (`backend/.env` e `backend/data/` locali e gitignored).
@@ -184,8 +184,11 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   5 min con istantanea tenuta sugli errori, `GET /digest/today` (immagine 1 bit 200×136 di
   3.400 byte con ETag, `304`, `204`), composta con Pillow e Space Grotesk. Firmware: nuova
   schermata "Oggi" con fasce nere (ora e batteria, `esito | coda N | rete`), download con
-  `If-None-Match` e copia su SD; release firmware **da rilasciare**. Verificata sul device
-  dall'ufficio col backend del Mac il 2026-10-13. La lista della spesa è letta ma non
+  `If-None-Match` e copia su SD; release firmware 0.9.0. Verificata sul device
+  dall'ufficio col backend del Mac il 2026-10-13, poi backend in produzione sulla ZimaBoard
+  (backup `pre-deploy-homeassistant-20261013-0621.sql.gz`) e device in produzione con la 0.9.0
+  (`digest: none` finché Home Assistant non è configurato lì: URL, token e scelte vanno
+  reinseriti nelle Impostazioni della ZimaBoard). La lista della spesa è letta ma non
   mostrata.
 - **Elaborazione AI** (spec `docs/specs/2026-09-29-backend-elaborazione-ai-design.md`):
   trascrizione, titolo, riassunto e tag con Groq e Gemini (chiavi inserite dall'autore

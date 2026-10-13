@@ -1,7 +1,7 @@
 # Home Assistant e schermata "Oggi" sul device — Design / Spec
 
 **Data:** 2026-10-13
-**Stato:** approvata in chat a sezioni il 2026-10-13, da pianificare. **Cambiato dopo la
+**Stato:** implementata, verificata sul device e in produzione il 2026-10-13 (backend sulla ZimaBoard, firmware 0.9.0). **Cambiato dopo la
 prima prova sul device e con la Home Assistant vera dell'autore (2026-10-13)**: la
 schermata mostra solo oggi (niente DOMANI), caratteri più grandi (righe a 20 px), spesa in
 una riga, emoji e caratteri che il font non ha tolti dai testi; nella card i sensori si
