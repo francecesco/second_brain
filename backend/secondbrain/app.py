@@ -12,7 +12,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from . import ingest, library, ota
+from . import digest_api, ingest, library, ota
 from .archive import Archive
 from .vault import Vault
 from .catalog import make_engine, make_sessionmaker
@@ -24,6 +24,7 @@ from .web import actions as web_actions
 from .web import ai as web_ai
 from .web import browse as web_browse
 from .web import compose as web_compose
+from .web import homeassistant as web_homeassistant
 from .web import login as web_login
 from .web import search as web_search
 from .web import settings as web_settings
@@ -32,7 +33,7 @@ from .web.templating import STATIC_DIR
 
 log = logging.getLogger(__name__)
 
-DEVICE_PATHS = ("/captures", "/firmware/")
+DEVICE_PATHS = ("/captures", "/firmware/", "/digest/")
 PURGE_INTERVAL_S = 24 * 3600
 
 
@@ -59,7 +60,7 @@ async def _purge_loop(app: FastAPI) -> None:
 
 
 def _is_device_path(path: str) -> bool:
-    return path == DEVICE_PATHS[0] or path.startswith(DEVICE_PATHS[1])
+    return path == DEVICE_PATHS[0] or path.startswith(DEVICE_PATHS[1:])
 
 
 def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> FastAPI:
@@ -104,6 +105,7 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
 
     app.include_router(ingest.router)
     app.include_router(ota.router)
+    app.include_router(digest_api.router)
 
     mimetypes.add_type("font/woff2", ".woff2")  # l'immagine slim non lo conosce: senza, il font esce come octet-stream
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -114,6 +116,7 @@ def create_app(settings: Settings, clock: Callable[[], datetime] = utcnow) -> Fa
     app.include_router(web_ai.router)
     app.include_router(web_search.router)
     app.include_router(web_settings.router)
+    app.include_router(web_homeassistant.router)
 
     @app.exception_handler(NotAuthenticated)
     async def login_required(request: Request, exc: NotAuthenticated) -> Response:

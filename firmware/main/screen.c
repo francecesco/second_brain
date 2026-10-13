@@ -1,4 +1,5 @@
 #include "screen.h"
+#include "config.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -10,6 +11,7 @@
 #define BAT_TIP_W     3
 #define BAT_TIP_H     10
 #define BAT_BORDER    2
+#define FOOT_H        34     // piede della schermata Oggi: coda, rete, esito
 
 static void px(uint8_t *fb, int x, int y, bool black)
 {
@@ -96,8 +98,9 @@ static const char *const BOLT[BOLT_H] = {
     "#........",
 };
 
-static void draw_battery(uint8_t *fb, const screen_status_t *st)
+static void draw_battery(uint8_t *fb, const screen_status_t *st, bool neg)
 {
+    bool ink = !neg;   // valore del "segno": nero sul bianco, bianco sul nero
     const font_t *f = &font_grotesk_16;
     int bx = SCREEN_W - MARGIN - BAT_TIP_W - BAT_W;
     int by = (BAR_H - BAT_H) / 2;
@@ -105,19 +108,19 @@ static void draw_battery(uint8_t *fb, const screen_status_t *st)
 
     if (st->battery == SCREEN_BAT_NONE) {
         int w = screen_text_width(f, "USB");
-        draw_text(fb, f, SCREEN_W - MARGIN - w, ty, "USB", w, true);
+        draw_text(fb, f, SCREEN_W - MARGIN - w, ty, "USB", w, ink);
         return;
     }
     // corpo e polo
-    rect(fb, bx, by, BAT_W, BAT_H, true);
-    rect(fb, bx + BAT_BORDER, by + BAT_BORDER, BAT_W - 2 * BAT_BORDER, BAT_H - 2 * BAT_BORDER, false);
-    rect(fb, bx + BAT_W, by + (BAT_H - BAT_TIP_H) / 2, BAT_TIP_W, BAT_TIP_H, true);
+    rect(fb, bx, by, BAT_W, BAT_H, ink);
+    rect(fb, bx + BAT_BORDER, by + BAT_BORDER, BAT_W - 2 * BAT_BORDER, BAT_H - 2 * BAT_BORDER, !ink);
+    rect(fb, bx + BAT_W, by + (BAT_H - BAT_TIP_H) / 2, BAT_TIP_W, BAT_TIP_H, ink);
 
     int inner_w = BAT_W - 2 * (BAT_BORDER + 1);
     int inner_h = BAT_H - 2 * (BAT_BORDER + 1);
     int ix = bx + BAT_BORDER + 1, iy = by + BAT_BORDER + 1;
     int pct = st->battery == SCREEN_BAT_FULL ? 100 : st->pct;
-    if (st->battery != SCREEN_BAT_UNKNOWN) rect(fb, ix, iy, screen_battery_fill_px(pct, inner_w), inner_h, true);
+    if (st->battery != SCREEN_BAT_UNKNOWN) rect(fb, ix, iy, screen_battery_fill_px(pct, inner_w), inner_h, ink);
 
     if (st->battery == SCREEN_BAT_CHARGING) {
         int ox = bx + (BAT_W - BOLT_W) / 2, oy = by + (BAT_H - BOLT_H) / 2;
@@ -127,7 +130,7 @@ static void draw_battery(uint8_t *fb, const screen_status_t *st)
                 // bianco sulla parte piena, nero su quella vuota: si legge con ogni carica
                 int x = ox + c, y = oy + r;
                 bool on_fill = x < ix + screen_battery_fill_px(pct, inner_w);
-                px(fb, x, y, !on_fill);
+                px(fb, x, y, on_fill ? !ink : ink);
             }
     }
 
@@ -136,17 +139,23 @@ static void draw_battery(uint8_t *fb, const screen_status_t *st)
     if (st->battery == SCREEN_BAT_UNKNOWN || st->pct < 0) snprintf(txt, sizeof(txt), "?");
     else snprintf(txt, sizeof(txt), "%d%%", pct);
     int w = screen_text_width(f, txt);
-    draw_text(fb, f, bx - 4 - w, ty, txt, w, true);
+    draw_text(fb, f, bx - 4 - w, ty, txt, w, ink);
+}
+
+// Barra in alto: ora a sinistra, batteria a destra.
+static void draw_bar(uint8_t *fb, const screen_status_t *st, bool neg)
+{
+    if (neg) rect(fb, 0, 0, SCREEN_W, BAR_H, true);
+    draw_text(fb, &font_grotesk_20, MARGIN, (BAR_H - font_grotesk_20.height) / 2 + 1,
+              st->clock ? st->clock : "--:--", 90, !neg);
+    draw_battery(fb, st, neg);
 }
 
 void screen_render_status(uint8_t *fb, const screen_status_t *st)
 {
     memset(fb, 0, SCREEN_FB_BYTES);
 
-    // barra in alto: ora a sinistra, batteria a destra, filetto sotto
-    draw_text(fb, &font_grotesk_20, MARGIN, (BAR_H - font_grotesk_20.height) / 2 + 1,
-              st->clock ? st->clock : "--:--", 90, true);
-    draw_battery(fb, st);
+    draw_bar(fb, st, false);
     rect(fb, 0, BAR_H, SCREEN_W, 2, true);
 
     // rete e coda
@@ -165,6 +174,31 @@ void screen_render_status(uint8_t *fb, const screen_status_t *st)
     const font_t *of = screen_text_width(big, out) <= SCREEN_W - 2 * MARGIN ? big : &font_grotesk_20;
     int oy = band_y + (SCREEN_H - band_y - of->height) / 2;
     draw_text(fb, of, MARGIN, oy, out, SCREEN_W - 2 * MARGIN, false);
+}
+
+void screen_render_today(uint8_t *fb, const screen_status_t *st, const uint8_t *digest)
+{
+    memset(fb, 0, SCREEN_FB_BYTES);
+    draw_bar(fb, st, true);   // intestazione e piede sempre in negativo: staccati dall'immagine
+    // l'immagine del backend ha lo stesso formato del framebuffer: copia di righe intere
+    if (digest) memcpy(&fb[SB_DIGEST_Y * (SCREEN_W / 8)], digest, SB_DIGEST_BYTES);
+
+    // piede: "esito | coda N | rete" (la rete, tagliata in fondo, e' la parte meno importante);
+    // senza rete "no wifi | coda N": l'esito sarebbe solo "no sync", che ripeterebbe lo stesso;
+    // se invece c'e' un esito di cattura ("Salvato 0:07", "SD piena", ...) quello vince
+    int foot_y = SCREEN_H - FOOT_H;
+    rect(fb, 0, foot_y, SCREEN_W, FOOT_H, true);
+    // il nero e' sempre il fondo, non segnala piu' l'allarme: lo dice il prefisso "! "
+    const char *al = st->alert ? "! " : "";
+    char line[96];
+    if (st->network)
+        snprintf(line, sizeof(line), "%s%s | coda %d | %s", al, st->outcome ? st->outcome : "", st->queue, st->network);
+    else if (st->outcome && st->outcome[0] && strcmp(st->outcome, "no sync") != 0)
+        snprintf(line, sizeof(line), "%s%s | coda %d", al, st->outcome, st->queue);
+    else
+        snprintf(line, sizeof(line), "%sno wifi | coda %d", al, st->queue);
+    const font_t *f = &font_grotesk_16;
+    draw_text(fb, f, MARGIN, foot_y + (FOOT_H - f->height) / 2, line, SCREEN_W - 2 * MARGIN, false);
 }
 
 void screen_render_lines(uint8_t *fb, const char *const lines[], int n)

@@ -1,0 +1,55 @@
+{% from "_icons.html" import icon %}
+{% set cfg = ha.config %}
+{% set snap = ha.snapshot %}
+<section class="card" id="homeassistant">
+  <h2>Connessione Home Assistant</h2>
+  <p>Calendari, sensori e lista della spesa per la schermata "Oggi" del device. Serve l'indirizzo di Home Assistant e un token di accesso a lungo termine, da creare in Home Assistant in Profilo → Sicurezza.</p>
+  {% if ha.message %}<p class="error" role="alert">{{ ha.message }}</p>{% endif %}
+  {% if not box_available %}<p class="notice" role="alert">{{ icon("fix") }}<span><code>SETTINGS_KEY</code> non impostata: il token non si può salvare.</span></p>{% endif %}
+  <p>Token: <span class="mono">{{ ha.token_status }}</span></p>
+  <form method="post" action="/settings/homeassistant" class="settings-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>URL di Home Assistant
+      <input type="url" name="url" value="{{ ha.url }}" placeholder="http://homeassistant.local:8123" required>
+    </label>
+    <label>Nuovo token
+      <input type="password" name="token" autocomplete="off" placeholder="{{ 'lascia vuoto per non cambiarlo' if cfg else 'incolla il token' }}"{% if not box_available %} disabled{% endif %}>
+    </label>
+    <div class="actions"><button type="submit" class="pri" aria-label="Salva la connessione" title="Salva">{{ icon("save") }}<span class="label">Salva</span></button></div>
+  </form>
+  {% if cfg %}
+  <div class="actions">
+    <button type="button" hx-post="/settings/homeassistant/test" hx-target="#test-homeassistant" hx-swap="innerHTML">Prova</button>
+    <span id="test-homeassistant"></span>
+  </div>
+
+  <h3 class="lab">Entità</h3>
+  {% if cfg.calendars or cfg.sensors or cfg.shopping_list %}
+  <dl class="ha-choices">
+    {% if cfg.calendars %}<dt>Calendari</dt><dd class="mono">{{ cfg.calendars|join(", ") }}</dd>{% endif %}
+    {% if cfg.sensors %}<dt>Sensori</dt><dd class="mono">{% for x in cfg.sensors %}{{ x.entity_id }}{% if x.label %} ({{ x.label }}){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
+    {% if cfg.shopping_list %}<dt>Spesa</dt><dd class="mono">{{ cfg.shopping_list }}</dd>{% endif %}
+  </dl>
+  {% else %}<p>Nessuna entità scelta.</p>{% endif %}
+  <div class="actions">
+    <button type="button" hx-get="/settings/homeassistant/entities" hx-target="#ha-entities" hx-swap="innerHTML" aria-label="Carica entità da Home Assistant" title="Carica entità da Home Assistant">{{ icon("download") }}<span>Carica entità da Home Assistant</span></button>
+  </div>
+  <div id="ha-entities"></div>
+
+  <h3 class="lab">Ultima lettura</h3>
+  {% if snap.fetched_at %}{% set r = snap.reading %}<p>Ultima lettura: {{ snap.fetched_at.astimezone(tz).strftime("%H:%M") }} · {{ r.events|length }} eventi · {{ r.shopping|length }} articoli · {{ r.sensors|length }} sensori</p>
+  {% if r.missing %}<p class="count">Non più in Home Assistant: {{ r.missing|join(", ") }}</p>{% endif %}
+  {% else %}<p>Nessuna lettura ancora: il worker legge Home Assistant ogni 5 minuti.</p>{% endif %}
+  {% if ha.error %}<p class="error" role="alert">{% if snap.error_at %}{{ local(snap.error_at) }} · {% endif %}{{ ha.error }}</p>{% endif %}
+  <form method="post" action="/settings/homeassistant/refresh" class="actions">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit" aria-label="Aggiorna ora" title="Aggiorna ora">{{ icon("refresh") }}<span class="label">Aggiorna ora</span></button>
+  </form>
+  {% if snap.reading %}<img src="/settings/homeassistant/preview.png?t={{ snap.fetched_at.timestamp()|int }}" class="ha-preview" alt="Anteprima della schermata Oggi">{% endif %}
+
+  <form method="post" action="/settings/homeassistant/delete" class="actions" onsubmit="return confirm('Scollegare Home Assistant? Token e scelte vengono cancellati.')">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit" aria-label="Scollega Home Assistant" title="Scollega">{{ icon("delete") }}<span class="label">Scollega</span></button>
+  </form>
+  {% endif %}
+</section>

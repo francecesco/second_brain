@@ -262,9 +262,27 @@ td .actions { margin: 0; }
 .settings-form label.check { display: flex; gap: .5rem; align-items: center; }
 .test-result.ok { color: var(--fg); }
 .test-result.ko { color: var(--acc); }
+.card h3 { margin: 1rem 0 .3rem; }
+.ha-choices { display: grid; grid-template-columns: auto 1fr; gap: .2rem .8rem; margin: .4rem 0; }
+.ha-choices dt { color: var(--mute); }
+.ha-choices dd { margin: 0; overflow-wrap: anywhere; }
+.ha-entities fieldset { border: 0; border-top: 1px solid var(--line); margin: 0; padding: .5rem 0 0; display: grid; gap: .35rem; min-width: 0; }
+.ha-entities legend { padding: 0 .4rem 0 0; }
+.ha-entities label.check { align-items: flex-start; overflow-wrap: anywhere; }
+.ha-entities label.check input { margin-top: .25rem; flex: none; }
+.ha-sensor { display: grid; grid-template-columns: minmax(0, 1fr) 9rem; gap: .2rem .35rem; }
+.ha-sensor input { width: 100%; min-width: 0; }
+.ha-sensor input[list] { grid-column: 1; grid-row: 1; }
+.ha-sensor-name { grid-column: 1; grid-row: 2; color: var(--mute); font-size: .85em; overflow-wrap: anywhere; }
+.ha-sensor-name:empty { display: none; }
+/* l'immagine è già 2× (400 px): niente sfumature quando si riduce sul telefono */
+.ha-preview { display: block; width: 400px; max-width: 100%; height: auto; image-rendering: pixelated; border: 1px solid var(--line); margin: .5rem 0; }
 
 
 @media (max-width: 700px) {
+  .ha-sensor { grid-template-columns: minmax(0, 1fr); }
+  .ha-sensor input[list], .ha-sensor-name { grid-column: auto; grid-row: auto; }
+  .ha-sensor + .ha-sensor { margin-top: .45rem; }
   .layout { display: block; padding: 6px; }
   .tree { width: auto; margin-bottom: 6px; padding: .5rem .2rem 0; }
   .tree > .tree-toggle { margin: 0 0 0 .5rem; }

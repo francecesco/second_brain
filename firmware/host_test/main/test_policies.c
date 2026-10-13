@@ -117,3 +117,37 @@ void test_timesync_tm_to_epoch_utc(void) {
     memset(&t, 0, sizeof(t)); t.tm_year = 100; t.tm_mon = 1; t.tm_mday = 29;
     TEST_ASSERT_EQUAL_INT64(951782400, timesync_tm_to_epoch_utc(&t));
 }
+
+void test_today_should_refresh(void) {
+    TEST_ASSERT_FALSE(today_should_refresh(false, "\"a\"", "\"a\""));
+    TEST_ASSERT_TRUE(today_should_refresh(false, "\"b\"", "\"a\""));
+    TEST_ASSERT_TRUE(today_should_refresh(true, "\"a\"", "\"a\""));
+    TEST_ASSERT_FALSE(today_should_refresh(false, NULL, ""));
+    TEST_ASSERT_TRUE(today_should_refresh(false, "\"a\"", ""));
+    TEST_ASSERT_TRUE(today_should_refresh(false, NULL, "\"a\""));
+}
+
+void test_digest_size_valid(void) {
+    TEST_ASSERT_TRUE(digest_size_valid(3400));
+    TEST_ASSERT_FALSE(digest_size_valid(0));
+    TEST_ASSERT_FALSE(digest_size_valid(3399));
+    TEST_ASSERT_FALSE(digest_size_valid(3401));
+    TEST_ASSERT_FALSE(digest_size_valid(-1));
+}
+
+void test_digest_etag_storable(void) {
+    char longe[SB_DIGEST_ETAG_MAX + 1];
+    TEST_ASSERT_TRUE(digest_etag_storable("\"abc\""));
+    TEST_ASSERT_FALSE(digest_etag_storable(NULL));
+    memset(longe, 'a', SB_DIGEST_ETAG_MAX - 1); longe[SB_DIGEST_ETAG_MAX - 1] = 0;
+    TEST_ASSERT_TRUE(digest_etag_storable(longe));
+    longe[SB_DIGEST_ETAG_MAX - 1] = 'a'; longe[SB_DIGEST_ETAG_MAX] = 0;
+    TEST_ASSERT_FALSE(digest_etag_storable(longe));
+}
+
+void test_digest_should_fetch(void) {
+    TEST_ASSERT_TRUE(digest_should_fetch(true, true, false));
+    TEST_ASSERT_FALSE(digest_should_fetch(false, true, false));   // niente Wi-Fi
+    TEST_ASSERT_FALSE(digest_should_fetch(true, false, false));   // batteria bassa
+    TEST_ASSERT_FALSE(digest_should_fetch(true, true, true));     // server irraggiungibile
+}

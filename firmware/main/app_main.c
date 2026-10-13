@@ -40,6 +40,8 @@
 #include "battery.h"
 #include "buttons.h"
 #include "button_policy.h"
+#include "digest.h"
+#include "esp_http_client.h"
 
 static const char *TAG = "app";
 
@@ -49,6 +51,7 @@ typedef struct {
     int   sent, rejected, remaining;
     bool  server_error;
     bool  auth_error;
+    bool  server_unreachable; // l'OTA pull non ha potuto connettersi: inutile riprovare con l'immagine Oggi
     char  capture_msg[32];  // "Salvato 0:07" | "Scartato" | "Max 10:00" | "SD assente" | ...
 } cycle_state_t;
 
@@ -235,6 +238,7 @@ static void do_sync(cycle_state_t *st)
         snprintf(manifest_url, sizeof(manifest_url), "%s/firmware/manifest.json", SERVER_BASE_URL);
         esp_err_t r = ota_pull(manifest_url);   // non ritorna se aggiorna
         ESP_LOGI(TAG, "ota_pull -> %s", esp_err_to_name(r));
+        if (r == ESP_ERR_HTTP_CONNECT) st->server_unreachable = true;   // una risposta HTTP, anche d'errore, no
         if (r == ESP_ERR_NOT_ALLOWED) st->auth_error = true; // token rifiutato anche a coda vuota: "token ko"
     }
 }
@@ -267,7 +271,9 @@ static void fmt_wifi_line(bool wifi_ok, char *out, size_t n)
     else strlcpy(out, "wifi: assente", n);
 }
 
-static void show_status(const cycle_state_t *st)
+// Con digest (immagine della schermata "Oggi") disegna quella con il piede di stato,
+// altrimenti la schermata di stato classica.
+static void show_status(const cycle_state_t *st, const uint8_t *digest)
 {
     char l1[8], l2[32], l3[32], l4[48];
     fmt_clock(l1, sizeof(l1));
@@ -275,13 +281,16 @@ static void show_status(const cycle_state_t *st)
     char bl[20];
     battery_label(bl, sizeof(bl));
     snprintf(l3, sizeof(l3), "coda: %d  %s", st->remaining, bl);
+    // SD assente (alert): spiega la fascia nera al posto di "sync ok"; i guasti di rete e i
+    // messaggi di cattura hanno la precedenza perche' dicono di piu' sul ciclo
     // Senza rete l'esito della cattura vince su "no sync": "nessuna rete" e' gia' sopra.
     if (st->capture_msg[0] && !st->wifi_ok) strlcpy(l4, st->capture_msg, sizeof(l4));
-    else if (!st->wifi_ok) strlcpy(l4, "no sync", sizeof(l4));
+    else if (!st->wifi_ok) strlcpy(l4, st->sd_ok ? "no sync" : "SD assente", sizeof(l4));
     else if (st->auth_error) strlcpy(l4, "token ko", sizeof(l4));
     else if (st->server_error) strlcpy(l4, "server ko", sizeof(l4));
     else if (st->sent > 0) snprintf(l4, sizeof(l4), "%d inviate", st->sent);
     else if (st->capture_msg[0]) strlcpy(l4, st->capture_msg, sizeof(l4));
+    else if (!st->sd_ok) strlcpy(l4, "SD assente", sizeof(l4));
     else strlcpy(l4, "sync ok", sizeof(l4));
     ESP_LOGI(TAG, "stato: [%s] [%s] [%s] [%s]", l1, l2, l3, l4);
     const power_state_t *ps = battery_last();
@@ -292,9 +301,50 @@ static void show_status(const cycle_state_t *st)
         .network = st->wifi_ok ? wifi_current_ssid() : NULL,
         .queue = st->remaining,
         .outcome = l4,
+        .alert = !st->wifi_ok || st->auth_error || st->server_error || !st->sd_ok,
     };
     ensure_display();
-    display_status(&scr);
+    if (digest) display_today(&scr, digest);
+    else display_status(&scr);
+}
+
+// Immagine della schermata "Oggi" per questo ciclo (spec Home Assistant): quella sulla SD, o
+// una nuova dal backend se c'e' rete e batteria per scaricarla. Ritorna true se buf contiene
+// un'immagine da mostrare; etag_now e' allora il suo etag. Un 401/403 qui non tocca coda ne'
+// esito: il token rifiutato lo segnala gia' l'OTA pull.
+static bool load_today(const cycle_state_t *st, uint8_t *buf, char *etag_now, size_t etag_len)
+{
+    bool cached = st->sd_ok && digest_load(buf, etag_now, etag_len) == ESP_OK;
+    if (!cached) etag_now[0] = '\0';
+    if (!digest_should_fetch(st->wifi_ok, !battery_below(SB_BATTERY_MIN_OTA_PCT), st->server_unreachable)) {
+        ESP_LOGI(TAG, "digest: skip (%s) etag=%s",
+                 !st->wifi_ok ? "no wifi" : st->server_unreachable ? "server irraggiungibile" : "batteria",
+                 cached ? etag_now : "-");
+        return cached;
+    }
+    char etag_new[SB_DIGEST_ETAG_MAX];
+    digest_fetch_t r = digest_fetch(etag_now, buf, etag_new, sizeof(etag_new));
+    bool has = cached;
+    switch (r) {
+    case DIGEST_NEW:
+        if (st->sd_ok && digest_save(buf, etag_new) != ESP_OK) ESP_LOGW(TAG, "digest: salvataggio su SD fallito");
+        strlcpy(etag_now, etag_new, etag_len);
+        has = true;
+        break;
+    case DIGEST_SAME:
+        break;
+    case DIGEST_NONE:
+        if (st->sd_ok) digest_clear();
+        has = false;
+        break;
+    case DIGEST_FAILED:
+        // digest_fetch puo' aver scritto in buf: l'immagine della SD va riletta.
+        has = cached && digest_load(buf, etag_now, etag_len) == ESP_OK;
+        break;
+    }
+    if (!has) etag_now[0] = '\0';
+    ESP_LOGI(TAG, "digest: %s etag=%s", digest_fetch_name(r), has ? etag_now : "-");
+    return has;
 }
 
 // Esito della riga 4 come categoria, per decidere se un wake da timer deve aggiornare lo schermo.
@@ -393,11 +443,25 @@ void app_main(void)
     do_sync(&st);
     if (st.sd_ok) st.remaining = queue_count(NULL);
 
+    // Immagine della schermata "Oggi" (SB_DIGEST_BYTES: sull'heap).
+    uint8_t *digest = malloc(SB_DIGEST_BYTES);
+    char etag_now[SB_DIGEST_ETAG_MAX] = "";
+    bool has_digest = digest && load_today(&st, digest, etag_now, sizeof(etag_now));
+    if (!digest) ESP_LOGE(TAG, "malloc immagine Oggi fallita: schermata di stato");
+
     status_view_t view = cycle_view(&st);
-    bool refresh = (mode != BOOT_TIMER_SYNC) || status_should_refresh(st.sent, &view, retry_state_shown());
-    if (refresh) { show_status(&st); retry_state_set_shown(&view); }
-    else ESP_LOGI(TAG, "wake dal timer senza novita' (esito %d, coda %d, carica %d, %d%%): display non aggiornato",
-                  (int)view.outcome, view.remaining, (int)view.charge, view.pct);
+    bool refresh = (mode != BOOT_TIMER_SYNC) ||
+                   today_should_refresh(status_should_refresh(st.sent, &view, retry_state_shown()),
+                                        has_digest ? etag_now : NULL, retry_state_digest_shown());
+    if (refresh) {
+        show_status(&st, has_digest ? digest : NULL);
+        retry_state_set_shown(&view);
+        retry_state_set_digest_shown(has_digest ? etag_now : NULL);
+    } else {
+        ESP_LOGI(TAG, "wake dal timer senza novita' (esito %d, coda %d, carica %d, %d%%): display non aggiornato",
+                 (int)view.outcome, view.remaining, (int)view.charge, view.pct);
+    }
+    free(digest);
 
     // Wake periodico (spec wake periodico §3): ogni SB_WAKE_PERIOD_MS, a batteria non sotto
     // la soglia di sync; altrimenti solo da tasto.

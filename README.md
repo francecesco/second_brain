@@ -61,6 +61,35 @@ coda: 0                            registrazioni in attesa
 [ sync ok ]                        esito su fascia nera: "N inviate", "server ko", "Salvato 0:07", ...
 ```
 
+**Schermata "Oggi".** Se sul backend è collegata Home Assistant (vedi `backend/README.md`), a
+fine ciclo al posto della schermata di stato compare "Oggi": fascia nera in alto con ora e
+batteria, al centro gli eventi di oggi dai calendari scelti (fino a 4, "nulla in programma"
+se non ce ne sono) e i sensori scelti, uno per riga ("etichetta valore", con "agg. HH:MM" se
+il dato ha più di 30 minuti), fascia nera in basso con `esito | coda N | rete`. Il prefisso
+`! ` sull'esito segnala un problema (rete, token, server, SD); senza rete il piede è
+`no wifi | coda N`, oppure l'esito della cattura appena fatta.
+
+```
+10:13                 77% [###]
+---------------------------------
+09:30 Dentista
+Tutto il giorno: Ferie Marco
+---------------------------------
+Salotto 21,4 C
+Consumo 0,8 kW
+---------------------------------
+[ sync ok | coda 0 | FASTWEB ]
+```
+
+L'immagine (200×136, 1 bit) la compone il backend e il device la scarica con
+`GET /digest/today` a ogni sync; la tiene su SD (`digest.bin`, `digest.etag`) e la
+richiede con `If-None-Match`, quindi se non è cambiato niente la risposta è `304`. Ai wake
+da timer lo schermo si ridisegna solo se cambiano lo stato o l'ETag. Senza immagine (Home
+Assistant non collegata, `204`, nessuna rete e nessuna copia su SD) resta la schermata di
+stato qui sopra; se il server non ha risposto al controllo OTA dello stesso ciclo il device
+non tenta nemmeno il download e usa la copia su SD. La lista della spesa è letta dal backend
+ma non compare sul device.
+
 La versione del firmware compare solo nella schermata DEV MODE. Anteprima delle schermate
 sul Mac senza flash: `firmware/tools/screen_preview.c` (istruzioni in `CLAUDE.md`).
 
@@ -227,6 +256,8 @@ Moduli principali in `firmware/main/`: `app_main.c` (flusso del ciclo), `power.c
   ora, display di stato, più reti Wi-Fi: completata.
 - **Fase 1b** — backend `secondbrain`: `POST /captures` → Whisper → nota `.md` nel vault
   Obsidian + indice SQLite; serve anche il manifest OTA. Da fare.
-- **Fase 2** — display "glanceable": `GET /digest.bmp` renderizzato dal server.
+- **Fase 2** — display "glanceable": schermata "Oggi" renderizzata dal backend
+  (`GET /digest/today`) con calendario e sensori di Home Assistant: completata (firmware
+  in attesa di release).
 - **Fase 3** — arricchimento con agente (tag, action items), ricerca full-text.
 - **Fase 4** — sync del vault con Syncthing.

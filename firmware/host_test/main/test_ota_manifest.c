@@ -65,6 +65,10 @@ void test_http_status_is_auth_error(void);
 void test_http_url_has_base(void);
 void test_wake_timer_should_arm(void);
 void test_status_should_refresh(void);
+void test_today_should_refresh(void);
+void test_digest_size_valid(void);
+void test_digest_etag_storable(void);
+void test_digest_should_fetch(void);
 void test_timesync_needed(void);
 void test_timesync_tm_to_epoch_utc(void);
 
@@ -87,6 +91,11 @@ void test_click_det_ignores_bounce(void);
 void test_click_det_wake_press_not_counted(void);
 void test_capture_gesture(void);
 void test_screen_status_draws_outcome_band(void);
+void test_screen_today_digest_rows_copied(void);
+void test_screen_today_bars_always_negative(void);
+void test_screen_status_header_stays_positive(void);
+void test_screen_today_null_digest(void);
+void test_screen_today_no_network_shows_capture_outcome(void);
 
 void app_main(void) {
     UNITY_BEGIN();
@@ -113,6 +122,10 @@ void app_main(void) {
     RUN_TEST(test_http_url_has_base);
     RUN_TEST(test_wake_timer_should_arm);
     RUN_TEST(test_status_should_refresh);
+    RUN_TEST(test_today_should_refresh);
+    RUN_TEST(test_digest_size_valid);
+    RUN_TEST(test_digest_etag_storable);
+    RUN_TEST(test_digest_should_fetch);
     RUN_TEST(test_timesync_needed);
     RUN_TEST(test_timesync_tm_to_epoch_utc);
     RUN_TEST(test_wifi_select_none_visible);
@@ -133,5 +146,10 @@ void app_main(void) {
     RUN_TEST(test_click_det_wake_press_not_counted);
     RUN_TEST(test_capture_gesture);
     RUN_TEST(test_screen_status_draws_outcome_band);
+    RUN_TEST(test_screen_today_digest_rows_copied);
+    RUN_TEST(test_screen_today_bars_always_negative);
+    RUN_TEST(test_screen_status_header_stays_positive);
+    RUN_TEST(test_screen_today_null_digest);
+    RUN_TEST(test_screen_today_no_network_shows_capture_outcome);
     UNITY_END();
 }

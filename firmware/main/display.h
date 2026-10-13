@@ -15,6 +15,8 @@ void display_blit_1bit(const uint8_t *buf, int w, int h);
 
 // Schermata di stato (ora, batteria, rete, coda, esito): vedi screen.h.
 void display_status(const screen_status_t *st);
+// Schermata "Oggi": intestazione, immagine del backend (SB_DIGEST_BYTES), piede di stato.
+void display_today(const screen_status_t *st, const uint8_t *digest);
 
 // Come display_text, ma il refresh (~2 s) avviene in un task: il chiamante prosegue
 // subito (es. Wi-Fi). display_wait_idle() attende la fine prima di un nuovo disegno.

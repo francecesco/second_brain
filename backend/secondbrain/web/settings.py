@@ -12,10 +12,11 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from markupsafe import escape
 from sqlalchemy.orm import Session
 
-from .. import jobs
+from .. import ha_store, jobs
 from .. import settings_store as store
-from ..ai.base import CheckResult
+from ..ai.base import CheckResult, redact
 from ..ai.registry import PROVIDER_SPECS, ProviderConfig, ProviderSpec, build_provider
+from ..homeassistant import HaConfig
 from ..languages import LANGUAGES
 from ..models import AiProvider, WebSession
 from ..usage import month_start, usage_for_month
@@ -62,9 +63,30 @@ def _vault_check(db: Session) -> dict | None:
         return None
 
 
-@router.get("/settings")
-def settings_page(request: Request, queued: int | None = None, db: Session = Depends(get_db),
-                  session: WebSession = Depends(require_login)):
+@dataclass(frozen=True)
+class HaView:
+    """Card di Home Assistant: configurazione, stato del token, ultima lettura."""
+    config: HaConfig | None
+    token_status: str
+    snapshot: ha_store.Snapshot
+    error: str | None     # ultimo errore della lettura, ripulito
+    url: str              # valore del campo: quello salvato o quello appena inviato
+    message: str | None   # errore dell'ultimo invio della card
+
+
+def ha_view(db: Session, box: store.SecretBox, url: str | None = None,
+            message: str | None = None) -> HaView:
+    config = ha_store.get_config(db)
+    snapshot = ha_store.get_snapshot(db)
+    token = ha_store.get_token(db, box)
+    error = redact(snapshot.error, [token] if token else []) if snapshot.error else None
+    status = ha_store.token_status(db, box)
+    return HaView(config, "nessun token" if status == store.NO_KEY else status, snapshot, error,
+                  url if url is not None else (config.url if config else ""), message)
+
+
+def render_settings(request: Request, db: Session, session: WebSession, queued: int | None = None,
+                    ha: HaView | None = None, status_code: int = 200):
     state = request.app.state
     now = state.clock()
     rows = store.ensure_providers(db, now)
@@ -88,7 +110,14 @@ def settings_page(request: Request, queued: int | None = None, db: Session = Dep
         "counts": jobs.queue_counts(db), "backfill_count": jobs.count_backfill(db),
         "vocabulary": store.vocabulary(db), "retag_count": jobs.count_retag(db),
         "queued_now": queued,
-        "vault_dir": str(state.settings.vault_dir), "vault_check": _vault_check(db)})
+        "vault_dir": str(state.settings.vault_dir), "vault_check": _vault_check(db),
+        "ha": ha or ha_view(db, state.box)}, status_code=status_code)
+
+
+@router.get("/settings")
+def settings_page(request: Request, queued: int | None = None, db: Session = Depends(get_db),
+                  session: WebSession = Depends(require_login)):
+    return render_settings(request, db, session, queued)
 
 
 @router.post("/settings/general")

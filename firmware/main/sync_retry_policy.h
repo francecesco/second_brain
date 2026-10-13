@@ -31,3 +31,16 @@ typedef struct {
 // Dopo un wake da timer: refresh se sono stati inviati file o se la vista e' cambiata; la
 // percentuale conta solo se si sposta di almeno SB_BATTERY_DISPLAY_STEP_PCT punti.
 bool status_should_refresh(int sent, const status_view_t *now, const status_view_t *shown);
+
+// Ridisegno a un wake da timer: stato cambiato (status_should_refresh) oppure immagine
+// diversa da quella mostrata. NULL vale "nessuna immagine".
+bool today_should_refresh(bool status_changed, const char *etag_now, const char *etag_shown);
+// Un file dell'immagine e' utilizzabile solo con la dimensione esatta.
+bool digest_size_valid(long size);
+// Un etag entra nella memoria RTC solo intero: troncato non combacerebbe piu' col server e
+// l'immagine verrebbe ridisegnata a ogni wake.
+bool digest_etag_storable(const char *etag);
+// Se scaricare l'immagine "Oggi" in questo ciclo: serve rete e batteria sopra la soglia OTA, e
+// il server non deve essere risultato irraggiungibile (connessione fallita all'OTA pull):
+// riprovare costerebbe un altro paio di timeout di connessione.
+bool digest_should_fetch(bool wifi_ok, bool battery_ok, bool server_unreachable);

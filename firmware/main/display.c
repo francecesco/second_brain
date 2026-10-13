@@ -500,6 +500,14 @@ void display_status(const screen_status_t *st)
     display_blit_1bit(s_fb, DISPLAY_W, DISPLAY_H);
 }
 
+void display_today(const screen_status_t *st, const uint8_t *digest)
+{
+    if (!s_ready) return;
+    display_wait_idle();
+    screen_render_today(s_fb, st, digest);
+    display_blit_1bit(s_fb, DISPLAY_W, DISPLAY_H);
+}
+
 void display_lines(const char *l1, const char *l2, const char *l3)
 {
     const char *const lines[3] = { l1, l2, l3 };

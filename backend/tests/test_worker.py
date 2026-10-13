@@ -281,6 +281,30 @@ def test_run_forever_stops():
     run_forever(Interrupted(), threading.Event(), interval=0)  # esce senza sollevare
 
 
+def test_run_forever_survives_a_failing_homeassistant_refresh():
+    stop = threading.Event()
+
+    class Flaky:
+        runs = 0
+
+        def run_once(self):
+            self.runs += 1
+            return False
+
+        def maybe_refresh_homeassistant(self):
+            if self.runs == 1:
+                raise RuntimeError("HA rotto")
+            if self.runs >= 2:
+                stop.set()
+
+        def maybe_check_vault(self):
+            return False
+
+    w = Flaky()
+    run_forever(w, stop, interval=0)
+    assert w.runs == 2
+
+
 def test_cli_worker_wiring(monkeypatch, settings):
     seen = {}
     monkeypatch.setenv("DATABASE_URL", TEST_DB)
