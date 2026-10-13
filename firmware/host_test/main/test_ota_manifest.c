@@ -92,7 +92,8 @@ void test_click_det_wake_press_not_counted(void);
 void test_capture_gesture(void);
 void test_screen_status_draws_outcome_band(void);
 void test_screen_today_digest_rows_copied(void);
-void test_screen_today_alert_footer(void);
+void test_screen_today_bars_always_negative(void);
+void test_screen_status_header_stays_positive(void);
 void test_screen_today_null_digest(void);
 void test_screen_today_no_network_shows_capture_outcome(void);
 
@@ -146,7 +147,8 @@ void app_main(void) {
     RUN_TEST(test_capture_gesture);
     RUN_TEST(test_screen_status_draws_outcome_band);
     RUN_TEST(test_screen_today_digest_rows_copied);
-    RUN_TEST(test_screen_today_alert_footer);
+    RUN_TEST(test_screen_today_bars_always_negative);
+    RUN_TEST(test_screen_status_header_stays_positive);
     RUN_TEST(test_screen_today_null_digest);
     RUN_TEST(test_screen_today_no_network_shows_capture_outcome);
     UNITY_END();

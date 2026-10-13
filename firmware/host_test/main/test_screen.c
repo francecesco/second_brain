@@ -34,31 +34,53 @@ void test_screen_today_digest_rows_copied(void) {
     screen_render_today(fb, &st, digest);
     for (int y = SB_DIGEST_Y; y < SB_DIGEST_Y + SB_DIGEST_H; y++)
         for (int i = 0; i < ROW_BYTES; i++) TEST_ASSERT_EQUAL_HEX8(0xFF, fb[y * ROW_BYTES + i]);
-    for (int i = 0; i < ROW_BYTES; i++) TEST_ASSERT_EQUAL_HEX8(0x00, fb[i]);   // riga 0 bianca
+    for (int i = 0; i < ROW_BYTES; i++) TEST_ASSERT_EQUAL_HEX8(0xFF, fb[i]);   // riga 0 nera (intestazione)
     memset(digest, 0x00, sizeof(digest));
     screen_render_today(fb, &st, digest);
     for (int y = SB_DIGEST_Y; y < SB_DIGEST_Y + SB_DIGEST_H; y++)
         for (int i = 0; i < ROW_BYTES; i++) TEST_ASSERT_EQUAL_HEX8(0x00, fb[y * ROW_BYTES + i]);
 }
 
-void test_screen_today_alert_footer(void) {
-    static uint8_t fb[SCREEN_FB_BYTES];
+void test_screen_today_bars_always_negative(void) {
+    static uint8_t fb[SCREEN_FB_BYTES], al[SCREEN_FB_BYTES];
     static uint8_t digest[SB_DIGEST_BYTES];
-    screen_status_t st = { "15:45", SCREEN_BAT_DISCHARGING, 77, NULL, 2, "no sync", true };
-    memset(digest, 0xFF, sizeof(digest));
+    screen_status_t st = { "15:45", SCREEN_BAT_DISCHARGING, 77, NULL, 2, "no sync", false };
+    memset(digest, 0x00, sizeof(digest));
     screen_render_today(fb, &st, digest);
-    for (int i = 0; i < ROW_BYTES; i++) TEST_ASSERT_EQUAL_HEX8(0xFF, fb[(SCREEN_H - 1) * ROW_BYTES + i]);
-    st.alert = false;
-    screen_render_today(fb, &st, digest);
-    // senza alert il piede e' bianco con il testo in nero: qualche pixel nero, non tutto
-    int black = 0, all_black = 0;
-    for (int y = SCREEN_H - 34; y < SCREEN_H; y++)
+    st.alert = true;
+    screen_render_today(al, &st, digest);
+    uint8_t *v[2] = { fb, al };
+    for (int k = 0; k < 2; k++) {
+        // prima riga dell'intestazione e ultima del piede: tutto nero, con e senza alert
         for (int i = 0; i < ROW_BYTES; i++) {
-            black += fb[y * ROW_BYTES + i] != 0x00;
-            all_black += fb[y * ROW_BYTES + i] == 0xFF;
+            TEST_ASSERT_EQUAL_HEX8(0xFF, v[k][i]);
+            TEST_ASSERT_EQUAL_HEX8(0xFF, v[k][(SCREEN_H - 1) * ROW_BYTES + i]);
         }
+        // testo bianco nell'intestazione e nel piede
+        int white_h = 0, white_f = 0;
+        for (int y = 0; y < 30; y++)
+            for (int i = 0; i < ROW_BYTES; i++) white_h += v[k][y * ROW_BYTES + i] != 0xFF;
+        for (int y = SCREEN_H - 34; y < SCREEN_H; y++)
+            for (int i = 0; i < ROW_BYTES; i++) white_f += v[k][y * ROW_BYTES + i] != 0xFF;
+        TEST_ASSERT_TRUE(white_h > 0);
+        TEST_ASSERT_TRUE(white_f > 0);
+    }
+    // il prefisso "! " distingue il piede in allarme
+    TEST_ASSERT_TRUE(memcmp(fb, al, SCREEN_FB_BYTES) != 0);
+    // l'intestazione e' uguale (l'alert tocca solo il piede)
+    TEST_ASSERT_EQUAL_MEMORY(fb, al, 30 * ROW_BYTES);
+}
+
+void test_screen_status_header_stays_positive(void) {
+    static uint8_t fb[SCREEN_FB_BYTES];
+    const screen_status_t st = { "15:45", SCREEN_BAT_CHARGING, 50, "Casa", 0, "sync ok", false };
+    screen_render_status(fb, &st);
+    // la schermata classica non e' toccata: riga 0 bianca, qualche pixel nero nella barra
+    int black = 0;
+    for (int y = 0; y < 30; y++)
+        for (int i = 0; i < ROW_BYTES; i++) black += fb[y * ROW_BYTES + i] != 0x00;
     TEST_ASSERT_TRUE(black > 0);
-    TEST_ASSERT_TRUE(all_black < 34 * ROW_BYTES);
+    for (int i = 0; i < ROW_BYTES; i++) TEST_ASSERT_EQUAL_HEX8(0x00, fb[i]);
 }
 
 void test_screen_today_null_digest(void) {
