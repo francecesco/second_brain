@@ -171,3 +171,14 @@ def test_huge_inputs_render_fast():
     assert time.perf_counter() - started < 1.0
     assert len(packed) == digest.PACKED_BYTES
     assert max(_black_columns(image)) <= 196
+
+
+def _ink_rows(image):
+    return [y for y in range(image.height) if any(image.getpixel((x, y)) == 0 for x in range(image.width))]
+
+
+def test_first_heading_is_not_clipped_at_the_top():
+    image = digest.render(snap([ev("Riunione", at("15:00"), at("16:00"))]), NOW, TZ, shopping=False)
+    rows = _ink_rows(image)
+    assert rows[0] >= 1             # fila y = 0 tutta bianca
+    assert rows[0] <= 4             # ma il titolo non scende troppo

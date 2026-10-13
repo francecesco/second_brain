@@ -36,9 +36,11 @@ SENSOR_SEP = " · "
 # stile → (dimensione del font in px, altezza della riga, distanza della linea di base dal
 # bordo alto della riga). Scelte guardando le anteprime: a 11 px il grassetto esce con tratti
 # da 1 punto e sembra un light; 15 px ha le stesse maiuscole del 16 (11 punti) e con righe da
-# 15 OGGI 3 + DOMANI 2 + SPESA + una riga di sensori stanno nei 136 punti (135).
+# 15 OGGI 3 + DOMANI 2 + SPESA + una riga di sensori stanno nei 136 punti (135). La linea
+# di base dei titoli a 9 lascia la prima fila bianca: le maiuscole (8 punti) non toccano il
+# bordo alto né le discendenti della riga sopra.
 STYLES = {
-    "head": (12, 10, 8),
+    "head": (12, 10, 9),
     "item": (15, 15, 12),
     "small": (12, 12, 10),
 }
@@ -184,7 +186,13 @@ def render(snapshot: Snapshot, now: datetime, tz: ZoneInfo, *, shopping: bool) -
     rows = lines(snapshot, now, tz, shopping=shopping)
     small = [r for r in rows if r[0] == "small"]
     body = [r for r in rows if r[0] != "small"]
-    room = HEIGHT - sum(STYLES[s][1] for s, _ in small)
+    # se la prima riga sporgerebbe sopra y = 0 (es. maiuscola accentata), si scende quanto basta
+    top = 0
+    if body:
+        size, _, baseline = STYLES[body[0][0]]
+        font = _font(size)
+        top = max(0, 1 - (baseline + font.getbbox(_fit(body[0][1], font), anchor="ls")[1]))
+    room = HEIGHT - top - sum(STYLES[s][1] for s, _ in small)
     while body and sum(STYLES[s][1] for s, _ in body) > room:
         body.pop()
     while body and body[-1][0] == "head":       # niente titolo senza righe sotto
@@ -193,7 +201,7 @@ def render(snapshot: Snapshot, now: datetime, tz: ZoneInfo, *, shopping: bool) -
     image = Image.new("1", (WIDTH, HEIGHT), 1)
     draw = ImageDraw.Draw(image)
     draw.fontmode = "1"
-    y = 0
+    y = top
     for style, text in body:
         size, height, baseline = STYLES[style]
         font = _font(size)
