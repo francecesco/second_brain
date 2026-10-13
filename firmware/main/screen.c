@@ -1,4 +1,5 @@
 #include "screen.h"
+#include "config.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -10,6 +11,7 @@
 #define BAT_TIP_W     3
 #define BAT_TIP_H     10
 #define BAT_BORDER    2
+#define FOOT_H        34     // piede della schermata Oggi: coda, rete, esito
 
 static void px(uint8_t *fb, int x, int y, bool black)
 {
@@ -139,14 +141,19 @@ static void draw_battery(uint8_t *fb, const screen_status_t *st)
     draw_text(fb, f, bx - 4 - w, ty, txt, w, true);
 }
 
+// Barra in alto: ora a sinistra, batteria a destra.
+static void draw_bar(uint8_t *fb, const screen_status_t *st)
+{
+    draw_text(fb, &font_grotesk_20, MARGIN, (BAR_H - font_grotesk_20.height) / 2 + 1,
+              st->clock ? st->clock : "--:--", 90, true);
+    draw_battery(fb, st);
+}
+
 void screen_render_status(uint8_t *fb, const screen_status_t *st)
 {
     memset(fb, 0, SCREEN_FB_BYTES);
 
-    // barra in alto: ora a sinistra, batteria a destra, filetto sotto
-    draw_text(fb, &font_grotesk_20, MARGIN, (BAR_H - font_grotesk_20.height) / 2 + 1,
-              st->clock ? st->clock : "--:--", 90, true);
-    draw_battery(fb, st);
+    draw_bar(fb, st);
     rect(fb, 0, BAR_H, SCREEN_W, 2, true);
 
     // rete e coda
@@ -165,6 +172,23 @@ void screen_render_status(uint8_t *fb, const screen_status_t *st)
     const font_t *of = screen_text_width(big, out) <= SCREEN_W - 2 * MARGIN ? big : &font_grotesk_20;
     int oy = band_y + (SCREEN_H - band_y - of->height) / 2;
     draw_text(fb, of, MARGIN, oy, out, SCREEN_W - 2 * MARGIN, false);
+}
+
+void screen_render_today(uint8_t *fb, const screen_status_t *st, const uint8_t *digest)
+{
+    memset(fb, 0, SCREEN_FB_BYTES);
+    draw_bar(fb, st);
+    // l'immagine del backend ha lo stesso formato del framebuffer: copia di righe intere
+    if (digest) memcpy(&fb[SB_DIGEST_Y * (SCREEN_W / 8)], digest, SB_DIGEST_BYTES);
+
+    // piede: "coda N | rete | esito", in negativo su fascia nera se c'e' un allarme
+    int foot_y = SCREEN_H - FOOT_H;
+    if (st->alert) rect(fb, 0, foot_y, SCREEN_W, FOOT_H, true);
+    char line[96];
+    snprintf(line, sizeof(line), "coda %d | %s | %s", st->queue,
+             st->network ? st->network : "no wifi", st->outcome ? st->outcome : "");
+    const font_t *f = &font_grotesk_16;
+    draw_text(fb, f, MARGIN, foot_y + (FOOT_H - f->height) / 2, line, SCREEN_W - 2 * MARGIN, !st->alert);
 }
 
 void screen_render_lines(uint8_t *fb, const char *const lines[], int n)

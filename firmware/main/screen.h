@@ -25,10 +25,16 @@ typedef struct {
     const char      *network;    // nome della rete, NULL senza rete
     int              queue;      // file in coda
     const char      *outcome;    // esito del ciclo, in grande
+    bool             alert;      // schermata Oggi: piede in negativo
 } screen_status_t;
 
 // Schermata di stato: ora e batteria in alto, rete e coda al centro, esito in basso.
 void screen_render_status(uint8_t *fb, const screen_status_t *st);
+
+// Schermata "Oggi": intestazione come screen_render_status (ora e batteria), immagine del
+// backend (SB_DIGEST_W x SB_DIGEST_H, formato del framebuffer) da y = SB_DIGEST_Y, piede su
+// una riga "coda N | rete | esito" (rete "no wifi" se NULL), in negativo se alert.
+void screen_render_today(uint8_t *fb, const screen_status_t *st, const uint8_t *digest);
 
 // Righe di testo centrate verticalmente (DEV MODE, REC, messaggi brevi).
 void screen_render_lines(uint8_t *fb, const char *const lines[], int n);
