@@ -31,3 +31,9 @@ typedef struct {
 // Dopo un wake da timer: refresh se sono stati inviati file o se la vista e' cambiata; la
 // percentuale conta solo se si sposta di almeno SB_BATTERY_DISPLAY_STEP_PCT punti.
 bool status_should_refresh(int sent, const status_view_t *now, const status_view_t *shown);
+
+// Ridisegno a un wake da timer: stato cambiato (status_should_refresh) oppure immagine
+// diversa da quella mostrata. NULL vale "nessuna immagine".
+bool today_should_refresh(bool status_changed, const char *etag_now, const char *etag_shown);
+// Un file dell'immagine e' utilizzabile solo con la dimensione esatta.
+bool digest_size_valid(long size);
