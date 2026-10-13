@@ -175,8 +175,9 @@ def _sensor_value(sensor: ha.SensorValue) -> str:
         return state
     if not math.isfinite(number):
         return state
-    text = state if state.lstrip("-").isdigit() else f"{number:.1f}"
-    text = text.replace(".", ",")
+    # Interi, mezzi lontano da zero: un decimale che balla ridisegnerebbe l'e-Paper ogni 5 minuti.
+    whole = int(math.copysign(math.floor(abs(number) + 0.5), number))
+    text = _clean(str(whole), 40)
     unit = _clean(sensor.unit or "", 20)
     if not unit:
         return text

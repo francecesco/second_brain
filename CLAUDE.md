@@ -430,7 +430,8 @@ cattura, `! ` sugli avvisi, "SD assente" come esito); con il server irraggiungib
 ciclo durava 43 s (21 s di OTA + 17 s di download): se l'OTA non ha risposto non si prova
 il download. Richieste dell'autore dopo averla vista sul device: sensori cercati scrivendo
 (`datalist`) invece di un menu, solo oggi, caratteri più grandi, via le emoji (il font
-mostrava `[?]`), via il titolo, spesa non mostrata. Verificato sull'hardware: download
+mostrava `[?]`), via il titolo, spesa non mostrata; sensori arrotondati a interi dopo aver visto il giardino
+variare di un decimale ogni ora. Verificato sull'hardware: download
 nuovo in ~0,13 s con ETag, `304` con copia su SD all'avvio, ridisegno ai wake da timer solo
 con ETag cambiato, caso server irraggiungibile con schermata di stato classica.
 686 test backend, 52 host. Lezioni: mai due `pytest` insieme sul database di test
@@ -452,9 +453,6 @@ ufficio (da rimettere in `secrets.h` a ogni cambio di rete).
   passati all'arricchimento delle note).
 - **Lista della spesa sul device** con una combinazione di tasti (è già letta e salvata dal
   backend, ma l'immagine Oggi non la mostra).
-- **Arrotondare i sensori** se ridisegnano troppo: con un decimale ogni variazione cambia
-  l'ETag e fa ridisegnare l'e-Paper ai wake da timer; da decidere dopo aver osservato
-  quanti refresh all'ora (aperto con l'autore).
 - **Refresh parziale e-Paper**: contatore che scorre durante la registrazione, meno
   lampeggi.
 - **Batteria** (collegata, 1000 mAh, mantenimento verificato): consumo in deep sleep e per

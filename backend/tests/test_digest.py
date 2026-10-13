@@ -75,13 +75,33 @@ def test_no_heading_and_no_shopping_line_even_with_items():
     assert digest.pack(image) == digest.pack(digest.render(snap(), NOW, TZ))
 
 
-def test_sensors_rounded_with_comma_one_per_row():
+def test_sensors_whole_numbers_one_per_row():
     rows = digest.lines(snap(sensors=[sensor("casa", "21.5", "°C")]), NOW, TZ)
-    assert rows == [("item", digest.EMPTY_DAY), ("rule", ""), ("item", "casa 21,5°C")]
+    assert rows == [("item", digest.EMPTY_DAY), ("rule", ""), ("item", "casa 22°C")]
     rows = digest.lines(snap(sensors=[sensor("casa", "21.46", "°C"), sensor("fuori", "unavailable"),
                                       sensor("umidita bagno", "55", "%")]), NOW, TZ)
-    assert rows[-3:] == [("item", "casa 21,5°C"), ("item", "fuori unavailable"),
+    assert rows[-3:] == [("item", "casa 21°C"), ("item", "fuori unavailable"),
                          ("item", "umidita bagno 55%")]
+
+
+def test_sensor_rounding_half_away_from_zero():
+    def show(state, unit="°C"):
+        return digest._sensor_value(sensor("x", state, unit))
+    assert show("18.5") == "19°C"
+    assert show("22.4") == "22°C"
+    assert show("-0.4") == "0°C"
+    assert show("-1.5") == "-2°C"
+    assert show("55", "%") == "55%"
+    assert show("1013.4", "hPa") == "1013 hPa"
+    assert show("unavailable") == "unavailable"
+    assert show("on", "") == "on"
+
+
+def test_sensor_decimal_drift_keeps_same_etag():
+    def image(value):
+        return digest.pack(digest.render(snap(sensors=[sensor("giardino", value, "°C")]), NOW, TZ))
+    assert digest.etag(image("21.4")) == digest.etag(image("21.2"))
+    assert digest.etag(image("21.4")) != digest.etag(image("22.6"))
 
 
 def test_short_sensors_share_a_row_when_they_fit():

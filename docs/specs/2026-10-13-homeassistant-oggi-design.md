@@ -102,7 +102,8 @@ Assistant mostra l'ultimo dato buono dicendo di quando è.
      programma` se non c'è niente; la prima riga parte 3 punti sotto il bordo alto;
   2. se ci sono sensori, un filetto orizzontale da 1 punto (4 di bianco sopra e sotto), poi
      i sensori `etichetta valore`, uno per riga; due sulla stessa riga, separati da ` · `,
-     solo se ci stanno. La lista della spesa **non** è nell'immagine.
+     solo se ci stanno. I valori numerici sono interi (mezzi arrotondati lontano da zero,
+     `-0,4` è `0`), così un decimale che oscilla non cambia l'ETag. La lista della spesa **non** è nell'immagine.
   Righe a 20 px (sotto, il grassetto a 1 bit esce con tratti da 1 punto e sul pannello non
   si legge), `agg. HH:MM` a 14 px. Con 4 eventi, il filetto e due sensori l'immagine è piena
   (132 punti su 136); un titolo sta in ~16 caratteri.
