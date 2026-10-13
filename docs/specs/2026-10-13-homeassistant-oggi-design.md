@@ -5,7 +5,12 @@
 prima prova sul device e con la Home Assistant vera dell'autore (2026-10-13)**: la
 schermata mostra solo oggi (niente DOMANI), caratteri più grandi (righe a 20 px), spesa in
 una riga, emoji e caratteri che il font non ha tolti dai testi; nella card i sensori si
-cercano scrivendo invece che da un menu a tendina (§3, §5).
+cercano scrivendo invece che da un menu a tendina (§3, §5). **Dopo la prova sul device con
+le fasce nere di intestazione e piede (2026-10-13)**: niente titolo "OGGI" (il calendario di
+oggi è implicito), 3 punti d'aria sotto la fascia nera, filetto da 1 punto tra eventi e
+sensori (solo se ci sono entrambi), eventi fino a 4 (con 2 sensori e il filetto stanno in
+132 punti; con "agg." un sensore salta), spesa fuori dall'immagine (resta letta e salvata:
+si mostrerà con una combinazione di tasti).
 
 ## 1. Obiettivo
 
@@ -92,12 +97,12 @@ Assistant mostra l'ultimo dato buono dicendo di quando è.
 - **Disegno** (`digest.py`, Pillow, testo senza sfumature): Space Grotesk della UI convertito
   una volta in TTF e tenuto nel repo (licenza OFL). Righe in ordine di priorità, tagliate dal
   fondo se non c'è posto:
-  1. **OGGI** (titolo a 16 px): eventi di oggi non finiti, al massimo 3, prima quelli di
-     tutto il giorno o iniziati prima di oggi, poi `09:30 Titolo…` (taglio con "…");
-     `nulla in programma` se non c'è niente;
-  2. una riga `Spesa: N articoli` (o `1 articolo`, `vuota`), senza titolo;
-  3. sensori `etichetta valore`, uno per riga; due sulla stessa riga, separati da ` · `,
-     solo se ci stanno.
+  1. eventi di oggi non finiti, **senza titolo**, al massimo 4, prima quelli di tutto il
+     giorno o iniziati prima di oggi, poi `09:30 Titolo…` (taglio con "…"); `nulla in
+     programma` se non c'è niente; la prima riga parte 3 punti sotto il bordo alto;
+  2. se ci sono sensori, un filetto orizzontale da 1 punto (4 di bianco sopra e sotto), poi
+     i sensori `etichetta valore`, uno per riga; due sulla stessa riga, separati da ` · `,
+     solo se ci stanno. La lista della spesa **non** è nell'immagine.
   Righe a 20 px (sotto, il grassetto a 1 bit esce con tratti da 1 punto e sul pannello non
   si legge), `agg. HH:MM` a 14 px. Con un evento di tutto il giorno, due a orario, la spesa
   e due sensori l'immagine è piena (134 punti su 136); un titolo sta in ~16 caratteri.
