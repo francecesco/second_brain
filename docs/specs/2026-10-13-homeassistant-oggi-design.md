@@ -104,8 +104,8 @@ Assistant mostra l'ultimo dato buono dicendo di quando è.
      i sensori `etichetta valore`, uno per riga; due sulla stessa riga, separati da ` · `,
      solo se ci stanno. La lista della spesa **non** è nell'immagine.
   Righe a 20 px (sotto, il grassetto a 1 bit esce con tratti da 1 punto e sul pannello non
-  si legge), `agg. HH:MM` a 14 px. Con un evento di tutto il giorno, due a orario, la spesa
-  e due sensori l'immagine è piena (134 punti su 136); un titolo sta in ~16 caratteri.
+  si legge), `agg. HH:MM` a 14 px. Con 4 eventi, il filetto e due sensori l'immagine è piena
+  (132 punti su 136); un titolo sta in ~16 caratteri.
   "Oggi" nel fuso dell'archivio; domani non si mostra (il 2026-10-13, dopo la prova sul
   device: con i caratteri grandi non c'era posto e l'autore preferisce leggere bene oggi).
   Dai testi (titoli, etichette e stati dei sensori) si tolgono i caratteri che il font non
