@@ -270,13 +270,15 @@ td .actions { margin: 0; }
 .ha-entities legend { padding: 0 .4rem 0 0; }
 .ha-entities label.check { align-items: flex-start; overflow-wrap: anywhere; }
 .ha-entities label.check input { margin-top: .25rem; flex: none; }
-.ha-sensor { display: grid; gap: .25rem; }
-.ha-sensor > input { margin-left: 1.5rem; max-width: 14rem; }
+.ha-sensor { display: grid; grid-template-columns: minmax(0, 1fr) 9rem; gap: .35rem; }
+.ha-sensor select { width: 100%; max-width: 100%; min-width: 0; text-overflow: ellipsis; }
+.ha-sensor input { width: 100%; min-width: 0; }
 /* l'immagine è già 2× (400 px): niente sfumature quando si riduce sul telefono */
 .ha-preview { display: block; width: 400px; max-width: 100%; height: auto; image-rendering: pixelated; border: 1px solid var(--line); margin: .5rem 0; }
 
 
 @media (max-width: 700px) {
+  .ha-sensor { grid-template-columns: minmax(0, 1fr); }
   .layout { display: block; padding: 6px; }
   .tree { width: auto; margin-bottom: 6px; padding: .5rem .2rem 0; }
   .tree > .tree-toggle { margin: 0 0 0 .5rem; }

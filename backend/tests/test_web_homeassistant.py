@@ -83,8 +83,8 @@ def test_prova_ok_and_401(ui):
 def test_load_entities_with_saved_and_missing_choices(ui, db):
     connect(ui)
     ui.client.post("/settings/homeassistant/choices", data=form(
-        ui, calendars=["calendar.casa", "calendar.sparito"], sensors=["sensor.t_soggiorno"],
-        **{"label_sensor.t_soggiorno": "casa"}, shopping_list="todo.shopping_list"))
+        ui, calendars=["calendar.casa", "calendar.sparito"], sensor_1="sensor.t_soggiorno",
+        label_1="casa", shopping_list="todo.shopping_list"))
     mock_http(ui.client, hass)
     r = ui.client.get("/settings/homeassistant/entities", headers={"HX-Request": "true"})
     text = r.text
@@ -92,13 +92,73 @@ def test_load_entities_with_saved_and_missing_choices(ui, db):
     assert 'name="calendars" value="calendar.casa" checked' in text
     assert 'name="calendars" value="calendar.differenziata">' in text
     assert 'name="calendars" value="calendar.sparito" checked' in text and "non trovata" in text
-    assert 'name="sensors" value="sensor.t_soggiorno" checked' in text
-    assert 'name="label_sensor.t_soggiorno"' in text and 'value="casa"' in text
+    assert 'name="sensor_1"' in text and 'name="sensor_6"' in text and 'name="sensor_7"' not in text
+    assert 'value="sensor.t_soggiorno" selected' in text and 'name="label_1"' in text
+    assert 'name="sensors"' not in text
     assert f'maxlength="{ha_store.MAX_LABEL_LEN}"' in text
     assert 'name="shopping_list" value="todo.shopping_list" checked' in text
     assert 'name="shopping_list" value=""' in text
     assert "light.cucina" not in text
     assert f'value="{ui.csrf}"' in text
+
+
+def saved_sensors(ui, **rows):
+    ui.client.post("/settings/homeassistant/choices", data=form(ui, **rows))
+
+
+def rows_html(ui):
+    mock_http(ui.client, hass)
+    return ui.client.get("/settings/homeassistant/entities", headers={"HX-Request": "true"}).text
+
+
+def test_sensor_rows_are_prefilled_in_saved_order(ui, db):
+    connect(ui)
+    saved_sensors(ui, sensor_1="sensor.umidita", label_1="umidita",
+                  sensor_2="sensor.t_soggiorno", label_2="casa")
+    text = rows_html(ui)
+    row1 = text[text.index('name="sensor_1"'):text.index('name="sensor_2"')]
+    row2 = text[text.index('name="sensor_2"'):text.index('name="sensor_3"')]
+    assert 'value="sensor.umidita" selected' in row1 and 'value="umidita"' in row1
+    assert 'value="sensor.t_soggiorno" selected' in row2 and 'value="casa"' in row2
+    assert row1.count("selected") == 1 and 'aria-label="Sensore 1"' in text
+    row3 = text[text.index('name="sensor_3"'):text.index('name="sensor_4"')]
+    assert "selected" not in row3 and "— nessuno —" in row3 and "sensor.t_soggiorno" in row3
+
+
+def test_missing_saved_sensor_is_an_extra_selected_option(ui, db):
+    connect(ui)
+    saved_sensors(ui, sensor_1="sensor.sparito", label_1="x")
+    text = rows_html(ui)
+    row1 = text[text.index('name="sensor_1"'):text.index('name="sensor_2"')]
+    assert 'value="sensor.sparito" selected' in row1 and "non trovato" in row1
+    assert "sensor.sparito" not in text[text.index('name="sensor_2"'):]
+
+
+def test_two_rows_and_an_empty_one_keep_row_order(ui, db):
+    connect(ui)
+    saved_sensors(ui, sensor_1="sensor.umidita", label_1="u", sensor_2="",
+                  label_2="orfana", sensor_4="sensor.t_soggiorno", label_4="")
+    db.expire_all()
+    assert ha_store.get_config(db).sensors == (ha.SensorChoice("sensor.umidita", "u"),
+                                               ha.SensorChoice("sensor.t_soggiorno", None))
+
+
+def test_duplicate_sensor_in_two_rows_is_saved_once(ui, db):
+    connect(ui)
+    saved_sensors(ui, sensor_1="sensor.umidita", label_1="prima",
+                  sensor_2="sensor.umidita", label_2="seconda")
+    db.expire_all()
+    assert ha_store.get_config(db).sensors == (ha.SensorChoice("sensor.umidita", "prima"),)
+
+
+def test_bad_sensor_in_a_row_saves_nothing(ui, db):
+    connect(ui)
+    saved_sensors(ui, sensor_1="sensor.umidita")
+    r = ui.client.post("/settings/homeassistant/choices", data=form(
+        ui, sensor_1="sensor.t_soggiorno", sensor_5="sensor.<x>"))
+    assert r.status_code == 400
+    db.expire_all()
+    assert ha_store.get_config(db).sensors == (ha.SensorChoice("sensor.umidita", None),)
 
 
 def test_load_entities_errors(ui):
@@ -113,9 +173,8 @@ def test_load_entities_errors(ui):
 def test_save_choices_with_labels(ui, db):
     connect(ui)
     r = ui.client.post("/settings/homeassistant/choices", data=form(
-        ui, calendars=["calendar.casa"], sensors=["sensor.t_soggiorno", "sensor.umidita"],
-        **{"label_sensor.t_soggiorno": "  soggiorno  ", "label_sensor.umidita": ""},
-        shopping_list=""), follow_redirects=False)
+        ui, calendars=["calendar.casa"], sensor_1="sensor.t_soggiorno", label_1="  soggiorno  ",
+        sensor_2="sensor.umidita", label_2="", shopping_list=""), follow_redirects=False)
     assert (r.status_code, r.headers["location"]) == (303, "/settings#homeassistant")
     db.expire_all()
     config = ha_store.get_config(db)
@@ -129,7 +188,7 @@ def test_save_choices_with_labels(ui, db):
 
 def test_save_choices_rejects_bad_entity_ids(ui, db):
     connect(ui)
-    for data in ({"calendars": ["calendar.casa<script>"]}, {"sensors": ["Sensor.X"]},
+    for data in ({"calendars": ["calendar.casa<script>"]}, {"sensor_1": "Sensor.X"}, {"sensor_3": "calendar.casa"},
                  {"shopping_list": "todo.lista spesa"}, {"calendars": ["sensor.t_soggiorno"]}):
         r = ui.client.post("/settings/homeassistant/choices", data=form(ui, **data))
         assert r.status_code == 400, data

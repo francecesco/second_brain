@@ -18,6 +18,7 @@ TOKEN_KEY = "homeassistant_token"
 SNAPSHOT_KEY = "homeassistant_snapshot"
 REFRESH_KEY = "homeassistant_refresh"
 MAX_LABEL_LEN = 24
+MAX_SENSOR_ROWS = 6      # sensori scelti: quanti ne mostra la schermata Oggi, righe del form
 
 
 @dataclass(frozen=True)

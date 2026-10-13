@@ -10,11 +10,16 @@
   </fieldset>
   <fieldset>
     <legend class="lab">Sensori</legend>
-    {% for c in sensors %}<div class="ha-sensor">
-      <label class="check"><input type="checkbox" name="sensors" value="{{ c.entity_id }}"{% if c.checked %} checked{% endif %}> <span>{{ entity(c) }}</span></label>
-      <input name="label_{{ c.entity_id }}" value="{{ c.label }}" maxlength="{{ max_label }}" placeholder="etichetta breve" aria-label="Etichetta di {{ c.name }}">
+    {% for r in sensor_rows %}<div class="ha-sensor">
+      <select name="sensor_{{ r.n }}" aria-label="Sensore {{ r.n }}">
+        <option value="">— nessuno —</option>
+        {% if r.missing %}<option value="{{ r.entity_id }}" selected>{{ r.entity_id }} (non trovato)</option>{% endif %}
+        {% for o in sensor_options %}<option value="{{ o.entity_id }}"{% if o.entity_id == r.entity_id %} selected{% endif %}>{% if o.name != o.entity_id %}{{ o.name }} ({{ o.entity_id }}){% else %}{{ o.entity_id }}{% endif %}</option>
+        {% endfor %}
+      </select>
+      <input name="label_{{ r.n }}" value="{{ r.label }}" maxlength="{{ max_label }}" placeholder="etichetta" aria-label="Etichetta {{ r.n }}">
     </div>
-    {% else %}<p>Nessun sensore in Home Assistant.</p>{% endfor %}
+    {% endfor %}
   </fieldset>
   <fieldset>
     <legend class="lab">Lista della spesa</legend>

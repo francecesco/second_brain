@@ -117,11 +117,17 @@ def entities(request: Request, db: Session = Depends(get_db),
         listed = ha.list_entities(request.app.state.http, config.url, token)
     except ha.HaError as exc:
         return _result(False, str(exc))
+    chosen = list(config.sensors)[:ha_store.MAX_SENSOR_ROWS]
+    listed_sensors = {e.entity_id for e in listed["sensor"]}
+    rows = [{"n": i + 1, "entity_id": chosen[i].entity_id if i < len(chosen) else "",
+             "label": (chosen[i].label or "") if i < len(chosen) else "",
+             "missing": i < len(chosen) and chosen[i].entity_id not in listed_sensors}
+            for i in range(ha_store.MAX_SENSOR_ROWS)]
     shopping = {config.shopping_list: ""} if config.shopping_list else {}
     return templates.TemplateResponse(request, "_homeassistant_entities.html", {
         "csrf": session.csrf_token, "max_label": ha_store.MAX_LABEL_LEN,
         "calendars": _choices(listed["calendar"], {c: "" for c in config.calendars}),
-        "sensors": _choices(listed["sensor"], {x.entity_id: x.label or "" for x in config.sensors}),
+        "sensor_options": listed["sensor"], "sensor_rows": rows,
         "lists": _choices(listed["todo"], shopping), "no_list": not config.shopping_list})
 
 
@@ -142,17 +148,21 @@ async def save_choices(request: Request, db: Session = Depends(get_db),
                        session: WebSession = Depends(require_csrf)):
     data = await request.form()
     calendars = _entity_ids(data.getlist("calendars"), "calendar")
-    sensors = _entity_ids(data.getlist("sensors"), "sensor")
+    picked = [(data.get(f"sensor_{n}"), data.get(f"label_{n}"))
+              for n in range(1, ha_store.MAX_SENSOR_ROWS + 1)]
+    sensors = _entity_ids([eid for eid, _ in picked if eid], "sensor")
     shopping = data.get("shopping_list") or ""
     lists = _entity_ids([shopping] if shopping else [], "todo")
     if calendars is None or sensors is None or lists is None:
         return PlainTextResponse("entità non valida", status_code=400)
     if ha_store.get_config(db) is None:
         return _card_error(request, db, session, CHOICES_FIRST, 409)
-    labels = [data.get(f"label_{eid}") for eid in sensors]
-    ha_store.save_choices(db, calendars,
-                          [ha.SensorChoice(eid, label if isinstance(label, str) else None)
-                           for eid, label in zip(sensors, labels)],
+    # righe in ordine, la prima occorrenza di un sensore vince (con la sua etichetta)
+    chosen: dict[str, str | None] = {}
+    for eid, label in picked:
+        if eid and eid not in chosen:
+            chosen[eid] = label if isinstance(label, str) else None
+    ha_store.save_choices(db, calendars, [ha.SensorChoice(e, lb) for e, lb in chosen.items()],
                           lists[0] if lists else None)
     ha_store.request_refresh(db, request.app.state.clock())
     db.commit()
