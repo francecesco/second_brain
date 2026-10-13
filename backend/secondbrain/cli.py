@@ -288,7 +288,8 @@ def _worker(args: argparse.Namespace) -> None:
     worker = Worker(sessionmaker=catalog.make_sessionmaker(engine),
                     archive=Archive(settings.archive_dir), tz=settings.tz_archive, box=box,
                     factory=lambda config: build_provider(config, client),
-                    vault=Vault(settings.vault_dir), public_url=settings.public_url)
+                    vault=Vault(settings.vault_dir), public_url=settings.public_url,
+                    http=client)
     try:
         run_forever(worker, stop)
     finally:

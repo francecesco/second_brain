@@ -17,7 +17,7 @@ import threading
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import datetime, time, timedelta
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -25,7 +25,9 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
-from . import jobs, notefile, notes, search, textnotes, vault_sync
+import httpx
+
+from . import ha_store, homeassistant, jobs, notefile, notes, search, textnotes, vault_sync
 from . import settings_store as store
 from .ai import chain
 from .ai.audio import AudioError, AudioSource
@@ -45,6 +47,7 @@ LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 POLL_INTERVAL_S = 5.0
 VAULT_CHECK_INTERVAL_S = 60.0   # modifiche da Obsidian (spec vault §7)
 VAULT_CHECK_KEY = "vault_check"
+HA_REFRESH_S = 300   # lettura di Home Assistant (spec Home Assistant e Oggi)
 AI_SCHEMA_VERSION = 1
 TEMP_PREFIX = "secondbrain-audio-"
 IDLE_NO_KEY = "SETTINGS_KEY non impostata"
@@ -85,8 +88,10 @@ class Worker:
     clock: Callable[[], datetime] = utcnow
     vault: Vault | None = None          # None solo nei test vecchi: la nota resta accanto al WAV
     public_url: str | None = None
+    http: httpx.Client | None = None    # per Home Assistant; None = nessuna lettura
     _idle_reason: str | None = field(default=None, init=False)
     _last_vault_check: datetime | None = field(default=None, init=False)
+    _last_ha_refresh: datetime | None = field(default=None, init=False)
 
     def run_once(self) -> bool:
         """Elabora al più un lavoro; False se non c'era niente da fare o non si può."""
@@ -124,6 +129,41 @@ class Worker:
             store.set_setting(s, VAULT_CHECK_KEY, {"at": now.isoformat(), "notes": notes_count,
                                                    "changed": report.changed,
                                                    "problems": report.problems[:20]})
+            s.commit()
+        return True
+
+    def maybe_refresh_homeassistant(self) -> bool:
+        """Legge Home Assistant al primo giro, ogni HA_REFRESH_S o su richiesta della UI.
+
+        True se ha provato a leggere (anche se e' fallita: l'errore sta nell'istantanea).
+        """
+        if self.http is None:
+            return False
+        now = self.clock()
+        with self.sessionmaker() as s:
+            config = ha_store.get_config(s)
+            token = ha_store.get_token(s, self.box) if config else None
+            if config is None or not token:
+                return False
+            due = (self._last_ha_refresh is None
+                   or (now - self._last_ha_refresh).total_seconds() >= HA_REFRESH_S
+                   or ha_store.refresh_requested_after(s, self._last_ha_refresh))
+            if not due:
+                return False
+        self._last_ha_refresh = now
+        local = now.astimezone(self.tz)
+        end = datetime.combine(local.date() + timedelta(days=2), time.min, tzinfo=self.tz)
+        try:
+            reading = homeassistant.read(self.http, config, token, now, end)
+            error = None
+        except homeassistant.HaError as exc:  # il messaggio non contiene mai il token
+            reading, error = None, str(exc)
+            log.warning("Home Assistant: %s", error)
+        with self.sessionmaker() as s:
+            if reading is not None:
+                ha_store.save_reading(s, reading, now)
+            else:
+                ha_store.save_error(s, error, now)
             s.commit()
         return True
 
@@ -358,6 +398,10 @@ def run_forever(worker, stop: threading.Event, interval: float = POLL_INTERVAL_S
             except SQLAlchemyError:
                 log.exception("database non raggiungibile, riprovo tra poco")
                 busy = False
+            try:
+                worker.maybe_refresh_homeassistant()
+            except Exception:  # noqa: BLE001 - Home Assistant non deve fermare il worker
+                log.exception("lettura di Home Assistant interrotta, riprovo al prossimo giro")
             if not busy:
                 try:
                     worker.maybe_check_vault()
