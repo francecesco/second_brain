@@ -93,7 +93,11 @@ def test_load_entities_with_saved_and_missing_choices(ui, db):
     assert 'name="calendars" value="calendar.differenziata">' in text
     assert 'name="calendars" value="calendar.sparito" checked' in text and "non trovata" in text
     assert 'name="sensor_1"' in text and 'name="sensor_6"' in text and 'name="sensor_7"' not in text
-    assert 'value="sensor.t_soggiorno" selected' in text and 'name="label_1"' in text
+    assert 'name="sensor_1" value="sensor.t_soggiorno" list="ha-sensors"' in text
+    assert 'name="label_1"' in text and "<select" not in text.split("Sensori")[1].split("Lista")[0]
+    assert text.count('<datalist id="ha-sensors">') == 1
+    assert '<option value="sensor.t_soggiorno" label="Temperatura soggiorno">' in text
+    assert 'placeholder="cerca un sensore"' in text
     assert 'name="sensors"' not in text
     assert f'maxlength="{ha_store.MAX_LABEL_LEN}"' in text
     assert 'name="shopping_list" value="todo.shopping_list" checked' in text
@@ -111,27 +115,43 @@ def rows_html(ui):
     return ui.client.get("/settings/homeassistant/entities", headers={"HX-Request": "true"}).text
 
 
-def test_sensor_rows_are_prefilled_in_saved_order(ui, db):
+def row_html(text, n):
+    start = text.index(f'name="sensor_{n}"')
+    end = text.index(f'name="sensor_{n + 1}"') if n < ha_store.MAX_SENSOR_ROWS else text.index("<datalist")
+    return text[start:end]
+
+
+def test_sensor_rows_are_prefilled_in_saved_order_with_friendly_name(ui, db):
     connect(ui)
-    saved_sensors(ui, sensor_1="sensor.umidita", label_1="umidita",
-                  sensor_2="sensor.t_soggiorno", label_2="casa")
+    saved_sensors(ui, sensor_1="sensor.t_soggiorno", label_1="casa",
+                  sensor_2="sensor.umidita", label_2="umidita")
     text = rows_html(ui)
-    row1 = text[text.index('name="sensor_1"'):text.index('name="sensor_2"')]
-    row2 = text[text.index('name="sensor_2"'):text.index('name="sensor_3"')]
-    assert 'value="sensor.umidita" selected' in row1 and 'value="umidita"' in row1
-    assert 'value="sensor.t_soggiorno" selected' in row2 and 'value="casa"' in row2
-    assert row1.count("selected") == 1 and 'aria-label="Sensore 1"' in text
-    row3 = text[text.index('name="sensor_3"'):text.index('name="sensor_4"')]
-    assert "selected" not in row3 and "— nessuno —" in row3 and "sensor.t_soggiorno" in row3
+    row1, row2, row3 = row_html(text, 1), row_html(text, 2), row_html(text, 3)
+    assert 'name="sensor_1" value="sensor.t_soggiorno"' in text and 'value="casa"' in row1
+    assert "Temperatura soggiorno" in row1 and "non trovato" not in row1
+    assert 'name="sensor_2" value="sensor.umidita"' in text and 'value="umidita"' in row2
+    assert 'aria-label="Sensore 1"' in text
+    assert 'name="sensor_3" value=""' in text and "non trovato" not in row3
+    assert "Temperatura soggiorno" not in row3
 
 
-def test_missing_saved_sensor_is_an_extra_selected_option(ui, db):
+def test_missing_saved_sensor_is_prefilled_and_marked_not_found(ui, db):
     connect(ui)
     saved_sensors(ui, sensor_1="sensor.sparito", label_1="x")
     text = rows_html(ui)
-    row1 = text[text.index('name="sensor_1"'):text.index('name="sensor_2"')]
-    assert 'value="sensor.sparito" selected' in row1 and "non trovato" in row1
-    assert "sensor.sparito" not in text[text.index('name="sensor_2"'):]
+    assert 'name="sensor_1" value="sensor.sparito"' in text and "non trovato" in row_html(text, 1)
+    assert "sensor.sparito" not in text[text.index('name="sensor_2"'):]   # non nella lista
+
+
+def test_typed_sensor_not_in_home_assistant_is_saved(ui, db):
+    """Senza una chiamata in più a HA al salvataggio: un id valido si salva comunque e la
+    card lo mostra come "non trovato"."""
+    connect(ui)
+    r = ui.client.post("/settings/homeassistant/choices",
+                       data=form(ui, sensor_1="sensor.scritto_a_mano"), follow_redirects=False)
+    assert r.status_code == 303
+    db.expire_all()
+    assert ha_store.get_config(db).sensors == (ha.SensorChoice("sensor.scritto_a_mano", None),)
 
 
 def test_two_rows_and_an_empty_one_keep_row_order(ui, db):

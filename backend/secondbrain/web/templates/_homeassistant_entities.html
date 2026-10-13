@@ -10,16 +10,23 @@
   </fieldset>
   <fieldset>
     <legend class="lab">Sensori</legend>
+    {# si cerca scrivendo: il browser filtra la lista per entity_id e per nome #}
     {% for r in sensor_rows %}<div class="ha-sensor">
-      <select name="sensor_{{ r.n }}" aria-label="Sensore {{ r.n }}">
-        <option value="">— nessuno —</option>
-        {% if r.missing %}<option value="{{ r.entity_id }}" selected>{{ r.entity_id }} (non trovato)</option>{% endif %}
-        {% for o in sensor_options %}<option value="{{ o.entity_id }}"{% if o.entity_id == r.entity_id %} selected{% endif %}>{% if o.name != o.entity_id %}{{ o.name }} ({{ o.entity_id }}){% else %}{{ o.entity_id }}{% endif %}</option>
-        {% endfor %}
-      </select>
+      <input name="sensor_{{ r.n }}" value="{{ r.entity_id }}" list="ha-sensors" placeholder="cerca un sensore" aria-label="Sensore {{ r.n }}" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="haSensorName(this)">
+      <span class="ha-sensor-name">{% if r.missing %}<span class="count">non trovato</span>{% else %}{{ r.name }}{% endif %}</span>
       <input name="label_{{ r.n }}" value="{{ r.label }}" maxlength="{{ max_label }}" placeholder="etichetta" aria-label="Etichetta {{ r.n }}">
     </div>
     {% endfor %}
+    <datalist id="ha-sensors">{% for o in sensor_options %}<option value="{{ o.entity_id }}"{% if o.name != o.entity_id %} label="{{ o.name }}"{% endif %}>
+    {% endfor %}</datalist>
+    <script>
+    // sotto il campo il nome del sensore scelto, o niente finché non è uno della lista
+    function haSensorName(input) {
+      var hit = Array.prototype.find.call(document.getElementById("ha-sensors").options,
+        function (o) { return o.value === input.value; });
+      input.nextElementSibling.textContent = hit ? hit.label === hit.value ? "" : hit.label : "";
+    }
+    </script>
   </fieldset>
   <fieldset>
     <legend class="lab">Lista della spesa</legend>

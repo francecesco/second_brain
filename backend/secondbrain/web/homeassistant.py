@@ -118,11 +118,15 @@ def entities(request: Request, db: Session = Depends(get_db),
     except ha.HaError as exc:
         return _result(False, str(exc))
     chosen = list(config.sensors)[:ha_store.MAX_SENSOR_ROWS]
-    listed_sensors = {e.entity_id for e in listed["sensor"]}
-    rows = [{"n": i + 1, "entity_id": chosen[i].entity_id if i < len(chosen) else "",
-             "label": (chosen[i].label or "") if i < len(chosen) else "",
-             "missing": i < len(chosen) and chosen[i].entity_id not in listed_sensors}
-            for i in range(ha_store.MAX_SENSOR_ROWS)]
+    names = {e.entity_id: e.name for e in listed["sensor"]}
+    rows = []
+    for i in range(ha_store.MAX_SENSOR_ROWS):
+        eid = chosen[i].entity_id if i < len(chosen) else ""
+        rows.append({"n": i + 1, "entity_id": eid,
+                     "label": (chosen[i].label or "") if i < len(chosen) else "",
+                     # il friendly_name accanto all'entity_id; niente se coincidono
+                     "name": names.get(eid, "") if names.get(eid) != eid else "",
+                     "missing": bool(eid) and eid not in names})
     shopping = {config.shopping_list: ""} if config.shopping_list else {}
     return templates.TemplateResponse(request, "_homeassistant_entities.html", {
         "csrf": session.csrf_token, "max_label": ha_store.MAX_LABEL_LEN,
