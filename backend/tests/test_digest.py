@@ -33,7 +33,7 @@ def texts(rows):
     return [t for _, t in rows]
 
 
-def test_events_today_sorted_all_day_first_finished_excluded_max_three():
+def test_events_today_sorted_all_day_first_finished_excluded_max_three_no_tomorrow():
     events = [
         ev("Dentista", at("15:00"), at("16:00")),
         ev("Colazione", at("07:00"), at("08:00")),               # già finito
@@ -46,9 +46,8 @@ def test_events_today_sorted_all_day_first_finished_excluded_max_three():
     rows = digest.lines(snap(events), NOW, TZ, shopping=False)
     assert rows[:4] == [("head", "OGGI"), ("item", "Compleanno"), ("item", "09:30 Riunione"),
                         ("item", "15:00 Dentista")]
-    assert rows[4:7] == [("head", "DOMANI"), ("item", "Carta"), ("item", "18:00 Palestra")]
-    assert "Carta" not in texts(rows[:4])
-    assert "Cena" not in " ".join(texts(rows))
+    assert len(rows) == 4             # solo oggi: niente sezione per domani
+    assert not hasattr(digest, "MAX_TOMORROW")
 
 
 def test_event_across_midnight_is_today_yesterday_all_day_is_not():
@@ -60,29 +59,36 @@ def test_event_across_midnight_is_today_yesterday_all_day_is_not():
     assert ("head", "DOMANI") not in rows
 
 
-def test_nothing_today_and_tomorrow_section_omitted():
+def test_nothing_today():
     rows = digest.lines(snap(), NOW, TZ, shopping=False)
-    assert rows == [("head", "OGGI"), ("item", "niente in programma")]
+    assert rows == [("head", "OGGI"), ("item", digest.EMPTY_DAY)]
 
 
-def test_shopping_counts_and_section_omitted_without_list():
+def test_shopping_is_one_line_and_omitted_without_list():
     def spesa(n):
         rows = digest.lines(snap(shopping=[f"voce {i}" for i in range(n)]), NOW, TZ, shopping=True)
-        i = rows.index(("head", "SPESA"))
-        return rows[i + 1]
-    assert spesa(0) == ("item", "vuota")
-    assert spesa(1) == ("item", "1 articolo")
-    assert spesa(5) == ("item", "5 articoli")
+        assert [s for s, _ in rows] == ["head", "item", "item"]       # senza titolo SPESA
+        return rows[-1]
+    assert spesa(0) == ("item", "Spesa: vuota")
+    assert spesa(1) == ("item", "Spesa: 1 articolo")
+    assert spesa(5) == ("item", "Spesa: 5 articoli")
     rows = digest.lines(snap(shopping=["latte"]), NOW, TZ, shopping=False)
-    assert ("head", "SPESA") not in rows
+    assert not any("Spesa" in t for t in texts(rows))
 
 
-def test_sensors_rounded_with_comma_two_per_row():
+def test_sensors_rounded_with_comma_one_per_row():
     rows = digest.lines(snap(sensors=[sensor("casa", "21.5", "°C")]), NOW, TZ, shopping=False)
     assert rows[-1] == ("item", "casa 21,5°C")
     rows = digest.lines(snap(sensors=[sensor("casa", "21.46", "°C"), sensor("fuori", "unavailable"),
-                                      sensor("umid", "55", "%")]), NOW, TZ, shopping=False)
-    assert rows[-2:] == [("item", "casa 21,5°C · fuori unavailable"), ("item", "umid 55%")]
+                                      sensor("umidita bagno", "55", "%")]), NOW, TZ, shopping=False)
+    assert rows[-3:] == [("item", "casa 21,5°C"), ("item", "fuori unavailable"),
+                         ("item", "umidita bagno 55%")]
+
+
+def test_short_sensors_share_a_row_when_they_fit():
+    rows = digest.lines(snap(sensors=[sensor("t", "21", "°"), sensor("u", "55", "%"),
+                                      sensor("pressione", "1013", "hPa")]), NOW, TZ, shopping=False)
+    assert rows[-2:] == [("item", "t 21° · u 55%"), ("item", "pressione 1013 hPa")]
 
 
 def test_stale_label_only_after_thirty_minutes():
@@ -129,7 +135,7 @@ def test_overflow_keeps_the_stale_label():
     sensors = [sensor(f"s{i}", "20", "°C") for i in range(6)]
     image = digest.render(snap(events, ["latte"], sensors, fetched_at=NOW - timedelta(hours=2)),
                           NOW, TZ, shopping=True)
-    band = image.crop((0, digest.HEIGHT - 12, digest.WIDTH, digest.HEIGHT))
+    band = image.crop((0, digest.HEIGHT - digest.STYLES["small"][1], digest.WIDTH, digest.HEIGHT))
     assert band.histogram()[0] > 0
 
 
@@ -139,13 +145,39 @@ def test_preview_png_is_scaled():
     assert png.startswith(b"\x89PNG")
 
 
-def test_tomorrow_does_not_repeat_all_day_events_of_today():
+def test_tomorrow_events_are_never_shown():
     events = [ev("Vacanza", "2026-10-12", "2026-10-16"),
               ev("Carta", "2026-10-14", "2026-10-15"),
               ev("Palestra", at("18:00", 14), at("19:00", 14))]
     rows = digest.lines(snap(events), NOW, TZ, shopping=False)
-    assert rows == [("head", "OGGI"), ("item", "Vacanza"), ("head", "DOMANI"),
-                    ("item", "Carta"), ("item", "18:00 Palestra")]
+    assert rows == [("head", "OGGI"), ("item", "Vacanza")]
+
+
+def test_emoji_and_characters_without_glyph_are_removed():
+    events = [ev("🎂 Compleanno di Giulia 🎉", "2026-10-13", "2026-10-14"),
+              ev("☕️Caffè", at("11:00"), at("11:30")),
+              ev("🇮🇹 Partita 👍🏽", at("12:00"), at("13:00")),
+              ev("👨‍👩‍👧", at("14:00"), at("15:00"))]            # resta vuoto: si salta
+    rows = digest.lines(snap(events), NOW, TZ, shopping=False)
+    assert rows == [("head", "OGGI"), ("item", "Compleanno di Giulia"), ("item", "11:00 Caffè"),
+                    ("item", "12:00 Partita")]
+    rows = digest.lines(snap(sensors=[sensor("🌡️ casa", "☀️ sole")]), NOW, TZ, shopping=False)
+    assert rows[-1] == ("item", "casa sole")
+
+
+def test_italian_accents_and_symbols_survive():
+    title = "àèéìòù ÀÈÉÌÒÙ 21° · città…"
+    rows = digest.lines(snap([ev(title, "2026-10-13", "2026-10-14")]), NOW, TZ, shopping=False)
+    assert rows[1] == ("item", title)
+    decomposed = "citta\u0300"                                       # accento combinante
+    rows = digest.lines(snap([ev(decomposed, "2026-10-13", "2026-10-14")]), NOW, TZ, shopping=False)
+    assert rows[1] == ("item", "città")
+
+
+def test_glyph_set_matches_the_font_cmap():
+    ttlib = pytest.importorskip("fontTools.ttLib")
+    cmap = ttlib.TTFont(str(digest.FONT_PATH)).getBestCmap()
+    assert digest.glyphs() == frozenset(cmap)
 
 
 def test_timed_event_started_yesterday_has_no_time():
