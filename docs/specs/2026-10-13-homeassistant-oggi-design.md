@@ -1,7 +1,11 @@
 # Home Assistant e schermata "Oggi" sul device — Design / Spec
 
 **Data:** 2026-10-13
-**Stato:** approvata in chat a sezioni il 2026-10-13, da pianificare.
+**Stato:** approvata in chat a sezioni il 2026-10-13, da pianificare. **Cambiato dopo la
+prima prova sul device e con la Home Assistant vera dell'autore (2026-10-13)**: la
+schermata mostra solo oggi (niente DOMANI), caratteri più grandi (righe a 20 px), spesa in
+una riga, emoji e caratteri che il font non ha tolti dai testi; nella card i sensori si
+cercano scrivendo invece che da un menu a tendina (§3, §5).
 
 ## 1. Obiettivo
 
@@ -17,7 +21,7 @@ scelto dall'autore:
 La connessione si configura dalle Impostazioni (URL, token, entità scelte): niente nomi
 fissi nel codice, così il progetto è utilizzabile anche da altri.
 
-Riuscita: al risveglio il device mostra gli eventi di oggi e domani, gli articoli della
+Riuscita: al risveglio il device mostra gli eventi di oggi, gli articoli della
 spesa e i sensori scelti; ridisegna solo quando qualcosa cambia; senza rete o senza Home
 Assistant mostra l'ultimo dato buono dicendo di quando è.
 
@@ -49,9 +53,14 @@ Assistant mostra l'ultimo dato buono dicendo di quando è.
      (risposta "API running") e mostra ok o l'errore (401, timeout, certificato…).
   2. Dopo una prova riuscita, scelta delle entità da `GET /api/states`, a caselle, con nome
      amichevole ed `entity_id`: calendari (`calendar.*`, multipla), sensori (`sensor.*`,
-     multipla, campo etichetta accanto; vuota = nome amichevole), lista della spesa
+     fino a 6 righe con etichetta accanto, vuota = nome amichevole), lista della spesa
      (`todo.*`, singola, con "nessuna"). Le entità salvate che Home Assistant non elenca
-     più restano visibili come "non trovata".
+     più restano visibili come "non trovata". I sensori (centinaia in una casa vera) si
+     scelgono **scrivendo**: ogni riga ha un campo di testo legato a una sola `datalist` con
+     `entity_id` e nome, che il browser filtra mentre si scrive; sotto il campo il nome del
+     sensore scelto, o "non trovato". Al salvataggio si controlla solo la forma
+     (`sensor.*`): un id valido che Home Assistant non ha si salva e la card lo mostra come
+     "non trovato" (niente chiamata in più a Home Assistant).
   3. Ultima lettura (ora, numero di elementi, ultimo errore) e "Aggiorna ora".
   4. Anteprima dell'immagine per il device (PNG ingrandito).
 - Login e CSRF come le altre impostazioni; il token non compare mai in pagine, log o
@@ -83,12 +92,21 @@ Assistant mostra l'ultimo dato buono dicendo di quando è.
 - **Disegno** (`digest.py`, Pillow, testo senza sfumature): Space Grotesk della UI convertito
   una volta in TTF e tenuto nel repo (licenza OFL). Righe in ordine di priorità, tagliate dal
   fondo se non c'è posto:
-  1. **OGGI**: eventi non finiti, al massimo 3, prima quelli di tutto il giorno, poi
-     `09:30 Titolo…` (taglio con "…");
-  2. **DOMANI**: al massimo 2, prima quelli di tutto il giorno (es. differenziata);
-  3. **SPESA**: `N articoli` o `vuota`;
-  4. sensori `etichetta valore` separati da ` · ` (due per riga).
-  "Oggi"/"domani" nel fuso dell'archivio. Istantanea più vecchia di 30 minuti: riga piccola
+  1. **OGGI** (titolo a 16 px): eventi di oggi non finiti, al massimo 3, prima quelli di
+     tutto il giorno o iniziati prima di oggi, poi `09:30 Titolo…` (taglio con "…");
+     `nulla in programma` se non c'è niente;
+  2. una riga `Spesa: N articoli` (o `1 articolo`, `vuota`), senza titolo;
+  3. sensori `etichetta valore`, uno per riga; due sulla stessa riga, separati da ` · `,
+     solo se ci stanno.
+  Righe a 20 px (sotto, il grassetto a 1 bit esce con tratti da 1 punto e sul pannello non
+  si legge), `agg. HH:MM` a 14 px. Con un evento di tutto il giorno, due a orario, la spesa
+  e due sensori l'immagine è piena (134 punti su 136); un titolo sta in ~16 caratteri.
+  "Oggi" nel fuso dell'archivio; domani non si mostra (il 2026-10-13, dopo la prova sul
+  device: con i caratteri grandi non c'era posto e l'autore preferisce leggere bene oggi).
+  Dai testi (titoli, etichette e stati dei sensori) si tolgono i caratteri che il font non
+  ha (emoji, bandiere, selettori di variante, zero-width joiner, modificatori di
+  carnagione), dopo la normalizzazione NFC: le lettere accentate restano; un evento il cui
+  titolo resta vuoto si salta. Istantanea più vecchia di 30 minuti: riga piccola
   `agg. HH:MM` in fondo.
 
 ## 6. Firmware
