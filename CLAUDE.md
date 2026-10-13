@@ -197,11 +197,9 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
    dal telefono su rete mobile login e blocco dopo 5 tentativi; `sudo reboot` della ZimaBoard con servizi e tunnel che tornano da soli;
    backup (`pg_dump` del README e snapshot di `/mnt/Storage1/secondbrain`, compresa la
    `SETTINGS_KEY` del `.env`).
-2. **Vault con Syncthing** sulla ZimaBoard: `/mnt/Storage1/secondbrain/vault` condiviso col
-   Mac, prova con Obsidian vero.
-3. Tasti: resta da provare l'accensione a batteria da scheda spenta del tutto (PWR tenuto
+2. Tasti: resta da provare l'accensione a batteria da scheda spenta del tutto (PWR tenuto
    ~1 s).
-4. Batteria: scarica completa per la curva della percentuale e misura del consumo per
+3. Batteria: scarica completa per la curva della percentuale e misura del consumo per
    decidere se il wake ogni 5 min regge.
 
 ## Storico
@@ -407,6 +405,10 @@ pubblicata sulla ZimaBoard il 2026-10-12. Lezione: Tailscale verso la ZimaBoard 
 rispondere; in casa `ssh -o HostName=192.168.1.71 zima`.
 
 ## Idee future e cose rimandate
+
+- **Integrazione con Obsidian sospesa** (decisione dell'autore, 2026-10-13): il backend
+  continua a scrivere le note nel vault sulla ZimaBoard, ma Syncthing col Mac e la prova con
+  Obsidian vero non sono più in programma finché l'autore non la riprende.
 
 - **Backend dopo l'elaborazione AI**: adattatore locale (faster-whisper o altro) passando a
   un NAS più potente; divisione in pezzi dell'audio oltre i limiti dei provider (serve solo
