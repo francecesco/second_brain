@@ -63,10 +63,14 @@ def save_connection(s: Session, box: SecretBox, url: str, token: str | None) -> 
     """`token` vuoto o None = token invariato (il campo nel browser è in sola scrittura)."""
     url = ha.clean_url(url)
     new_token = (token or "").strip()
+    old = get_config(s)
+    if (not new_token and old is not None and old.url != url
+            and isinstance(get_setting(s, TOKEN_KEY, None), str)):
+        # il token salvato non deve seguire un indirizzo diverso (reindirizzamento)
+        raise ha.HaError("Cambiando l'URL va reinserito il token")
     if new_token:
         encrypted = box.encrypt(new_token)  # senza SETTINGS_KEY: NoSettingsKey
         set_setting(s, TOKEN_KEY, encrypted)
-    old = get_config(s)
     _put_config(s, ha.HaConfig(url, old.calendars, old.sensors, old.shopping_list)
                 if old else ha.HaConfig(url))
 

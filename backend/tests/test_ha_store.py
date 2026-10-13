@@ -24,11 +24,31 @@ def test_connection_and_token_are_saved_encrypted(db):
     assert "token-finto-per-i-test" not in ha_store.token_status(db, BOX)
 
 
-def test_empty_token_keeps_the_old_one(db):
+def test_empty_token_keeps_the_old_one_on_same_url(db):
     ha_store.save_connection(db, BOX, "http://ha.test:8123", "token-finto-per-i-test")
-    ha_store.save_connection(db, BOX, "http://altro.test:8123", "")
+    ha_store.save_connection(db, BOX, "http://ha.test:8123/", "")
     assert ha_store.get_token(db, BOX) == "token-finto-per-i-test"
+
+
+def test_changed_url_without_new_token_is_refused(db):
+    ha_store.save_connection(db, BOX, "http://ha.test:8123", "token-finto-per-i-test")
+    with pytest.raises(ha.HaError):
+        ha_store.save_connection(db, BOX, "http://altro.test:8123", "")
+    assert ha_store.get_config(db).url == "http://ha.test:8123"
+    assert ha_store.get_token(db, BOX) == "token-finto-per-i-test"
+
+
+def test_changed_url_with_new_token_updates_both(db):
+    ha_store.save_connection(db, BOX, "http://ha.test:8123", "token-finto-per-i-test")
+    ha_store.save_connection(db, BOX, "http://altro.test:8123", "altro-token-finto")
     assert ha_store.get_config(db).url == "http://altro.test:8123"
+    assert ha_store.get_token(db, BOX) == "altro-token-finto"
+
+
+def test_first_configuration_without_token_is_allowed(db):
+    ha_store.save_connection(db, BOX, "http://ha.test:8123", "")
+    assert ha_store.get_config(db).url == "http://ha.test:8123"
+    assert ha_store.get_token(db, BOX) is None
 
 
 def test_without_settings_key_the_token_is_refused(db):
