@@ -13,5 +13,6 @@ RTC_DATA_ATTR static char s_digest[SB_DIGEST_ETAG_MAX];   // "" = nessuna immagi
 const char *retry_state_digest_shown(void) { return s_digest; }
 void retry_state_set_digest_shown(const char *etag)
 {
-    strlcpy(s_digest, etag ? etag : "", sizeof(s_digest));
+    // etag troppo lungo: meglio "nessuna" di una copia troncata (ridisegno a ogni wake)
+    strlcpy(s_digest, digest_etag_storable(etag) ? etag : "", sizeof(s_digest));
 }

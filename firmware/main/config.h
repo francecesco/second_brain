@@ -41,6 +41,7 @@
 #define SB_BATTERY_MIN_RECORD_PCT  10   // sotto: niente registrazione, niente Wi-Fi
 #define SB_BATTERY_MIN_OTA_PCT     30   // sotto: niente OTA pull
 #define SB_BATTERY_DISPLAY_STEP_PCT 2   // a un wake da timer la percentuale ridisegna lo schermo
+                                        // solo se si sposta di tanto (le letture oscillano di 1)
 
 // Schermata Oggi: immagine 1-bit scaricata dal backend (/digest/today), in cache su SD
 #define SB_DIGEST_W          200
@@ -51,7 +52,6 @@
 #define SB_DIGEST_FILE       "digest.bin"
 #define SB_DIGEST_ETAG_FILE  "digest.etag"
 #define SB_DIGEST_TIMEOUT_MS 8000
-                                        // solo se si sposta di tanto (le letture oscillano di 1)
 
 // Rete e sync (§6.3)
 #define SB_WIFI_BUDGET_MS          12000  // dopo la scansione; su AP affollati 8 s non bastano

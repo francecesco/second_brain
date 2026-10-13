@@ -134,3 +134,13 @@ void test_digest_size_valid(void) {
     TEST_ASSERT_FALSE(digest_size_valid(3401));
     TEST_ASSERT_FALSE(digest_size_valid(-1));
 }
+
+void test_digest_etag_storable(void) {
+    char longe[SB_DIGEST_ETAG_MAX + 1];
+    TEST_ASSERT_TRUE(digest_etag_storable("\"abc\""));
+    TEST_ASSERT_FALSE(digest_etag_storable(NULL));
+    memset(longe, 'a', SB_DIGEST_ETAG_MAX - 1); longe[SB_DIGEST_ETAG_MAX - 1] = 0;
+    TEST_ASSERT_TRUE(digest_etag_storable(longe));
+    longe[SB_DIGEST_ETAG_MAX - 1] = 'a'; longe[SB_DIGEST_ETAG_MAX] = 0;
+    TEST_ASSERT_FALSE(digest_etag_storable(longe));
+}

@@ -67,6 +67,7 @@ void test_wake_timer_should_arm(void);
 void test_status_should_refresh(void);
 void test_today_should_refresh(void);
 void test_digest_size_valid(void);
+void test_digest_etag_storable(void);
 void test_timesync_needed(void);
 void test_timesync_tm_to_epoch_utc(void);
 
@@ -119,6 +120,7 @@ void app_main(void) {
     RUN_TEST(test_status_should_refresh);
     RUN_TEST(test_today_should_refresh);
     RUN_TEST(test_digest_size_valid);
+    RUN_TEST(test_digest_etag_storable);
     RUN_TEST(test_timesync_needed);
     RUN_TEST(test_timesync_tm_to_epoch_utc);
     RUN_TEST(test_wifi_select_none_visible);

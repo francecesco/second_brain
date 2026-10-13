@@ -29,3 +29,8 @@ bool digest_size_valid(long size)
 {
     return size == SB_DIGEST_BYTES;
 }
+
+bool digest_etag_storable(const char *etag)
+{
+    return etag && strlen(etag) < SB_DIGEST_ETAG_MAX;
+}

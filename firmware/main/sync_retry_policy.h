@@ -37,3 +37,6 @@ bool status_should_refresh(int sent, const status_view_t *now, const status_view
 bool today_should_refresh(bool status_changed, const char *etag_now, const char *etag_shown);
 // Un file dell'immagine e' utilizzabile solo con la dimensione esatta.
 bool digest_size_valid(long size);
+// Un etag entra nella memoria RTC solo intero: troncato non combacerebbe piu' col server e
+// l'immagine verrebbe ridisegnata a ogni wake.
+bool digest_etag_storable(const char *etag);
