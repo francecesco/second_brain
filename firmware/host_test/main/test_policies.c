@@ -144,3 +144,10 @@ void test_digest_etag_storable(void) {
     longe[SB_DIGEST_ETAG_MAX - 1] = 'a'; longe[SB_DIGEST_ETAG_MAX] = 0;
     TEST_ASSERT_FALSE(digest_etag_storable(longe));
 }
+
+void test_digest_should_fetch(void) {
+    TEST_ASSERT_TRUE(digest_should_fetch(true, true, false));
+    TEST_ASSERT_FALSE(digest_should_fetch(false, true, false));   // niente Wi-Fi
+    TEST_ASSERT_FALSE(digest_should_fetch(true, false, false));   // batteria bassa
+    TEST_ASSERT_FALSE(digest_should_fetch(true, true, true));     // server irraggiungibile
+}

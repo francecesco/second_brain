@@ -34,3 +34,8 @@ bool digest_etag_storable(const char *etag)
 {
     return etag && strlen(etag) < SB_DIGEST_ETAG_MAX;
 }
+
+bool digest_should_fetch(bool wifi_ok, bool battery_ok, bool server_unreachable)
+{
+    return wifi_ok && battery_ok && !server_unreachable;
+}

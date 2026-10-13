@@ -40,3 +40,7 @@ bool digest_size_valid(long size);
 // Un etag entra nella memoria RTC solo intero: troncato non combacerebbe piu' col server e
 // l'immagine verrebbe ridisegnata a ogni wake.
 bool digest_etag_storable(const char *etag);
+// Se scaricare l'immagine "Oggi" in questo ciclo: serve rete e batteria sopra la soglia OTA, e
+// il server non deve essere risultato irraggiungibile (connessione fallita all'OTA pull):
+// riprovare costerebbe un altro paio di timeout di connessione.
+bool digest_should_fetch(bool wifi_ok, bool battery_ok, bool server_unreachable);

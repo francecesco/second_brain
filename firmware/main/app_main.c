@@ -41,6 +41,7 @@
 #include "buttons.h"
 #include "button_policy.h"
 #include "digest.h"
+#include "esp_http_client.h"
 
 static const char *TAG = "app";
 
@@ -50,6 +51,7 @@ typedef struct {
     int   sent, rejected, remaining;
     bool  server_error;
     bool  auth_error;
+    bool  server_unreachable; // l'OTA pull non ha potuto connettersi: inutile riprovare con l'immagine Oggi
     char  capture_msg[32];  // "Salvato 0:07" | "Scartato" | "Max 10:00" | "SD assente" | ...
 } cycle_state_t;
 
@@ -236,6 +238,7 @@ static void do_sync(cycle_state_t *st)
         snprintf(manifest_url, sizeof(manifest_url), "%s/firmware/manifest.json", SERVER_BASE_URL);
         esp_err_t r = ota_pull(manifest_url);   // non ritorna se aggiorna
         ESP_LOGI(TAG, "ota_pull -> %s", esp_err_to_name(r));
+        if (r == ESP_ERR_HTTP_CONNECT) st->server_unreachable = true;   // una risposta HTTP, anche d'errore, no
         if (r == ESP_ERR_NOT_ALLOWED) st->auth_error = true; // token rifiutato anche a coda vuota: "token ko"
     }
 }
@@ -313,8 +316,10 @@ static bool load_today(const cycle_state_t *st, uint8_t *buf, char *etag_now, si
 {
     bool cached = st->sd_ok && digest_load(buf, etag_now, etag_len) == ESP_OK;
     if (!cached) etag_now[0] = '\0';
-    if (!st->wifi_ok || battery_below(SB_BATTERY_MIN_OTA_PCT)) {
-        ESP_LOGI(TAG, "digest: skip (%s) etag=%s", st->wifi_ok ? "batteria" : "no wifi", cached ? etag_now : "-");
+    if (!digest_should_fetch(st->wifi_ok, !battery_below(SB_BATTERY_MIN_OTA_PCT), st->server_unreachable)) {
+        ESP_LOGI(TAG, "digest: skip (%s) etag=%s",
+                 !st->wifi_ok ? "no wifi" : st->server_unreachable ? "server irraggiungibile" : "batteria",
+                 cached ? etag_now : "-");
         return cached;
     }
     char etag_new[SB_DIGEST_ETAG_MAX];
