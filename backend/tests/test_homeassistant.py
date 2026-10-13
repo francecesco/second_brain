@@ -125,3 +125,23 @@ def test_other_status_and_bad_url_scheme():
         ha.test(fake(lambda r: httpx.Response(500)), URL, TOKEN)
     with pytest.raises(ha.HaError):
         ha.clean_url("http://")
+
+
+def test_403_reports_the_real_status():
+    with pytest.raises(ha.HaError, match=r"\(403\)") as exc:
+        ha.test(fake(lambda r: httpx.Response(403)), URL, TOKEN)
+    assert "401" not in str(exc.value) and TOKEN not in str(exc.value)
+
+
+def test_malformed_url_is_an_ha_error():
+    def boom(request):
+        raise httpx.InvalidURL("URL malformato")
+    with pytest.raises(ha.HaError, match="URL di Home Assistant non valido"):
+        ha.test(fake(boom), URL, TOKEN)
+
+
+def test_non_ascii_token_is_an_ha_error_without_the_token():
+    bad = "tokén-finto"
+    with pytest.raises(ha.HaError, match="caratteri non ammessi") as exc:
+        ha.test(httpx.Client(), URL, bad)
+    assert bad not in str(exc.value)

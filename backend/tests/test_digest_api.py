@@ -53,3 +53,12 @@ def test_preview_png(ui, db):
     r = ui.client.get("/settings/homeassistant/preview.png")
     assert r.status_code == 200 and r.headers["content-type"] == "image/png"
     assert r.content.startswith(b"\x89PNG")
+
+
+def test_device_hostname_serves_digest_but_not_the_settings_preview(make_client, settings, token, db):
+    from dataclasses import replace
+    configure(db)
+    c = make_client(replace(settings, device_hostname="ingest.example.org"))
+    host = {"Host": "ingest.example.org"}
+    assert c.get("/digest/today", headers={**auth(token), **host}).status_code == 200
+    assert c.get("/settings/homeassistant/preview.png", headers=host).status_code == 404

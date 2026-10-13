@@ -88,10 +88,15 @@ def _request(client: httpx.Client, method: str, url: str, token: str,
         if _is_ssl_error(exc):
             raise HaError("certificato di Home Assistant non valido") from None
         raise HaError("Home Assistant irraggiungibile") from None
+    except httpx.InvalidURL:
+        raise HaError("URL di Home Assistant non valido") from None
+    except UnicodeError:
+        # token con caratteri non ASCII: l'header non si codifica (mai mostrare il token)
+        raise HaError("token non valido (caratteri non ammessi)") from None
     except httpx.HTTPError:
         raise HaError("Home Assistant irraggiungibile") from None
     if response.status_code in (401, 403):
-        raise HaError("token rifiutato da Home Assistant (401)")
+        raise HaError(f"token rifiutato da Home Assistant ({response.status_code})")
     if response.status_code >= 400:
         raise HaError(f"Home Assistant ha risposto {response.status_code}")
     return response
