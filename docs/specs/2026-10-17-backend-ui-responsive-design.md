@@ -4,8 +4,8 @@
 **Stato:** implementato sul branch `backend-ui-responsive` il 2026-10-17 (702 test del
 backend; screenshot dell'app vera a 1440, 1024 e 390 px in chiaro e scuro, nessuno scroll
 orizzontale; prove di interazione: un solo dettaglio aperto nel pannello, × che lo chiude,
-spunta che aggiorna tessere e albero, foglio "Altro" che si chiude toccando fuori). Da
-provare dall'autore sul Mac e dal telefono. Deviazioni: l'ora nelle righe è `HH:MM`
+spunta che aggiorna tessere e albero, foglio "Altro" che si chiude toccando fuori). **Provata
+dall'autore sul Mac il 2026-10-17: approvata.** Deviazioni: l'ora nelle righe è `HH:MM`
 ovunque, anche nella vista del giorno (data e secondi nel `title` dell'elemento `<time>`);
 la tessera "Questa settimana" del mockup è "Ultimi 7 giorni" (oggi compreso); nel pannello
 i tag non si ripetono in testa (ci sono già nel campo "Tag"); i mesi nell'albero vanno dal

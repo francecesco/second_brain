@@ -141,7 +141,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   prima era PWR), oppure push di un firmware, oppure `esptool ... --after hard_reset chip_id`
   con il cavo dati.
 
-## Stato al 2026-10-13
+## Stato al 2026-10-17
 
 - Tutto su `master`, compreso il backend (`backend-fase1b` e `backend-elaborazione-ai` uniti).
   `origin` (`github.com/francecesco/second_brain`, pubblico) allineato a `master` il
@@ -202,10 +202,19 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   minuto le modifiche fatte in Obsidian, `secondbrain vault migrate` ha spostato le note
   esistenti sul Mac. Da provare con Obsidian vero (installazione dell'8 ottobre) e con
   Syncthing sulla ZimaBoard.
+- **UI responsive** (spec `docs/specs/2026-10-17-backend-ui-responsive-design.md`, branch
+  `backend-ui-responsive`, non ancora in `master` né sulla ZimaBoard): "Da fare" come home,
+  raggruppata per giorno; desktop con albero per mesi sempre a sinistra, tessere-contatore e
+  dettaglio in un pannello a destra da 1100 px; telefono con riga in cima e barra in basso
+  (Da fare, Archivio, Nuova, Cerca, Altro). 702 test backend. Provata dall'autore sul Mac il
+  2026-10-17 e approvata.
 - Le catture di prova di `capture_server.py` sono state cancellate il 2026-09-29.
 
 ## Prossima sessione
 
+- **UI responsive**: merge di `backend-ui-responsive` in `master`, push e deploy sulla
+  ZimaBoard quando lo decide l'autore; poi prova dal telefono su
+  `https://secondbrain.cescohomelab.com`.
 0. **Home Assistant in produzione**: se non è già fatto, URL, token e scelte (calendari,
    sensori, lista) nelle Impostazioni di `https://secondbrain.cescohomelab.com`; poi
    controllare la schermata "Oggi" sul device e quante volte ridisegna in un giorno.
@@ -447,6 +456,20 @@ con ETag cambiato, caso server irraggiungibile con schermata di stato classica.
 condiviso (implementatore e revisore si sono pestati due volte); per provare il device
 contro il backend del Mac l'IP del Mac cambia, 192.168.1.43 a casa e 192.168.0.104 in
 ufficio (da rimettere in `secrets.h` a ogni cambio di rete).
+
+**2026-10-17 — UI responsive** (`docs/specs/2026-10-17-backend-ui-responsive-design.md`).
+Sul telefono le pagine erano quelle del desktop impilate. Proposte mostrate prima con mockup
+statici (CSS vero del progetto, Playwright a 390 e 1440 px), poi scelte dall'autore: barra di
+navigazione in basso sul telefono con contenuto riproporzionato, desktop più ricco nello
+stesso stile con la navigazione per mesi sempre a sinistra. Implementazione: `/` e login
+verso `/todo`, gruppi per giorno (`web/groups.py`), tessere (`catalog.todo_tiles`) rimandate
+out-of-band dalla spunta, albero con Liste e anno aperto di default, dettaglio a destra come
+lo stesso `.detail` della riga in `position: fixed` (htmx e azioni invariati), riga in cima,
+barra in basso e foglio "Altro" (`details.menu.more`) sul telefono, tasti più alti al tocco
+e campi a 16 px. Deviazioni dai mockup: ora `HH:MM` ovunque (data e secondi nel `title`),
+"Ultimi 7 giorni" al posto di "Questa settimana", pannello a destra solo da 1100 px.
+Emerso in verifica: `capture_by` nei test fa `expire_all`, quindi va chiamato prima di
+modificare oggetti già caricati. 702 test backend; screenshot dell'app vera in chiaro e scuro.
 
 ## Idee future e cose rimandate
 
