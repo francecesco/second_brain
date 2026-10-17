@@ -61,14 +61,18 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `GET /status` per lo stato, OTA pull pubblicando un manifest sul server di test.
 - ESP-IDF v5.3.1 in `~/esp/esp-idf`: `. ~/esp/esp-idf/export.sh` prima di `idf.py`.
 - Server: dal 2026-10-11 il backend di produzione è sulla **ZimaBoard** (`ssh zima`, utente
-  `casaos`, IP Tailscale; in LAN `192.168.1.71`), in `~/secondbrain` con i dati in
+  `casaos`, IP Tailscale; in LAN `192.168.1.71`), clone del repo in `~/second_brain` (compose
+  in `~/second_brain/backend`, con il suo `.env`) e i dati in
   `/mnt/Storage1/secondbrain`, porta **8100** (la 8000 è di un'altra app, la 8080 di
   Stremio). Fuori: `https://secondbrain.cescohomelab.com`, un solo hostname per UI e
   dispositivi, dal tunnel `cloudflared` che c'era già sulla ZimaBoard (container sulla rete
   Docker di default, servizio verso `172.17.0.1:8100`). Il device usa quell'URL HTTPS da
-  ogni rete. Deploy del codice: sulla ZimaBoard non c'è `rsync`, si usa `git archive
-  --format=tar HEAD:backend | ssh zima 'tar -x -C ~/secondbrain'`, poi `docker compose up
-  -d --build`. Il backend sul Mac (`cd backend && docker compose up -d`, porta 8000) resta
+  ogni rete. **Deploy** (dal 2026-10-17): push di `master` su GitHub dal Mac, poi
+  `ssh zima '~/second_brain/backend/deploy.sh'`, che fa il backup del DB in
+  `/mnt/Storage1/secondbrain/backup/`, `git pull --ff-only` e `docker compose up -d --build`
+  e stampa come tornare indietro. Il clone sulla ZimaBoard serve solo a ricevere: i commit si
+  fanno sul Mac (lì non ci sono credenziali per il push). Il compose ha `name: secondbrain`,
+  quindi i container restano gli stessi da qualunque cartella. Il backend sul Mac (`cd backend && docker compose up -d`, porta 8000) resta
   per lo sviluppo; `tools/capture_server.py` come server di prova minimale.
 - Rete di casa: due AP con lo stesso SSID FASTWEB; quello con BSSID `cc:2d:21:5f:59:29`
   non inoltra TCP (ping ok, connessioni in timeout in entrambe le direzioni). Per questo
@@ -106,7 +110,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 - OTA col backend: `docker compose cp <bin> app:/tmp/fw.bin` e `docker compose exec app
   secondbrain firmware publish /tmp/fw.bin --version X.Y.Z`; il manifest è generato
   dalla release corrente. Sulla ZimaBoard prima `scp <bin> zima:/tmp/` e i comandi dentro
-  `ssh zima 'cd ~/secondbrain && ...'`.
+  `ssh zima 'cd ~/second_brain/backend && ...'`.
 - Audio: l'amplificatore dell'altoparlante (GPIO46) è **attivo alto** e impiega centinaia
   di ms a svegliarsi; il canale I2S TX va aperto solo per il beep (il full-duplex spostava
   il microfono sullo slot sbagliato) con `auto_clear` (altrimenti in underrun ripete
@@ -203,7 +207,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   esistenti sul Mac. Da provare con Obsidian vero (installazione dell'8 ottobre) e con
   Syncthing sulla ZimaBoard.
 - **UI responsive** (spec `docs/specs/2026-10-17-backend-ui-responsive-design.md`, branch
-  `backend-ui-responsive`, non ancora in `master` né sulla ZimaBoard): "Da fare" come home,
+  `backend-ui-responsive`, in `master` e **sulla ZimaBoard dal 2026-10-17**): "Da fare" come home,
   raggruppata per giorno; desktop con albero per mesi sempre a sinistra, tessere-contatore e
   dettaglio in un pannello a destra da 1100 px; telefono con riga in cima e barra in basso
   (Da fare, Archivio, Nuova, Cerca, Altro). 702 test backend. Provata dall'autore sul Mac il
@@ -212,9 +216,6 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
 
 ## Prossima sessione
 
-- **UI responsive**: merge di `backend-ui-responsive` in `master`, push e deploy sulla
-  ZimaBoard quando lo decide l'autore; poi prova dal telefono su
-  `https://secondbrain.cescohomelab.com`.
 0. **Home Assistant in produzione**: se non è già fatto, URL, token e scelte (calendari,
    sensori, lista) nelle Impostazioni di `https://secondbrain.cescohomelab.com`; poi
    controllare la schermata "Oggi" sul device e quante volte ridisegna in un giorno.
@@ -470,6 +471,15 @@ e campi a 16 px. Deviazioni dai mockup: ora `HH:MM` ovunque (data e secondi nel 
 "Ultimi 7 giorni" al posto di "Questa settimana", pannello a destra solo da 1100 px.
 Emerso in verifica: `capture_by` nei test fa `expire_all`, quindi va chiamato prima di
 modificare oggetti già caricati. 702 test backend; screenshot dell'app vera in chiaro e scuro.
+
+**2026-10-17 — Repo e deploy sulla ZimaBoard.** Prima il deploy copiava `backend/` dal Mac
+con `git archive | ssh ... tar` in `~/secondbrain`. Ora sulla ZimaBoard c'è un clone del repo
+pubblico (`~/second_brain`, solo `pull`), con il `.env` copiato in `backend/`; passaggio fatto
+dall'autore con `docker compose down` nella vecchia cartella e `up -d --build` nella nuova,
+senza toccare i dati (`DATA_DIR` assoluto, nome del progetto compose fisso). Deploy con
+`backend/deploy.sh`: backup, `git pull --ff-only`, ricostruzione. Deploy della UI responsive
+fatto così, con backup del DB prima. La vecchia `~/secondbrain` resta come
+`~/secondbrain.old` finché l'autore non la cancella.
 
 ## Idee future e cose rimandate
 

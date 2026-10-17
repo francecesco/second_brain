@@ -331,6 +331,20 @@ del piano di questa fase).
 `DEVICE_HOSTNAME` vuoto: impostato, quell'hostname risponde solo a `/captures` e
 `/firmware/*` e la UI darebbe 404. Gli upload dal tunnel chiedono comunque il token.
 
+## Deploy in produzione
+
+Sul server c'è un clone del repo; il `.env` sta in `backend/` accanto al compose e
+`DATA_DIR` è un percorso assoluto. Dopo il push su GitHub:
+
+```bash
+ssh <server> '~/second_brain/backend/deploy.sh'
+```
+
+Lo script fa il backup del database in `$DATA_DIR/backup/`, aggiorna il codice con
+`git pull --ff-only`, ricostruisce app e worker (le migrazioni le applica l'app all'avvio)
+e stampa il commit a cui tornare in caso di problemi. Si ferma se il repo ha modifiche
+locali o se `DATA_DIR` non è assoluto.
+
 ## Backup e ripristino
 
 - **Archivio** (`archive/`): è la fonte di verità. Basta uno snapshot del NAS o:
