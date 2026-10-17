@@ -1,0 +1,2 @@
+{# Contatori del menu, albero e, su "Da fare", tessere, contatore del telefono e In scadenza. #}
+{% with oob=True %}{% include "_nav_counts.html" %}{% include "_tree.html" %}{% if tiles %}{% include "_tiles.html" %}{% include "_mhead_count.html" %}{% include "_due.html" %}{% endif %}{% endwith %}

@@ -1,7 +1,7 @@
-{# Tessere-contatore di "Da fare" (spec UI responsive §2.6): rimandate out-of-band dalla spunta. #}
+{# Tessere-contatore di "Da fare" (spec azioni §5): rimandate out-of-band dalle spunte. #}
 <div class="tiles" id="tiles"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
   <div class="tile on"><span class="lab">Da fare</span><span class="num">{{ tiles.todo }}</span></div>
-  <div class="tile"><span class="lab">Oggi</span><span class="num">{{ tiles.today }}</span></div>
-  <div class="tile"><span class="lab">Ultimi 7 giorni</span><span class="num">{{ tiles.week }}</span></div>
+  <div class="tile"><span class="lab">Azioni aperte</span><span class="num">{{ tiles.actions }}</span></div>
+  <div class="tile{% if tiles.overdue %} warn{% endif %}"><span class="lab">In scadenza</span><span class="num-row"><span class="num">{{ tiles.due }}</span>{% if tiles.overdue %}<span class="tile-note">{{ tiles.overdue }} scadut{{ 'a' if tiles.overdue == 1 else 'e' }}</span>{% endif %}</span></div>
   <div class="tile"><span class="lab">In elaborazione</span><span class="num">{{ tiles.processing }}</span>{% if tiles.running %}<span class="led run" role="img" aria-label="In corso" title="In corso"></span>{% endif %}</div>
 </div>

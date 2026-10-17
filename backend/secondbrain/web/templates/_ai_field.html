@@ -4,7 +4,21 @@
 <section class="ai-field" id="field-{{ field }}-{{ c.id }}">
   <h3>{{ label }}{% if field in (c.edited or []) %} <span class="edited" role="img" aria-label="Corretto a mano" title="Corretto a mano">✎</span>{% endif %}
   {% if not c.trashed_at and not editing and (field == "transcript" or processed) %}<button type="button" class="pencil" hx-get="/captures/{{ c.id }}/field/{{ field }}?edit=1" hx-target="#field-{{ field }}-{{ c.id }}" hx-swap="outerHTML" aria-label="Modifica {{ label|lower }}" title="Modifica {{ label|lower }}">{{ icon("pencil") }}</button>{% endif %}</h3>
+  {% if field == "actions" %}
   {% if editing %}
+  {% macro act_row(id, text, due) %}<div class="act-row"><input type="hidden" name="id" value="{{ id }}"><input name="text" value="{{ text }}" maxlength="{{ MAX_ACTION_LEN }}" placeholder="Cosa fare" aria-label="Azione"><input type="date" name="due" value="{{ due or '' }}" aria-label="Scadenza"><button type="button" class="pencil" onclick="this.parentNode.remove()" aria-label="Togli l'azione" title="Togli l'azione">{{ icon("close") }}</button></div>{% endmacro %}
+  <form class="act-form" hx-post="/captures/{{ c.id }}/actions" hx-target="#field-actions-{{ c.id }}" hx-swap="outerHTML">
+    <div class="act-rows">{% for a in c.actions %}{{ act_row(a.id, a.text, a.due) }}{% else %}{{ act_row('', '', '') }}{% endfor %}</div>
+    <template>{{ act_row('', '', '') }}</template>
+    <div class="act-bar">
+      <button type="button" onclick="this.form.querySelector('.act-rows').appendChild(this.form.querySelector('template').content.cloneNode(true))" aria-label="Aggiungi un'azione" title="Aggiungi un'azione">{{ icon("plus") }}<span class="label">Aggiungi</span></button>
+      <button type="submit" class="pri" aria-label="Salva" title="Salva">{{ icon("save") }}<span class="label">Salva</span></button>
+      <button type="button" hx-get="/captures/{{ c.id }}/field/actions" hx-target="#field-actions-{{ c.id }}" hx-swap="outerHTML" aria-label="Annulla" title="Annulla">{{ icon("close") }}<span class="label">Annulla</span></button>
+    </div>
+  </form>
+  {% elif c.actions %}<ul class="field-actions">{% for a in c.actions %}<li{% if a.done %} class="done"{% endif %}>{{ a.text }}{% if a.due %} <span class="due-tag{% if not a.done and a.due < today.isoformat() %} late{% endif %}">{{ due_label(a.due, today) }}</span>{% endif %}</li>{% endfor %}</ul>
+  {% else %}<p class="empty">—</p>{% endif %}
+  {% elif editing %}
   <form hx-post="/captures/{{ c.id }}/field/{{ field }}" hx-target="#field-{{ field }}-{{ c.id }}" hx-swap="outerHTML">
     {% if field == "transcript" %}<textarea name="value" rows="8" aria-label="{{ label }}">{{ c.transcript or '' }}</textarea>
     {% elif field == "summary" %}<textarea name="value" rows="3" maxlength="{{ MAX_SUMMARY_LEN }}" aria-label="{{ label }}">{{ c.summary or '' }}</textarea>

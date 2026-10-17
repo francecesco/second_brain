@@ -1,0 +1,4 @@
+{# Risposta alla spunta di un'azione: le azioni della riga (o niente, se la nota esce dalla
+   lista: la route sposta allora il bersaglio sull'intera riga) e il resto out-of-band. #}
+{% if not gone %}{% include "_row_actions.html" %}{% endif %}
+{% include "_list_oob.html" %}

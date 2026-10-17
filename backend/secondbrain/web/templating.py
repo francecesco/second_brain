@@ -1,6 +1,6 @@
 """Jinja: template, filtri di formato, nomi dei mesi e dei giorni, titolo di default."""
 import hashlib
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from fastapi.templating import Jinja2Templates
 
 from ..ai.base import redact
-from ..notefile import MAX_MODEL_LEN, MAX_SUMMARY_LEN, MAX_TITLE_LEN
+from ..notefile import MAX_ACTION_LEN, MAX_MODEL_LEN, MAX_SUMMARY_LEN, MAX_TITLE_LEN
 from ..notes import default_title, effective_title
 from ..search import MAX_QUERY_LEN
 from ..textnotes import is_text_capture
@@ -36,8 +36,8 @@ MIB = 1024 * 1024
 
 ROW_POLL_S = 5  # righe in coda o in corso: htmx le ricarica ogni tanti secondi
 ROW_TAG_PREVIEW = 3  # tag mostrati nell'intestazione della riga, per non affollarla
-DETAIL_FIELDS = ("summary", "tags", "transcript")  # ordine nel dettaglio (spec AI §10)
-FIELD_LABELS = {"summary": "Riassunto", "tags": "Tag", "transcript": "Trascrizione"}
+DETAIL_FIELDS = ("summary", "actions", "tags", "transcript")  # ordine nel dettaglio (spec AI §10, azioni §5)
+FIELD_LABELS = {"summary": "Riassunto", "actions": "Azioni", "tags": "Tag", "transcript": "Trascrizione"}
 
 
 def format_duration(seconds: float) -> str:
@@ -59,6 +59,20 @@ def weekday_label(d: date) -> str:
 def weekday_short(d: date) -> str:
     """"lun 28": per l'albero, dove lo spazio è poco."""
     return f"{WEEKDAYS_SHORT[d.weekday()]} {d.day}"
+
+
+def due_label(value: str | None, today: date) -> str:
+    """Scadenza breve per le righe: "oggi", "domani", altrimenti "ven 23/10" (con l'anno se
+    non è quello corrente)."""
+    if not value:
+        return ""
+    due = date.fromisoformat(value)
+    if due == today:
+        return "oggi"
+    if due == today + timedelta(days=1):
+        return "domani"
+    label = f"{WEEKDAYS_SHORT[due.weekday()]} {due:%d/%m}"
+    return label if due.year == today.year else f"{label}/{due:%y}"
 
 
 def day_month_label(d: date) -> str:
@@ -94,10 +108,12 @@ templates.env.globals["reprocess_confirm"] = reprocess_confirm
 templates.env.globals["DETAIL_FIELDS"] = DETAIL_FIELDS
 templates.env.globals["static_url"] = static_url
 templates.env.globals["FIELD_LABELS"] = FIELD_LABELS
+templates.env.globals["due_label"] = due_label
 templates.env.globals["ROW_POLL_S"] = ROW_POLL_S
 templates.env.globals["ROW_TAG_PREVIEW"] = ROW_TAG_PREVIEW
 templates.env.globals["MAX_SUMMARY_LEN"] = MAX_SUMMARY_LEN
 templates.env.globals["MAX_TITLE_LEN"] = MAX_TITLE_LEN
+templates.env.globals["MAX_ACTION_LEN"] = MAX_ACTION_LEN
 templates.env.globals["MAX_QUERY_LEN"] = MAX_QUERY_LEN
 templates.env.globals["MAX_MODEL_LEN"] = MAX_MODEL_LEN
 # `last_error` è già passato da `redact` quando è stato scritto; ripassarlo in pagina

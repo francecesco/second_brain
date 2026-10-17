@@ -9,5 +9,6 @@
     {% if c.date_estimated %}<span class="badge">data stimata</span>{% endif %}
     <span class="meta">{{ device_names.get(c.device_id, c.device_id) }} · {% if is_text_capture(c) %}{{ (c.transcript or '')|wordcount }} parole{% else %}{{ c.duration_s|duration }} · {{ c.size_bytes|size }}{% endif %}</span>
   </button>
+  {% include "_row_actions.html" %}
   <div class="detail" id="detail-{{ c.id }}"{% if open_id == c.id %} hx-get="/captures/{{ c.id }}" hx-trigger="load"{% endif %}></div>
 </div>

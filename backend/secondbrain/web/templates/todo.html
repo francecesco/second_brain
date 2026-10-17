@@ -1,5 +1,6 @@
 {% extends "finder.html" %}
 {% block head %}{% include "_tiles.html" %}{% endblock %}
 {% block main %}
+{% include "_due.html" %}
 {% with empty="Niente da fare." %}{% include "_day_groups.html" %}{% endwith %}
 {% endblock %}

@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session, selectinload, sessionmaker
 from .jobs import ACTIVE, RUNNING
 from .models import Capture, Device, Job
 
-WEEK_DAYS = 7  # tessera "Ultimi 7 giorni" di Da fare
 
 
 def make_engine(url: str) -> Engine:
@@ -104,17 +103,28 @@ def list_todo(s: Session, device_id: str | None = None) -> list[Capture]:
     return list(s.scalars(_open(_active(stmt, device_id))))
 
 
+def open_actions(s: Session, device_id: str | None = None) -> list[tuple[Capture, dict]]:
+    """Azioni non spuntate delle note aperte (spec azioni §5), nella forma del catalogo
+    (id, text, due, done), in ordine di nota dalla più recente e poi di posizione."""
+    stmt = (select(Capture).where(func.jsonb_array_length(Capture.actions) > 0)
+            .order_by(Capture.recorded_at.desc()).options(selectinload(Capture.job)))
+    return [(c, a) for c in s.scalars(_open(_active(stmt, device_id)))
+            for a in c.actions if not a.get("done")]
+
+
 def todo_tiles(s: Session, device_id: str | None, today: date) -> dict:
-    """Contatori delle tessere di "Da fare" (spec UI responsive §2.6): tutte, di oggi, degli
-    ultimi 7 giorni (oggi compreso) e quelle con un'elaborazione in coda o in corso."""
+    """Contatori delle tessere di "Da fare" (spec azioni §5): note da fare, azioni aperte,
+    azioni in scadenza (scadute o di oggi) e note con un'elaborazione in coda o in corso."""
     base = _open(_active(select(func.count()).select_from(Capture), device_id))
-    week_start = today - timedelta(days=WEEK_DAYS - 1)
     jobs = base.join(Job, Job.capture_id == Capture.id)
     running = s.scalar(jobs.where(Job.status == RUNNING))
+    pairs = open_actions(s, device_id)
+    dues = [date.fromisoformat(a["due"]) for _, a in pairs if a.get("due")]
     return {
         "todo": s.scalar(base),
-        "today": s.scalar(base.where(Capture.day == today)),
-        "week": s.scalar(base.where(Capture.day >= week_start, Capture.day <= today)),
+        "actions": len(pairs),
+        "due": sum(1 for d in dues if d <= today),
+        "overdue": sum(1 for d in dues if d < today),
         "processing": s.scalar(jobs.where(Job.status.in_(ACTIVE))),
         "running": bool(running),
     }

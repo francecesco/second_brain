@@ -1,3 +1,3 @@
-{# Risposta alla spunta: la riga sparisce dalla lista (htmx la sostituisce con niente),
-   contatori del menu, albero e, su "Da fare", tessere e contatore del telefono si aggiornano out-of-band. #}
-{% with oob=True %}{% include "_nav_counts.html" %}{% include "_tree.html" %}{% if tiles %}{% include "_tiles.html" %}{% include "_mhead_count.html" %}{% endif %}{% endwith %}
+{# Risposta alla spunta della nota: la riga sparisce dalla lista (htmx la sostituisce con niente),
+   il resto si aggiorna out-of-band. #}
+{% include "_list_oob.html" %}

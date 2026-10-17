@@ -69,12 +69,12 @@ def test_done_is_grouped_by_completion_day(recordings, db, settings):
 
 # --- tessere di Da fare ---
 
-def test_todo_tiles_count_today_week_and_processing(recordings, db, settings):
+def test_todo_tiles_count_notes_actions_and_processing(recordings, db, settings):
     stats = catalog.todo_tiles(db, None, TODAY)
-    # ogni upload mette in coda l'elaborazione: 3 in coda, nessuna in corso
-    assert stats == {"todo": 3, "today": 0, "week": 2, "processing": 3, "running": False}
-    assert catalog.todo_tiles(db, DEV, date(2026, 9, 23)) == {
-        "todo": 2, "today": 1, "week": 1, "processing": 2, "running": False}
+    # ogni upload mette in coda l'elaborazione: 3 in coda, nessuna in corso; nessuna azione
+    assert stats == {"todo": 3, "actions": 0, "due": 0, "overdue": 0, "processing": 3,
+                     "running": False}
+    assert catalog.todo_tiles(db, DEV, date(2026, 9, 23))["todo"] == 2
     text = recordings.client.get("/todo").text
     assert 'id="tiles"' in text and 'class="tile on"' in text
 

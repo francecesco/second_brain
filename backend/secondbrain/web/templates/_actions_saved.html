@@ -1,0 +1,4 @@
+{# Azioni riscritte dal dettaglio: il campo, poi le azioni della riga e il resto out-of-band. #}
+{% include "_ai_field.html" %}
+{% with oob=True %}{% include "_row_actions.html" %}{% endwith %}
+{% include "_list_oob.html" %}

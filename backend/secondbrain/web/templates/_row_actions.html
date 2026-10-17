@@ -1,0 +1,10 @@
+{# Azioni sotto la riga (spec azioni §5): una casella ciascuna; scadenza passata in arancione. #}
+<ul class="row-actions" id="acts-{{ c.id }}"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
+{%- for a in c.actions %}
+  <li{% if a.done %} class="done"{% endif %}>
+    <label class="check sm" title="{{ 'Segna come da fare' if a.done else 'Segna come fatta' }}"><input type="checkbox"{% if a.done %} checked{% endif %}{% if c.trashed_at %} disabled{% endif %} hx-post="/captures/{{ c.id }}/actions/{{ a.id }}/{{ 'undone' if a.done else 'done' }}" hx-target="#acts-{{ c.id }}" hx-swap="outerHTML" aria-label="{{ 'Segna come da fare' if a.done else 'Segna come fatta' }}: {{ a.text }}"></label>
+    <span class="a-text">{{ a.text }}</span>
+    {%- if a.due %}<span class="due-tag{% if not a.done and a.due < today.isoformat() %} late{% endif %}" title="Scadenza {{ a.due }}">{{ due_label(a.due, today) }}</span>{% endif %}
+  </li>
+{%- endfor -%}
+</ul>

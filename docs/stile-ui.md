@@ -86,7 +86,10 @@ Sì, e solo qui:
   voce più profonda, non sugli antenati) e punto del marchio;
 - orario della riga di cui è aperto il dettaglio (`.row:has(> .detail:not(:empty)) .time`) e,
   con il pannello a destra, filetto di 2 px a sinistra della riga e orario in testa al pannello;
-- tessera-contatore della lista corrente (`.tile.on`: bordo, etichetta e numero);
+- tessera-contatore della lista corrente (`.tile.on`: bordo, etichetta e numero) e nota
+  "N scadute" della tessera In scadenza;
+- scadenza passata di un'azione (`.due-tag.late`: testo e bordo) e titolo del gruppo
+  "Scadute";
 - voce attiva della barra in basso del telefono (testo, icona e filetto di 2 px in alto);
 - titolo di una riga o di un risultato al passaggio del mouse;
 - pulsante principale (`button.pri`), uno per modulo: salva, entra (in una vista con più
@@ -120,11 +123,28 @@ le briciole (es. le tessere di "Da fare"). Le briciole sono etichette con `›` 
 l'altra; con una sola voce hanno la classe `single` e sul telefono spariscono, perché il
 nome della pagina sta già nella riga in cima.
 
-**Testata e tessere-contatore** (`_tiles.html`, "Da fare"). Fino a quattro `.tile` nella
+**Testata e tessere-contatore** (`_tiles.html`, "Da fare": Da fare, Azioni aperte, In
+scadenza, In elaborazione). Fino a quattro `.tile` nella
 stessa forma delle tessere della griglia (fondo `--bg`, bordo, angoli 6 px): etichetta in
 maiuscoletto e numero in Doto 34 px peso 800. La tessera della lista corrente è `on`. Un LED
 `.led.run` in alto a destra se c'è un'elaborazione in corso. Si aggiornano out-of-band
 con la spunta. Sul telefono non ci sono: il contatore sta nella riga in cima.
+
+**Azioni della nota** (`_row_actions.html`, spec azioni §5). Sotto la riga, allineate al
+titolo (rientro di 5,2 rem, 3,6 sul telefono): casella piccola (`.check.sm`, 16 px, 20 sul
+telefono, stessa forma della casella "fatta"), testo a 13,5 px, scadenza come etichetta in
+monospazio (`.due-tag`: "oggi", "domani", "ven 23/10"). Azione fatta: barrata in `--mute`.
+La lista ha `id="acts-<nota>"` e la spunta la ridisegna da sola; se la nota esce dalla lista
+della pagina la route sposta il bersaglio sull'intera riga.
+
+**In scadenza** (`_due.html`, in cima a "Da fare"). Gruppi Scadute, Oggi, Prossimi 7 giorni
+con la stessa intestazione dei giorni e il numero di azioni a destra; ogni voce ha casella,
+testo, scadenza e, a destra in `--mute`, il titolo della nota come pulsante nudo che la
+apre (`openRow`). Sul telefono il titolo va sotto. Sezione vuota nascosta.
+
+**Campo "Azioni" del dettaglio** (`_ai_field.html`). In lettura un elenco; in modifica una
+riga per azione (`.act-row`: testo, data, × nudo per toglierla), "Aggiungi" che clona un
+`<template>`, "Salva" pieno, "Annulla". Sul telefono testo e data vanno su due righe.
 
 **Gruppi per giorno** (`_day_groups.html`, "Da fare" e "Completati"). `section.day-group`
 con `h2.day-head`: etichetta in `--fg` ("Oggi", "Ieri", "Martedì 14 ottobre") e data breve
@@ -329,3 +349,6 @@ senza, dopo un deploy il tunnel serviva il foglio di stile vecchio con l'HTML nu
   tessere-contatore; albero sempre a sinistra con Liste e mesi dell'anno aperto, barrette di
   densità grigie; dettaglio in un pannello a destra da 1100 px. Telefono con riga in cima,
   barra in basso e foglio "Altro" al posto di intestazione e albero; tasti più alti al tocco.
+- **2026-10-17** — Azioni (spec `docs/specs/2026-10-17-backend-azioni-design.md`): azioni
+  sotto le righe con casella piccola ed etichetta di scadenza, sezione In scadenza in cima a
+  Da fare, tessere Azioni aperte e In scadenza; arancione solo per le scadenze passate.

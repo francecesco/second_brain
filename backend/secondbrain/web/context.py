@@ -35,6 +35,7 @@ def base_context(request: Request, db: Session, session: WebSession,
         "estimated_count": catalog.count_estimated(db),
         "todo_count": catalog.count_todo(db, device),
         "done_count": catalog.count_done(db, device),
+        "today": today_local(request),
     }
 
 

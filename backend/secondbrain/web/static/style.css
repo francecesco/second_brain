@@ -236,6 +236,49 @@ main { background: var(--panel); border: 1px solid var(--line); border-radius: 2
 a.tag:hover { border-color: var(--acc); color: var(--acc); }
 .search-page .tag { display: inline-flex; align-items: center; gap: .3rem; border: 1px solid var(--line); border-radius: 2px; padding: 0 .4rem; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--mute); }
 
+/* Azioni della nota (spec azioni §5): sotto la riga, allineate al titolo; casella piccola,
+   scadenza come etichetta in monospazio (arancione solo se scaduta). */
+.row-actions { grid-column: 2; list-style: none; margin: -.35rem 0 .65rem; padding: 0 0 0 5.2rem; display: grid; gap: .15rem; }
+.row-actions:empty { display: none; }
+.row-actions li, .due-list li { display: flex; align-items: center; gap: .55rem; min-height: 1.9rem; }
+.row-actions .a-text, .due-list .a-text { font-size: 13.5px; min-width: 0; }
+.row-actions li.done .a-text { text-decoration: line-through; text-decoration-thickness: 1px; color: var(--mute); }
+.check.sm, .row .check.sm { display: inline-flex; cursor: pointer; flex: none; width: auto; min-height: 0; padding: 0; }
+.check.sm input { appearance: none; -webkit-appearance: none; margin: 0; width: 16px; height: 16px; padding: 0; flex: none;
+  border: 1.5px solid var(--mute); border-radius: 2px; background: var(--bg); cursor: pointer; display: grid; place-content: center; }
+.check.sm input::after { content: ""; width: 4px; height: 8px; margin-top: -2px; border: solid var(--panel); border-width: 0 2px 2px 0; transform: rotate(45deg); visibility: hidden; }
+.check.sm:hover input { border-color: var(--fg); }
+.check.sm input:checked { background: var(--fg); border-color: var(--fg); }
+.check.sm input:checked::after { visibility: visible; }
+.due-tag { flex: none; font-family: var(--mono); font-size: 10.5px; line-height: 1.5; color: var(--mute); border: 1px solid var(--line); border-radius: 2px; padding: 0 .35rem; white-space: nowrap; }
+.due-tag.late { color: var(--acc); border-color: var(--acc); }
+.row-actions li.done .due-tag { opacity: .6; }
+
+/* In scadenza, in cima a Da fare: gruppi come i giorni, righe di azioni con la nota a destra. */
+.due { margin-bottom: 1.4rem; }
+.due:empty { display: none; }
+.due-group .day-head { margin-top: 1rem; }
+.due-group:first-child .day-head { margin-top: .2rem; }
+.due-group.overdue .day-head .lab { color: var(--acc); }
+.due-list { list-style: none; margin: 0; padding: 0; }
+.due-list li { border-bottom: 1px solid var(--line); padding: .3rem 0 .3rem .7rem; }
+.due-list .due-note { margin-left: auto; min-width: 0; max-width: 45%; background: none; border: 0; box-shadow: none; padding: 0;
+  font: inherit; font-size: 12px; letter-spacing: 0; text-transform: none; font-weight: 400; color: var(--mute);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.due-list .due-note:hover { color: var(--acc); transform: none; box-shadow: none; }
+.tile .num-row { display: flex; align-items: baseline; gap: .6rem; }
+.tile .tile-note { font-size: 10px; color: var(--acc); font-weight: 600; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+
+/* Campo "Azioni" del dettaglio: elenco in lettura, righe testo + data in modifica. */
+.field-actions { margin: .2rem 0; padding-left: 1.1rem; }
+.field-actions li { margin: .15rem 0; }
+.field-actions li.done { text-decoration: line-through; color: var(--mute); }
+.act-form { display: grid; gap: .4rem; }
+.act-rows { display: grid; gap: .35rem; }
+.act-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .35rem; align-items: center; }
+.act-row input[name=text] { min-width: 0; }
+.act-bar { display: flex; flex-wrap: wrap; gap: .5rem; }
+
 /* LED di stato: in coda vuoto, in corso arancione che lampeggia, fallita triangolo arancione. */
 .status { display: inline-flex; align-items: center; color: var(--mute); }
 .status.failed { color: var(--acc); }
@@ -380,6 +423,15 @@ td .actions { margin: 0; }
   .detail .actions form { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   .detail .actions form input { min-width: 0; width: 100%; }
   .detail .actions button { justify-content: center; }
+  .row-actions { padding-left: 3.6rem; margin-top: -.3rem; }
+  .row-actions .check.sm input, .due-list .check.sm input { width: 20px; height: 20px; }
+  .row-actions li, .due-list li { min-height: 2.3rem; }
+  .row-actions li, .due-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: .55rem; padding-left: 0; }
+  .due-list .due-note { grid-column: 2 / -1; max-width: none; margin: 0; text-align: left; }
+  .act-row { grid-template-columns: minmax(0, 1fr) auto; padding-bottom: .4rem; border-bottom: 1px solid var(--line); }
+  .act-row input[name=text] { grid-column: 1; grid-row: 1; width: 100%; }
+  .act-row button { grid-column: 2; grid-row: 1; }
+  .act-row input[type=date] { grid-column: 1; grid-row: 2; width: 100%; }
   /* barra in basso */
   .tabbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
     background: var(--panel); border-top: 1px solid var(--line); padding: .2rem .3rem calc(.25rem + env(safe-area-inset-bottom)); }

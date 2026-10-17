@@ -1,0 +1,20 @@
+{% from "_icons.html" import icon %}
+{# "In scadenza" in cima a Da fare (spec azioni §2.3): azioni aperte scadute, di oggi e dei
+   prossimi 7 giorni; la spunta passa dalla stessa route delle righe. #}
+<section class="due" id="due"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
+{%- for g in due %}
+  <div class="due-group {{ g.key }}">
+    <h2 class="day-head"><span class="lab">{{ g.label }}</span><span class="dnum">{{ g.items|length }}</span></h2>
+    <ul class="due-list">
+    {%- for c, a, d in g.items %}
+      <li>
+        <label class="check sm" title="Segna come fatta"><input type="checkbox" hx-post="/captures/{{ c.id }}/actions/{{ a.id }}/done" hx-target="#acts-{{ c.id }}" hx-swap="outerHTML" aria-label="Segna come fatta: {{ a.text }}"></label>
+        <span class="a-text">{{ a.text }}</span>
+        <span class="due-tag{% if d < today %} late{% endif %}" title="Scadenza {{ a.due }}">{{ due_label(a.due, today) }}</span>
+        <button type="button" class="due-note" onclick="openRow('{{ c.id }}')" title="Apri la nota">{{ display_title(c, tz) }}</button>
+      </li>
+    {%- endfor %}
+    </ul>
+  </div>
+{%- endfor -%}
+</section>

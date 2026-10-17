@@ -12,7 +12,8 @@ from ..devices import DeviceError, rename_device
 from ..models import WebSession
 from ..naming import day_dir
 from .context import base_context, clean_device, page_context, today_local
-from .groups import day_groups
+from .groups import day_groups, due_groups
+from ..notefile import Action, clean_action_text, parse_due
 from .deps import get_db, require_csrf, require_login
 from .templating import templates
 
@@ -57,14 +58,80 @@ def _set_done(request: Request, capture_id: uuid.UUID, done: bool, db: Session, 
                          **_vault_kw(request))
     except library.NotFound:
         raise HTTPException(404, "registrazione sconosciuta") from None
+    # La riga esce dalla lista in cui stava (archivio e "Da fare" se spuntata, "Completati"
+    # se tolta la spunta): la risposta e' vuota per la riga, il resto e' out-of-band.
+    return templates.TemplateResponse(request, "_toggle_done.html", _list_context(request, db, session))
+
+
+def _list_context(request: Request, db: Session, session: WebSession) -> dict:
+    """Contesto per gli aggiornamenti out-of-band di una spunta, come li vede la pagina da
+    cui arriva il clic: menu, albero e, su "Da fare", tessere, contatore e In scadenza."""
     section, device, date_parts = _current_page(request)
     year, month, day = (date_parts + [None] * 3)[:3]
     ctx = page_context(request, db, session, device, year, month) | {"section": section, "day_num": day}
-    if section == "todo":  # le tessere di "Da fare" seguono la spunta (spec UI responsive §2.6)
-        ctx["tiles"] = catalog.todo_tiles(db, device, today_local(request))
-    # La riga esce dalla lista in cui stava (archivio e "Da fare" se spuntata, "Completati"
-    # se tolta la spunta): la risposta e' vuota per la riga, il resto e' out-of-band.
-    return templates.TemplateResponse(request, "_toggle_done.html", ctx)
+    if section == "todo":  # spec UI responsive §2.6, azioni §5
+        today = today_local(request)
+        ctx["tiles"] = catalog.todo_tiles(db, device, today)
+        ctx["due"] = due_groups(catalog.open_actions(db, device), today)
+    return ctx
+
+
+def _leaves_list(section: str | None, capture) -> bool:
+    """Dopo una spunta la nota non sta più nella lista della pagina?"""
+    if section in ("todo", "browse"):
+        return capture.done_at is not None
+    if section == "done":
+        return capture.done_at is None
+    return False
+
+
+@router.post("/captures/{capture_id}/actions/{action_id}/{state}")
+def action_done_route(request: Request, capture_id: uuid.UUID, action_id: str, state: str,
+                      db: Session = Depends(get_db), session: WebSession = Depends(require_csrf)):
+    """Spunta di un'azione (spec azioni §5): la lista delle azioni della riga si ridisegna; se
+    la nota esce dalla lista della pagina (tutte fatte, o una riaperta in Completati) sparisce
+    tutta la riga."""
+    if state not in ("done", "undone"):
+        raise HTTPException(404, "azione sconosciuta")
+    state_app = request.app.state
+    try:
+        capture = library.set_action_done(db, _archive(request), state_app.settings.tz_archive,
+                                          capture_id, action_id, state == "done", state_app.clock(),
+                                          vault=state_app.vault, public_url=state_app.settings.public_url)
+    except library.NotFound:
+        raise HTTPException(404, "azione sconosciuta") from None
+    except (library.InTrash, library.NotProcessed) as exc:
+        return PlainTextResponse(str(exc), status_code=409)
+    ctx = _list_context(request, db, session) | {"c": capture}
+    gone = _leaves_list(ctx["section"], capture)
+    response = templates.TemplateResponse(request, "_actions_changed.html", ctx | {"gone": gone})
+    if gone:
+        response.headers["HX-Retarget"] = f"#row-{capture.id}"
+        response.headers["HX-Reswap"] = "outerHTML"
+    return response
+
+
+@router.post("/captures/{capture_id}/actions")
+async def actions_edit_route(request: Request, capture_id: uuid.UUID, db: Session = Depends(get_db),
+                             session: WebSession = Depends(require_csrf)):
+    """Azioni riscritte dal dettaglio: righe con id (vuoto per le nuove), testo e data."""
+    form = await request.form()
+    ids, texts, dues = form.getlist("id"), form.getlist("text"), form.getlist("due")
+    if not (len(ids) == len(texts) == len(dues)):
+        return PlainTextResponse("righe delle azioni incomplete", status_code=400)
+    actions = [Action(str(i), str(t), parse_due(str(d))) for i, t, d in zip(ids, texts, dues)
+               if clean_action_text(str(t))]
+    state_app = request.app.state
+    try:
+        capture = library.edit_actions(db, _archive(request), state_app.settings.tz_archive,
+                                       capture_id, actions, state_app.clock(), vault=state_app.vault,
+                                       public_url=state_app.settings.public_url)
+    except library.NotFound:
+        raise HTTPException(404, "registrazione sconosciuta") from None
+    except (library.InTrash, library.NotProcessed) as exc:
+        return PlainTextResponse(str(exc), status_code=409)
+    ctx = _list_context(request, db, session) | {"c": capture, "field": "actions", "editing": False}
+    return templates.TemplateResponse(request, "_actions_saved.html", ctx)
 
 
 @router.post("/captures/{capture_id}/done")
@@ -86,7 +153,8 @@ def todo_page(request: Request, device: str | None = None, db: Session = Depends
     today = today_local(request)
     groups = day_groups(catalog.list_todo(db, device), lambda c: c.day, today)
     return templates.TemplateResponse(request, "todo.html", page_context(request, db, session, device) | {
-        "crumbs": [("Da fare", None)], "groups": groups, "tiles": catalog.todo_tiles(db, device, today)})
+        "crumbs": [("Da fare", None)], "groups": groups, "tiles": catalog.todo_tiles(db, device, today),
+        "due": due_groups(catalog.open_actions(db, device), today)})
 
 
 @router.get("/done")

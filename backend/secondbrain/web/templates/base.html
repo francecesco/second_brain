@@ -37,6 +37,14 @@ function toggleDetail(button) {
     htmx.ajax("GET", button.dataset.detailUrl, {target: detail});
   }
 }
+// Dalla sezione "In scadenza": apre la nota dell'azione e la porta in vista.
+function openRow(id) {
+  var row = document.getElementById("row-" + id);
+  if (!row) { return; }
+  var button = row.querySelector(".row-main");
+  if (button.getAttribute("aria-expanded") !== "true") { toggleDetail(button); }
+  row.scrollIntoView({block: "center", behavior: "smooth"});
+}
 document.addEventListener("click", function (evt) {
   if (evt.target.id === "flash") { evt.target.hidden = true; }
   // Il menu a scomparsa si chiude cliccando fuori.
