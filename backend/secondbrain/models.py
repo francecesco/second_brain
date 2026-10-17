@@ -79,6 +79,9 @@ class Capture(Base):
     ai_enrich_provider: Mapped[str | None] = mapped_column(String(MAX_PROVIDER_LEN))
     ai_enrich_model: Mapped[str | None] = mapped_column(String(MAX_MODEL_LEN))
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Azioni della nota (spec azioni §3): copia della lista `actions` del `.md`, nella forma di
+    # `notefile.actions_to_data` (id, text, due, done).
+    actions: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"))
     # Nota nel vault Obsidian (spec vault §4): percorso relativo a VAULT_DIR e data di
     # modifica del file dopo l'ultima scrittura/lettura del backend. NULL: mai scritta o nel cestino.
     note_path: Mapped[str | None] = mapped_column(String(255), unique=True)

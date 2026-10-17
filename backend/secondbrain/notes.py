@@ -16,8 +16,8 @@ import re
 
 from dataclasses import replace
 
-from .notefile import (Note, NoteError, NoteMeta, _edited, apply_edit, parse_note, parse_note_title,
-                       render_note)
+from .notefile import (Note, NoteError, NoteMeta, _edited, actions_from_data, actions_to_data,
+                       apply_edit, edit_actions, parse_note, parse_note_title, render_note)
 from .search import refresh_search_vector
 from .vault import Vault, note_dir, vault_note_name
 
@@ -72,6 +72,7 @@ def empty_ai_fields() -> dict:
         "transcript": None, "title_auto": None, "summary": None, "tags": [], "edited": [],
         "language": None, "ai_provider": None, "ai_transcribe_model": None,
         "ai_enrich_provider": None, "ai_enrich_model": None, "processed_at": None,
+        "actions": [],
     }
 
 
@@ -86,7 +87,7 @@ def note_from_capture(capture: Capture) -> Note:
         tags=tuple(capture.tags or ()), language=capture.language, provider=capture.ai_provider,
         transcribe_model=capture.ai_transcribe_model, enrich_provider=capture.ai_enrich_provider,
         enrich_model=capture.ai_enrich_model, processed_at=capture.processed_at,
-        edited=tuple(capture.edited or ()))
+        edited=tuple(capture.edited or ()), actions=actions_from_data(capture.actions or []))
 
 
 def note_fields(note: Note) -> dict:
@@ -96,7 +97,7 @@ def note_fields(note: Note) -> dict:
         "tags": list(note.tags), "edited": list(note.edited), "language": note.language,
         "ai_provider": note.provider, "ai_transcribe_model": note.transcribe_model,
         "ai_enrich_provider": note.enrich_provider, "ai_enrich_model": note.enrich_model,
-        "processed_at": note.processed_at,
+        "processed_at": note.processed_at, "actions": actions_to_data(note.actions),
     }
 
 
@@ -138,6 +139,8 @@ def _merge_unseen_edit(vault: Vault, capture: Capture, note: Note, prior: Note,
         note = apply_edit(note, "summary", file_note.summary or "")
     if tuple(file_note.tags) != tuple(prior.tags):
         note = replace(note, tags=tuple(file_note.tags), edited=_edited((*note.edited, "tags")))
+    if file_note.actions != prior.actions:
+        note = edit_actions(note, file_note.actions)
     if file_title and file_title != prior_title:
         capture.title = file_title
     return note

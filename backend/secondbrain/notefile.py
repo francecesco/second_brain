@@ -3,17 +3,21 @@
 Il `.md` è la verità per i campi AI: frontmatter YAML con titolo automatico, riassunto,
 tag, lingua, provenienza ed `edited` (i campi corretti a mano); il corpo è la trascrizione.
 Il titolo manuale non sta qui ma nel sidecar `.json`, come prima dell'elaborazione AI.
+Le azioni (spec azioni §3) stanno nel frontmatter come lista `actions`: testo, scadenza e
+spunta; sono un campo AI modificabile, e una spunta conta come correzione a mano.
 """
+import hashlib
+import secrets
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import yaml
 
 from .languages import LANGUAGES
 
-EDITABLE_FIELDS = ("transcript", "summary", "tags")
+EDITABLE_FIELDS = ("transcript", "summary", "tags", "actions")
 # Lunghezze delle colonne del catalogo (models.py le usa): un valore più lungo scritto a mano
 # nel `.md` è una nota illeggibile, non un DataError a metà rescan.
 MAX_TITLE_LEN = 200  # captures.title e captures.title_auto
@@ -23,6 +27,13 @@ MAX_TAG_LEN = 40  # elementi di captures.tags
 MAX_LANGUAGE_LEN = 8  # captures.language
 MAX_PROVIDER_LEN = 32  # captures.ai_provider, captures.ai_enrich_provider, ai_providers.name
 MAX_MODEL_LEN = 100  # modelli in captures e ai_providers
+MAX_ACTIONS = 10       # azioni per nota (spec azioni §3)
+MAX_ACTION_LEN = 200   # una riga
+ACTION_ID_LEN = 8      # caratteri esadecimali
+# Una scadenza dell'AI fuori da questa finestra attorno al giorno della registrazione e' un
+# errore di lettura della data ("2025" per "2026"), non una scadenza: si scarta.
+DUE_PAST = timedelta(days=365)
+DUE_FUTURE = timedelta(days=5 * 365)
 DELIMITER = "---"
 YAML_WIDTH = 10_000  # niente a capo automatici dentro titolo e riassunto
 
@@ -33,6 +44,15 @@ class NoteError(ValueError):
 
 class EnrichmentInvalid(ValueError):
     """Risposta di arricchimento senza i campi richiesti o del tipo sbagliato."""
+
+
+@dataclass(frozen=True)
+class Action:
+    """Una cosa da fare ricavata dalla nota (spec azioni §3). `done`: istante della spunta."""
+    id: str
+    text: str
+    due: date | None = None
+    done: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -48,6 +68,7 @@ class Note:
     enrich_model: str | None = None
     processed_at: datetime | None = None
     edited: tuple[str, ...] = ()
+    actions: tuple[Action, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -93,6 +114,96 @@ def parse_tags_input(text: str) -> tuple[str, ...]:
     return normalize_tags(text.split(","))
 
 
+def new_action_id() -> str:
+    return secrets.token_hex(ACTION_ID_LEN // 2)
+
+
+def _derived_id(position: int, text: str) -> str:
+    """Id stabile per un'azione scritta a mano senza `id` (es. in Obsidian): rileggere lo
+    stesso file deve dare lo stesso id, altrimenti `rescan` cambierebbe le spunte."""
+    return hashlib.sha256(f"{position}:{text}".encode()).hexdigest()[:ACTION_ID_LEN]
+
+
+def clean_action_text(value: object) -> str | None:
+    return _one_line(str(value))[:MAX_ACTION_LEN].rstrip() or None
+
+
+def parse_due(value: object) -> date | None:
+    """`AAAA-MM-GG` (o una data YAML) → data; qualunque altra cosa → nessuna scadenza."""
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value.strip()[:10])
+        except ValueError:
+            return None
+    return None
+
+
+def clean_actions(actions: Iterable[Action]) -> tuple[Action, ...]:
+    """Testo su una riga e tagliato, niente vuote né doppioni (stesso testo), al massimo
+    MAX_ACTIONS, id unici."""
+    out: list[Action] = []
+    seen_text: set[str] = set()
+    seen_id: set[str] = set()
+    for action in actions:
+        text = clean_action_text(action.text)
+        if text is None or text.casefold() in seen_text:
+            continue
+        aid = action.id if action.id and action.id not in seen_id else new_action_id()
+        out.append(replace(action, id=aid, text=text))
+        seen_text.add(text.casefold())
+        seen_id.add(aid)
+        if len(out) == MAX_ACTIONS:
+            break
+    return tuple(out)
+
+
+def sane_due(actions: Iterable[Action], reference: date) -> tuple[Action, ...]:
+    """Toglie le scadenze fuori dalla finestra attorno al giorno della registrazione."""
+    low, high = reference - DUE_PAST, reference + DUE_FUTURE
+    return tuple(a if a.due is None or low <= a.due <= high else replace(a, due=None)
+                 for a in actions)
+
+
+def actions_to_data(actions: Iterable[Action]) -> list[dict]:
+    """Forma JSON delle azioni: frontmatter del `.md` e colonna del catalogo."""
+    return [{"id": a.id, "text": a.text, "due": a.due.isoformat() if a.due else None,
+             "done": a.done.isoformat() if a.done else None} for a in actions]
+
+
+def actions_from_data(values: object) -> tuple[Action, ...]:
+    """Dal frontmatter (anche scritto a mano) o dal catalogo; NoteError se non è una lista
+    di voci leggibili. Una voce può essere solo un testo."""
+    if values is None:
+        return ()
+    if not isinstance(values, list):
+        raise NoteError("actions: attesa una lista")
+    actions: list[Action] = []
+    for position, item in enumerate(values):
+        if isinstance(item, str):
+            item = {"text": item}
+        if not isinstance(item, dict):
+            raise NoteError("actions: ogni voce è un testo o una mappa")
+        text = clean_action_text(item.get("text") or "")
+        if text is None:
+            continue
+        raw_id = item.get("id")
+        aid = str(raw_id).strip()[:ACTION_ID_LEN] if raw_id is not None and str(raw_id).strip() else ""
+        done = item.get("done")
+        try:
+            done_at = _datetime(done) if done not in (None, False, "") else None
+        except NoteError:
+            done_at = None
+        if done is True:  # `done: true` scritto a mano: fatta, senza l'istante
+            done_at = datetime(1970, 1, 1, tzinfo=UTC)
+        actions.append(Action(aid or _derived_id(position, text), text, parse_due(item.get("due")),
+                              done_at))
+    return clean_actions(actions)
+
+
 def _edited(fields: Iterable[str]) -> tuple[str, ...]:
     wanted = set(fields)
     return tuple(name for name in EDITABLE_FIELDS if name in wanted)
@@ -132,6 +243,8 @@ def render_note(note: Note, tz: ZoneInfo, meta: NoteMeta | None = None) -> str:
         front["models"] = models
     if note.processed_at:
         front["processed_at"] = note.processed_at.astimezone(tz).isoformat(timespec="seconds")
+    if note.actions:
+        front["actions"] = actions_to_data(note.actions)
     front["edited"] = list(note.edited)
     text = yaml.safe_dump(front, allow_unicode=True, sort_keys=False, default_flow_style=None,
                           width=YAML_WIDTH)
@@ -231,6 +344,9 @@ def merge_edits(file_note: Note, file_title: str | None, note: Note,
     if tuple(file_note.tags) != tuple(note.tags):
         note = replace(note, tags=tuple(file_note.tags), edited=_edited((*note.edited, "tags")))
         changed = True
+    if file_note.actions != note.actions:
+        note = edit_actions(note, file_note.actions)
+        changed = True
     return note, new_title, changed
 
 
@@ -275,6 +391,7 @@ def parse_note(text: str) -> Note:
         enrich_model=enrich_model,
         processed_at=_datetime(data.get("processed_at")),
         edited=_edited(str(name) for name in _list(data, "edited")),
+        actions=actions_from_data(data.get("actions")),
     )
 
 
@@ -298,13 +415,42 @@ def apply_transcript(note: Note, text: str, *, provider: str, model: str, langua
 
 
 def apply_enrichment(note: Note, title: str, summary: str | None, tags: tuple[str, ...], *,
-                     provider: str, model: str, at: datetime) -> Note:
-    """Risultato dell'arricchimento; riassunto e tag corretti a mano restano quelli."""
-    return replace(
+                     provider: str, model: str, at: datetime,
+                     actions: tuple[Action, ...] | None = None) -> Note:
+    """Risultato dell'arricchimento; riassunto, tag e azioni corretti a mano restano quelli.
+    `actions=None`: il provider non le ha date, restano quelle che c'erano."""
+    note = replace(
         note, title=title,
         summary=note.summary if "summary" in note.edited else summary,
         tags=note.tags if "tags" in note.edited else tags,
         enrich_provider=provider, enrich_model=model, processed_at=at)
+    return note if actions is None else apply_actions(note, actions)
+
+
+def apply_actions(note: Note, actions: tuple[Action, ...]) -> Note:
+    """Solo le azioni nuove (fase `actions`); quelle corrette o spuntate a mano restano."""
+    return note if "actions" in note.edited else replace(note, actions=clean_actions(actions))
+
+
+def edit_actions(note: Note, actions: Iterable[Action]) -> Note:
+    """Azioni scritte, cambiate, tolte o spuntate a mano: il campo entra in `edited`."""
+    return replace(note, actions=clean_actions(actions), edited=_edited((*note.edited, "actions")))
+
+
+def set_action_done(note: Note, action_id: str, at: datetime | None) -> Note:
+    """Spunta (o toglie la spunta a) un'azione; KeyError se l'id non c'è."""
+    if not any(a.id == action_id for a in note.actions):
+        raise KeyError(action_id)
+    return edit_actions(note, (replace(a, done=at) if a.id == action_id else a
+                               for a in note.actions))
+
+
+def set_all_actions_done(note: Note, at: datetime | None) -> Note:
+    """Tutte le azioni fatte (spunta della nota intera) o tutte di nuovo da fare."""
+    if not note.actions:
+        return note
+    return edit_actions(note, (replace(a, done=at if at is None or a.done is None else a.done)
+                               for a in note.actions))
 
 
 def apply_tags(note: Note, tags: tuple[str, ...]) -> Note:
@@ -320,6 +466,8 @@ def apply_edit(note: Note, field: str, value: str) -> Note:
         cleaned = clean_summary(value)
     elif field == "tags":
         cleaned = parse_tags_input(value)
+    elif field == "actions":
+        raise ValueError("le azioni si modificano con edit_actions")
     else:
         raise ValueError(f"campo non modificabile: {field!r}")
     return replace(note, **{field: cleaned}, edited=_edited((*note.edited, field)))
@@ -337,3 +485,22 @@ def validate_enrichment(data: object) -> tuple[str, str | None, tuple[str, ...]]
     if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
         raise EnrichmentInvalid("tag mancanti o non testuali")
     return clean_title(title), clean_summary(summary), normalize_tags(tags)
+
+
+def validate_actions(data: object) -> tuple[Action, ...] | None:
+    """Azioni della risposta di arricchimento (spec azioni §4): None se la chiave manca (il
+    provider non le ha date), voci illeggibili scartate una per una, id nuovi."""
+    if not isinstance(data, dict) or "actions" not in data:
+        return None
+    values = data.get("actions")
+    if not isinstance(values, list):
+        return ()
+    actions = []
+    for item in values:
+        if isinstance(item, str):
+            item = {"text": item}
+        if isinstance(item, dict):
+            text = clean_action_text(item.get("text") or "")
+            if text:
+                actions.append(Action(new_action_id(), text, parse_due(item.get("due"))))
+    return clean_actions(actions)
