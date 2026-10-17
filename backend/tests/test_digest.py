@@ -292,3 +292,21 @@ def test_stale_label_stays_at_the_bottom_and_sensors_go_first():
     assert all(y < digest.HEIGHT - 14 for y in rules)
     if rules:
         assert any(y > rules[0] for y in _ink_rows(above))
+
+
+# --- azioni (spec azioni §6) ---
+
+def test_actions_come_first_overdue_marked_and_capped():
+    from datetime import date as d
+    from secondbrain.digest import action_rows, lines
+    today = d(2026, 10, 17)
+    acts = [("Pagare", d(2026, 10, 15)), ("Chiamare", today), ("Futura", d(2026, 10, 20)),
+            ("Senza data", None)]
+    assert action_rows(acts, today) == [("item", "! Pagare"), ("item", "Chiamare")]
+    many = [(f"a{i}", today) for i in range(5)]
+    assert action_rows(many, today) == [("item", "a0"), ("item", "a1"), ("item", "+3 azioni")]
+    now = datetime(2026, 10, 17, 8, 0, tzinfo=ZoneInfo("Europe/Rome"))
+    assert lines(None, now, ZoneInfo("Europe/Rome"), acts) == [("item", "! Pagare"), ("item", "Chiamare")]
+    with_ha = lines(Snapshot(now, ha.Reading((), (), (), ())), now, ZoneInfo("Europe/Rome"), acts)
+    assert with_ha[:3] == [("item", "! Pagare"), ("item", "Chiamare"), ("rule", "")]
+    assert with_ha[3] == ("item", "nulla in programma")

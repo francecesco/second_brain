@@ -1,7 +1,14 @@
 # Backend — Azioni e scadenze estratte dalle note — Design / Spec
 
 **Data:** 2026-10-17
-**Stato:** approvata in chat il 2026-10-17; in sviluppo sul branch `backend-azioni`.
+**Stato:** approvata in chat il 2026-10-17; implementata sul branch `backend-azioni` il
+2026-10-17 (738 test del backend; screenshot a 1440 e 390 px in chiaro e scuro; prova nel
+browser: spunta dalla sezione In scadenza, nota completata dall'ultima azione, azione
+aggiunta a mano dal dettaglio; anteprima della schermata Oggi con e senza Home Assistant).
+**Da provare dall'autore** sul Mac e con un provider vero (Groq/Gemini) sulle note
+archiviate, con la fase `actions`: l'estrazione e le date relative sono verificate solo con
+provider finti. Deviazioni dalla bozza: colonna JSONB al posto della tabella (§3); lettura
+di Home Assistant estesa da 2 a 15 giorni per il contesto (§4).
 
 ## 1. Obiettivo
 

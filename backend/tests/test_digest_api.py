@@ -62,3 +62,16 @@ def test_device_hostname_serves_digest_but_not_the_settings_preview(make_client,
     host = {"Host": "ingest.example.org"}
     assert c.get("/digest/today", headers={**auth(token), **host}).status_code == 200
     assert c.get("/settings/homeassistant/preview.png", headers=host).status_code == 404
+
+
+def test_digest_without_home_assistant_shows_due_actions(client, token, db, recordings, settings):
+    from datetime import date
+    from secondbrain.notefile import Action
+    from tests.ai_fakes import processed
+    from tests.helpers import capture_by
+    cid = capture_by(db, "cap_20260923_191530").id
+    processed(db, settings, cid, actions=(Action("aaaa0001", "Domani", date(2026, 9, 29)),))
+    assert client.get("/digest/today", headers=auth(token)).status_code == 204   # niente di oggi
+    processed(db, settings, cid, actions=(Action("aaaa0002", "Pagare", date(2026, 9, 27)),))
+    r = client.get("/digest/today", headers=auth(token))
+    assert r.status_code == 200 and len(r.content) == 3400

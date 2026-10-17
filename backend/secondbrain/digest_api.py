@@ -1,7 +1,9 @@
 """Schermata "Oggi": bitmap per il device e anteprima PNG per le Impostazioni."""
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from . import digest, ha_store
+from datetime import date
+
+from . import catalog, digest, ha_store
 from .ota import require_device
 from .web.deps import require_login
 
@@ -9,14 +11,20 @@ router = APIRouter()
 
 
 def _image(request: Request):
-    """Immagine della schermata, o None se non c'è ancora una lettura da mostrare."""
+    """Immagine della schermata, o None se non c'è niente da mostrare: né una lettura di
+    Home Assistant né azioni scadute o di oggi (spec azioni §6)."""
     state = request.app.state
     with state.sessionmaker() as s:
         config = ha_store.get_config(s)
         snapshot = ha_store.get_snapshot(s)
+        actions = [(a["text"], date.fromisoformat(a["due"]))
+                   for _, a in catalog.open_actions(s) if a.get("due")]
+    now, tz = state.clock(), state.settings.tz_archive
     if config is None or snapshot.reading is None:
-        return None
-    return digest.render(snapshot, state.clock(), state.settings.tz_archive)
+        if not digest.action_rows(actions, now.astimezone(tz).date()):
+            return None
+        snapshot = None
+    return digest.render(snapshot, now, tz, actions)
 
 
 def _matches(header: str | None, tag: str) -> bool:

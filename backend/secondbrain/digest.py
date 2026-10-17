@@ -1,7 +1,8 @@
 """Immagine "Oggi" per il device: 200×136 punti in bianco e nero, dall'istantanea di HA.
 
-Solo la giornata di oggi (eventi non ancora finiti, senza titolo: "oggi" è implicito) e i
-sensori, divisi da un filetto; la spesa non è nell'immagine. In caratteri grandi: sul pannello da 1,54" quelli da 12-15 px non si leggevano.
+In cima le azioni scadute (con "! ") e di oggi delle note aperte (spec azioni §6), poi la
+giornata di oggi (eventi non ancora finiti, senza titolo: "oggi" è implicito) e i
+sensori, divisi da filetti; senza Home Assistant solo le azioni; la spesa non è nell'immagine. In caratteri grandi: sul pannello da 1,54" quelli da 12-15 px non si leggevano.
 
 Il device disegna da sé l'intestazione (ora, batteria) e il piede; il backend disegna la
 fascia centrale con lo stesso Space Grotesk della UI web. `lines` decide il contenuto,
@@ -51,6 +52,8 @@ STYLES = {
     "item": (20, 20, 15),
     "small": (14, 14, 11),
 }
+MAX_ACTION_ROWS = 3                     # righe di azioni; oltre, l'ultima dice quante restano
+OVERDUE_PREFIX = "! "                   # come gli avvisi nel piede del device
 EMPTY_DAY = "nulla in programma"        # "niente in programma" a 20 px non sta in 192 punti
 NO_SPACE_UNITS = ("°C", "°F", "°", "%")
 
@@ -184,19 +187,36 @@ def _sensor_value(sensor: ha.SensorValue) -> str:
     return text + (unit if unit in NO_SPACE_UNITS else f" {unit}")
 
 
-def lines(snapshot: Snapshot, now: datetime, tz: ZoneInfo) -> list[tuple[str, str]]:
+def action_rows(actions, today: date) -> list[tuple[str, str]]:
+    """Azioni aperte (testo, scadenza) scadute o di oggi, dalla più vecchia: al massimo
+    MAX_ACTION_ROWS righe, l'ultima "+N azioni" se non stanno tutte."""
+    due = sorted((d, i, _clean(str(t))) for i, (t, d) in enumerate(actions)
+                 if d is not None and d <= today)[:MAX_EVENTS]
+    rows = [("item", (OVERDUE_PREFIX if d < today else "") + t) for d, _, t in due]
+    if len(rows) > MAX_ACTION_ROWS:
+        rows = rows[:MAX_ACTION_ROWS - 1] + [("item", f"+{len(due) - MAX_ACTION_ROWS + 1} azioni")]
+    return rows
+
+
+def lines(snapshot: Snapshot | None, now: datetime, tz: ZoneInfo,
+          actions=()) -> list[tuple[str, str]]:
     """Righe (stile, testo) prima dell'impaginazione; stile in item, rule, small.
 
-    Solo il calendario di oggi, poi (se ci sono sensori) il filetto e i sensori; la spesa
-    non è nell'immagine. Due sensori stanno su una riga solo se ci entrano.
-    `now` deve avere il fuso (aware), altrimenti ValueError.
+    Le azioni scadute e di oggi (coppie testo, scadenza), poi il filetto e il calendario di
+    oggi, poi (se ci sono sensori) il filetto e i sensori; la spesa non è nell'immagine.
+    Senza istantanea (Home Assistant non collegato) solo le azioni. Due sensori stanno su
+    una riga solo se ci entrano. `now` deve avere il fuso (aware), altrimenti ValueError.
     """
     if now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("digest: serve un `now` con il fuso orario")
+    today = now.astimezone(tz).date()
+    rows: list[tuple[str, str]] = action_rows(actions, today)
+    if snapshot is None:
+        return rows
+    if rows:
+        rows.append(("rule", ""))
     reading = snapshot.reading
     events = reading.events if reading else ()
-    today = now.astimezone(tz).date()
-    rows: list[tuple[str, str]] = []
     today_items = _today_events(events, today, now, tz, MAX_TODAY)
     rows += [("item", t) for t in today_items] or [("item", EMPTY_DAY)]
 
@@ -245,10 +265,11 @@ def _fit(text: str, font: ImageFont.FreeTypeFont) -> str:
     return text[:low].rstrip() + ELLIPSIS
 
 
-def render(snapshot: Snapshot, now: datetime, tz: ZoneInfo) -> Image.Image:
+def render(snapshot: Snapshot | None, now: datetime, tz: ZoneInfo, actions=()) -> Image.Image:
     """Immagine modo "1" 200×136. Le righe che non stanno si tolgono dal fondo del
-    contenuto; la riga "agg." resta sempre in basso. `now` deve avere il fuso."""
-    rows = lines(snapshot, now, tz)
+    contenuto (prima i sensori, poi gli eventi: le azioni stanno in cima); la riga "agg."
+    resta sempre in basso. `now` deve avere il fuso."""
+    rows = lines(snapshot, now, tz, actions)
     small = [r for r in rows if r[0] == "small"]
     body = [r for r in rows if r[0] != "small"]
     # un po' d'aria sotto la fascia del device; se la prima riga sporgerebbe sopra y = 0
