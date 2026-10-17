@@ -10,6 +10,7 @@ from .deps import get_db, require_csrf, require_login
 from .templating import templates
 
 router = APIRouter()
+HOME = "/todo"  # pagina di partenza (spec UI responsive §2.1)
 
 
 def _client_ip(request: Request) -> str | None:
@@ -32,7 +33,7 @@ def login_submit(request: Request, password: str = Form(""), db: Session = Depen
     except NotAuthenticated:
         return templates.TemplateResponse(request, "login.html", {"error": "Password errata."},
                                           status_code=401)
-    response = RedirectResponse("/browse", status_code=303)
+    response = RedirectResponse(HOME, status_code=303)
     response.set_cookie(COOKIE_NAME, session.id, max_age=int(SESSION_LIFETIME.total_seconds()),
                         httponly=True, samesite="lax",
                         secure=public_scheme(request) == "https", path="/")
@@ -49,4 +50,4 @@ def logout_submit(session: WebSession = Depends(require_csrf), db: Session = Dep
 
 @router.get("/")
 def home(session: WebSession = Depends(require_login)):
-    return RedirectResponse("/browse", status_code=303)
+    return RedirectResponse(HOME, status_code=303)

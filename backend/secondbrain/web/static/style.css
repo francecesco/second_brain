@@ -32,6 +32,8 @@
   --sans: "Space Grotesk", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
   --mono: "Space Mono", ui-monospace, Menlo, monospace;
   --dot: "Doto", var(--mono);
+  --top-h: 3.2rem;    /* altezza dell'intestazione del desktop: albero e pannello si fermano sotto */
+  --panel-w: 27rem;   /* pannello del dettaglio a destra (desktop largo) */
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -50,7 +52,7 @@ h1, h2, h3 { font-weight: 600; }
 code { font-family: var(--mono); font-size: .9em; }
 
 /* Etichette: maiuscoletto spaziato, la "voce" di tutto il sistema. */
-.lab, .top nav a, .top nav button, .menu > summary, .crumbs, .tree-toggle, th, .ai-field h3, .card h2, .detail dt, .settings-form > label > span:first-child, .tags .tag {
+.lab, .top nav a, .top nav button, .menu > summary, .crumbs, th, .ai-field h3, .card h2, .detail dt, .settings-form > label > span:first-child, .tags .tag {
   font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: var(--mute);
 }
 .mono, .count, .row .meta, .hit .day, .provenance, .detail dd.mono, td.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
@@ -103,14 +105,14 @@ mark { background: var(--mark-bg); color: inherit; border-radius: 2px; padding: 
 .login .error { margin: 0 0 .8rem; }
 
 /* Intestazione */
-.top { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; padding: .55rem 1rem; background: var(--panel); border-bottom: 1px solid var(--line); }
+.top { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; padding: .55rem 1rem; background: var(--panel); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 30; min-height: var(--top-h); }
 .top .brand { display: inline-flex; align-items: center; gap: .55rem; margin-right: auto; font-family: var(--dot); font-size: 19px; line-height: 1; letter-spacing: .04em; text-transform: uppercase; font-weight: 800; color: var(--fg); }
 .top .brand::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--acc); flex-shrink: 0; }
 .top .dots { display: inline-flex; gap: 5px; }
 .top .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
 .top .dots i:first-child { background: var(--acc); }
 .top form { margin: 0; }
-.top select { max-width: 12rem; }
 .top form.search { display: flex; gap: .3rem; }
 .top form.search input { width: 13rem; }
 /* Menu a scomparsa: il pulsante mostra la sezione corrente, il pannello elenca tutte le voci */
@@ -140,29 +142,54 @@ mark { background: var(--mark-bg); color: inherit; border-radius: 2px; padding: 
 /* Su /new il tasto pieno è "Salva": qui la voce dice solo "sei qui", come la voce di menu attiva. */
 .top .new-note.on { background: var(--panel); color: var(--acc); border-color: var(--line); box-shadow: 0 2px 0 var(--line); filter: none; }
 
-/* Pannelli: albero a sinistra, contenuto a destra. */
-.layout { display: flex; gap: 8px; padding: 8px; min-height: calc(100vh - 3rem); }
-main { background: var(--panel); border: 1px solid var(--line); border-radius: 2px; }
-/* Albero: una colonna di tessere sul fondo grigio, come un menu a schede. Etichetta in
-   monospazio maiuscolo a sinistra, contatore a matrice di punti a destra. */
-.tree { width: 15rem; flex-shrink: 0; padding: .9rem 0 0 .4rem; }
+/* Pannelli: albero a sinistra, contenuto a destra (e pannello del dettaglio, vedi sotto). */
+.layout { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 8px; padding: 8px; align-items: start; }
+main { background: var(--panel); border: 1px solid var(--line); border-radius: 2px; flex: 1; min-width: 0; padding: 1.1rem 1.5rem 2rem;
+  min-height: calc(100vh - var(--top-h) - 16px); }
+.mhead, .tabbar { display: none; }   /* solo telefono */
+
+/* Albero: una colonna di tessere sul fondo grigio, come un menu a schede, in due sezioni
+   (Liste, Archivio). Etichetta in monospazio maiuscolo a sinistra, contatore a matrice di
+   punti a destra; i mesi hanno una barretta di densità grigia. Resta ferma scorrendo. */
+.tree { position: sticky; top: calc(var(--top-h) + 8px); max-height: calc(100vh - var(--top-h) - 16px); overflow-y: auto;
+  padding: .2rem .2rem 1rem .2rem; scrollbar-width: thin; }
+.tree-sec { margin: .9rem .3rem .45rem; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: var(--mute); }
+.tree-sec:first-child { margin-top: .3rem; }
 .tree ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .tree li { margin: 0; display: grid; gap: 4px; }
 .tree li ul { margin-left: 12px; }
 .tree li.empty { color: var(--mute); padding: .4rem .2rem; }
-.tree a { display: flex; align-items: center; justify-content: space-between; gap: .6rem; min-height: 2.6rem;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .9rem;
+.tree a { display: flex; align-items: center; gap: .6rem; min-height: 2.5rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: .45rem .9rem;
   font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--fg); }
 .tree a:hover { border-color: var(--fg); color: var(--fg); }
-.tree a .count { font-family: var(--dot); font-weight: 700; font-size: 16px; line-height: 1; color: var(--mute); }
-.tree a.current { color: var(--acc); border-color: var(--acc); }
+.tree a .icon { color: var(--mute); margin-right: -.15rem; }
+.tree a .t { flex: 1; min-width: 0; }
+.tree a .bar { width: 3rem; height: 4px; background: var(--bg); border-radius: 2px; overflow: hidden; flex-shrink: 0; }
+.tree a .bar i { display: block; height: 100%; background: var(--line); }
+.tree a:hover .bar i { background: var(--mute); }
+.tree a .count { font-family: var(--dot); font-weight: 700; font-size: 16px; line-height: 1; color: var(--mute); min-width: 2ch; text-align: right; }
+.tree a.year { background: var(--bg); }
+.tree a.current, .tree a.current .icon { color: var(--acc); border-color: var(--acc); }
 .tree li:has(ul .current) > a.current { border-color: var(--line); }  /* il bordo solo sulla voce più profonda, gli antenati solo il testo */
 .tree a.current .count { color: var(--acc); }
-.tree-toggle { display: none; cursor: pointer; }
-.tree > .tree-toggle { display: block; margin: 0 0 .6rem .5rem; }
-main { flex: 1; min-width: 0; padding: 1rem 1.2rem; }
-.crumbs { margin-bottom: 1rem; }
 .crumbs a { color: var(--fg); }
+
+/* Testata delle pagine: briciole o tessere a sinistra, filtro dispositivo a destra. */
+.page-head { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
+.page-head > :first-child { flex: 1; min-width: 0; }
+.page-head .crumbs, .page-title { margin: .35rem 0 0; }
+.page-title .count { font-family: var(--dot); font-size: 16px; font-weight: 700; letter-spacing: 0; margin-left: .35rem; }
+.device-filter { margin: 0; }
+.device-filter select { max-width: 13rem; }
+/* Tessere-contatore di "Da fare": stessa forma delle tessere della griglia, numeri in Doto. */
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 9.5rem)); gap: .6rem; }
+.tile { position: relative; display: grid; gap: .55rem; align-content: space-between; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: .7rem .9rem .75rem; }
+.tile .lab { font-size: 10px; }
+.tile .num { font-family: var(--dot); font-weight: 800; font-size: 34px; line-height: .9; }
+.tile.on { border-color: var(--acc); }
+.tile.on .lab, .tile.on .num { color: var(--acc); }
+.tile .led { position: absolute; top: .8rem; right: .8rem; }
 
 /* Griglia di anni, mesi, giorni */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .6rem; }
@@ -171,10 +198,19 @@ main { flex: 1; min-width: 0; padding: 1rem 1.2rem; }
 .grid .label { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
 .grid .count { font-family: var(--dot); font-weight: 700; font-size: 16px; line-height: 1; }
 
-/* Righe del giorno: casella "fatta" a sinistra, pulsante della riga, dettaglio a tutta larghezza */
-.row { border-bottom: 1px solid var(--line); display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: .4rem; }
+/* Gruppi per giorno (Da fare, Completati): etichetta con filetto in --fg, data breve a destra.
+   Un gruppo svuotato dalle spunte sparisce. */
+.day-group:not(:has(.row)) { display: none; }
+.day-head { display: flex; align-items: baseline; justify-content: space-between; margin: 1.3rem 0 0; padding-bottom: .35rem; border-bottom: 1px solid var(--fg); font-size: inherit; }
+.day-group:first-of-type .day-head { margin-top: .2rem; }
+.day-head .lab { color: var(--fg); }
+.day-head .dnum { font-family: var(--mono); font-size: 11px; color: var(--mute); }
+
+/* Righe: casella "fatta", poi a colonne ora | titolo con tag | dati; dettaglio a tutta larghezza. */
+.row { border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); column-gap: 0; border-radius: 2px; }
+.row:hover { background: color-mix(in srgb, var(--bg) 50%, transparent); }
 .row > .row-main:first-child, .row > .detail { grid-column: 1 / -1; }   /* cestino: niente casella */
-.row .check { display: flex; align-items: flex-start; justify-content: center; width: 2.25rem; min-height: 2.75rem; padding-top: .78rem; cursor: pointer; }
+.row .check { display: flex; align-items: flex-start; justify-content: center; width: 2.4rem; min-height: 2.75rem; padding-top: .85rem; cursor: pointer; }
 .row .check input { appearance: none; -webkit-appearance: none; margin: 0; width: 18px; height: 18px; padding: 0; flex: none;
   border: 1.5px solid var(--mute); border-radius: 2px; background: var(--bg); cursor: pointer; display: grid; place-content: center; }
 .row .check input::after { content: ""; width: 5px; height: 10px; margin-top: -2px; border: solid var(--panel); border-width: 0 2px 2px 0; transform: rotate(45deg); visibility: hidden; }
@@ -183,13 +219,15 @@ main { flex: 1; min-width: 0; padding: 1rem 1.2rem; }
 .row .check input:checked::after { visibility: visible; }
 .row.done .title { text-decoration: line-through; text-decoration-thickness: 1px; color: var(--mute); }
 .row.done .row-main:hover .title { color: var(--acc); }
-.row-main { display: flex; flex-wrap: wrap; gap: .3rem .8rem; width: 100%; text-align: left; background: none; border: 0; border-radius: 0; box-shadow: none; padding: .6rem 0;
+.row-main { display: grid; grid-template-columns: 4.2rem minmax(0, 1fr) auto; column-gap: 1rem; row-gap: .25rem; align-items: baseline;
+  width: 100%; text-align: left; background: none; border: 0; border-radius: 0; box-shadow: none; padding: .7rem .6rem .7rem 0;
   font: inherit; letter-spacing: 0; text-transform: none; font-weight: 400; cursor: pointer; }
 .row-main:hover { box-shadow: none; transform: none; }
 .row-main:hover .title { color: var(--acc); }
-.row .time { color: var(--mute); font-family: var(--dot); font-weight: 800; font-size: 18px; line-height: 1.2; letter-spacing: .02em; }
-.row .title { font-weight: 500; }
-.row .meta { color: var(--mute); margin-left: auto; font-size: .8em; }
+.row .time { color: var(--mute); font-family: var(--dot); font-weight: 800; font-size: 18px; line-height: 1.2; letter-spacing: .02em; white-space: nowrap; }
+.row .title { font-weight: 500; font-size: 15px; }
+.row .badge { grid-column: 2; justify-self: start; }
+.row .meta { grid-column: 3; grid-row: 1; color: var(--mute); font-size: .8em; text-align: right; white-space: nowrap; }
 .row:has(> .detail:not(:empty)) .time { color: var(--acc); }
 .head { display: flex; flex-wrap: wrap; gap: .3rem .5rem; align-items: center; }
 .head .tags { flex-basis: 100%; }
@@ -227,6 +265,25 @@ a.tag:hover { border-color: var(--acc); color: var(--acc); }
 .edited { color: var(--acc); }
 .transcript { white-space: pre-wrap; }
 .provenance { color: var(--mute); font-size: .75em; }
+
+/* Testata del dettaglio: serve solo nel pannello a destra (la riga mostra già ora, titolo e tag). */
+.detail-head { display: none; }
+/* Desktop largo: il dettaglio della riga diventa un pannello fisso a destra (spec UI responsive §2.8).
+   È lo stesso elemento .detail della riga, quindi htmx e azioni non cambiano. */
+@media (min-width: 1100px) {
+  .layout:has(.row > .detail:not(:empty)) { padding-right: calc(var(--panel-w) + 16px); }
+  .row > .detail:not(:empty) { position: fixed; z-index: 20; right: 8px; top: calc(var(--top-h) + 8px); bottom: 8px; width: var(--panel-w);
+    overflow-y: auto; overscroll-behavior: contain; background: var(--panel); border: 1px solid var(--line); border-radius: 2px; padding: 1rem 1.2rem 1.2rem; cursor: auto; }
+  .row:has(> .detail:not(:empty)) { background: var(--bg); box-shadow: inset 2px 0 0 var(--acc); }
+  .detail-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .3rem .7rem; padding-bottom: .8rem; margin-bottom: .6rem; border-bottom: 1px solid var(--line); }
+  .detail-head .time { font-family: var(--dot); font-weight: 800; font-size: 22px; line-height: 1; color: var(--acc); }
+  .detail-head .lab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .detail-head button { padding: .3rem .45rem; }
+  .detail-title { grid-column: 1 / -1; margin: .5rem 0 0; font-size: 18px; font-weight: 600; line-height: 1.3; }
+  .detail .actions > button:last-child { display: none; }   /* "Chiudi" sta già in testa */
+  .detail .actions form { flex: 1 1 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .detail .actions form input { min-width: 0; }
+}
 
 /* Nota scritta (/new) */
 .compose { display: grid; gap: .6rem; max-width: 48rem; }
@@ -283,19 +340,76 @@ td .actions { margin: 0; }
   .ha-sensor { grid-template-columns: minmax(0, 1fr); }
   .ha-sensor input[list], .ha-sensor-name { grid-column: auto; grid-row: auto; }
   .ha-sensor + .ha-sensor { margin-top: .45rem; }
-  .layout { display: block; padding: 6px; }
-  .tree { width: auto; margin-bottom: 6px; padding: .5rem .2rem 0; }
-  .tree > .tree-toggle { margin: 0 0 0 .5rem; }
-  .tree > .tree-toggle::after { content: " ▾"; }
-  .tree > ul { display: none; margin-top: .6rem; }
-  #tree-toggle:checked ~ ul { display: grid; }
-  main { padding: .9rem; }
-  .row .meta { margin-left: 0; width: 100%; }
-  .top .brand .label, .actions .label, .top .new-note .label, .top .dots { display: none; }
-  .menu .current { display: none; }
-  .top nav { min-width: 14rem; }
-  .search-open { display: inline-flex; }
-  .top form.search { display: none; width: 100%; }
-  #search-toggle:checked ~ form.search { display: flex; }
-  .top form.search input { flex: 1; width: auto; }
+}
+
+/* ===== Telefono (spec UI responsive §2.9–2.13): riga in cima, barra in basso, righe compatte ===== */
+@media (max-width: 700px) {
+  .top, .tree { display: none; }
+  body { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); }
+  .mhead { display: flex; align-items: center; gap: .5rem; position: sticky; top: 0; z-index: 30; background: var(--panel); border-bottom: 1px solid var(--line);
+    padding: calc(.7rem + env(safe-area-inset-top)) 1rem .65rem; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: var(--fg); }
+  .mhead::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--acc); flex-shrink: 0; }
+  .mhead .count { font-family: var(--dot); font-size: 16px; font-weight: 700; letter-spacing: 0; color: var(--mute); }
+  .layout { display: block; padding: 0; }
+  main { border: 0; border-radius: 0; padding: .5rem 1rem 1.5rem; min-height: calc(100vh - 3rem); }
+  .page-head { margin-bottom: .4rem; }
+  .page-head .tiles, .page-head .page-title, .page-head > .device-filter { display: none; }
+  .page-head .crumbs.single { display: none; }   /* il nome della pagina sta già nella riga in cima */
+  .page-head:not(:has(.crumbs:not(.single))) { display: none; }
+  .day-head { margin-top: 1rem; padding-bottom: .25rem; border-bottom-color: var(--line); }
+  .day-head .lab { font-size: 10px; }
+  /* riga compatta: [casella] ora · titolo / tag / dati */
+  .row:hover { background: none; }
+  .row { grid-template-columns: 2.1rem minmax(0, 1fr); }
+  .row .check { width: 2.1rem; padding-top: .7rem; min-height: 0; }
+  .row .check input { width: 20px; height: 20px; }
+  .row-main { grid-template-columns: 3.1rem minmax(0, 1fr); column-gap: .5rem; row-gap: .2rem; padding: .6rem 0 .65rem; }
+  .row .time { font-size: 16px; line-height: 1.3; }
+  .row .head { display: contents; }
+  .row .title { grid-column: 2; grid-row: 1; line-height: 1.3; }
+  .row .head .status { grid-column: 1; grid-row: 2; justify-self: center; }
+  .row .head .tags { grid-column: 2; }
+  .row .tags .tag { font-size: 9px; padding: 0 .3rem; }
+  .row .badge { grid-column: 2; }
+  .row .meta { grid-column: 2; grid-row: auto; text-align: left; font-size: 10.5px; white-space: normal; }
+  /* dettaglio: etichette sopra i valori, azioni in griglia con il testo */
+  .detail { padding: .2rem 0 1rem; }
+  .detail dl { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .detail dd { margin-bottom: .55rem; }
+  .detail .actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .detail .actions form { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .detail .actions form input { min-width: 0; width: 100%; }
+  .detail .actions button { justify-content: center; }
+  /* barra in basso */
+  .tabbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    background: var(--panel); border-top: 1px solid var(--line); padding: .2rem .3rem calc(.25rem + env(safe-area-inset-bottom)); }
+  .tabbar > a, .tabbar .more > summary { display: grid; justify-items: center; gap: .15rem; padding: .4rem 0 .2rem; list-style: none; cursor: pointer;
+    font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--mute); }
+  .tabbar .more { display: grid; }
+  .tabbar .more > summary { background: none; border: 0; border-radius: 0; box-shadow: none; }
+  .tabbar .more > summary::-webkit-details-marker { display: none; }
+  .tabbar .icon { width: 22px; height: 22px; }
+  .tabbar > a.on, .tabbar summary.on, .tabbar .more[open] > summary { color: var(--acc); box-shadow: inset 0 2px 0 var(--acc); }
+  .tabbar .tab-new .icon { box-sizing: content-box; width: 20px; height: 20px; padding: 7px; margin-top: -4px; background: var(--acc); color: var(--acc-fg); border-radius: 2px; box-shadow: 0 2px 0 var(--acc-edge); }
+  .tabbar .tab-new.on { box-shadow: none; }
+  .tabbar .tab-new.on .icon { background: var(--panel); color: var(--acc); box-shadow: 0 2px 0 var(--line); outline: 1px solid var(--line); }
+  /* foglio "Altro" */
+  .sheet-backdrop { position: fixed; inset: 0 0 calc(3.75rem + env(safe-area-inset-bottom)); background: rgba(0, 0, 0, .35); z-index: 35; }
+  .sheet { position: fixed; left: 0; right: 0; bottom: calc(3.75rem + env(safe-area-inset-bottom)); z-index: 36; background: var(--panel); border-top: 1px solid var(--line);
+    padding: .3rem 0; display: grid; max-height: 75vh; overflow-y: auto; }
+  .sheet > a, .sheet button { display: flex; align-items: center; gap: .7rem; width: 100%; padding: .7rem 1.1rem; background: none; border: 0; border-left: 2px solid transparent; border-radius: 0; box-shadow: none;
+    font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: var(--fg); }
+  .sheet > a.on { color: var(--acc); border-left-color: var(--acc); }
+  .sheet .count { margin-left: auto; font-family: var(--dot); font-size: 16px; font-weight: 700; letter-spacing: 0; color: var(--mute); }
+  .sheet form { margin: 0; }
+  .sheet-device { padding: .55rem 1.1rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .sheet-device select { width: 100%; max-width: none; }
+  .actions .label { display: inline; }
+  .search-page { position: sticky; top: 2.6rem; z-index: 5; background: var(--panel); padding: .4rem 0; }
+}
+/* Al tocco e sul telefono: tasti più alti (una taglia per tutti, regola invariata) e campi a
+   16 px, così iOS non ingrandisce la pagina quando si tocca un campo. */
+@media (pointer: coarse), (max-width: 700px) {
+  button, .btn, .menu > summary, .top .new-note { padding: .6rem .8rem; }
+  input, select, textarea { font-size: 16px; padding: .5rem .6rem; }
 }

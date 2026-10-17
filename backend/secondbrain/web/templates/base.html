@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% block title %}Second Brain{% endblock %}</title>
 <link rel="stylesheet" href="{{ static_url('style.css') }}">
 <script src="{{ static_url('htmx.min.js') }}" defer></script>
@@ -19,12 +19,20 @@ if (location.hash === "#salvata") {
   try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
 }
 // Clic sul titolo di una riga: apre il dettaglio, o lo richiude se e' gia' aperto.
+// Sul desktop largo il dettaglio e' un pannello a destra (style.css): una nota aperta per volta.
+var PANEL = window.matchMedia("(min-width: 1100px)");
+function closeDetail(button) {
+  document.getElementById(button.getAttribute("aria-controls")).innerHTML = "";
+  button.setAttribute("aria-expanded", "false");
+}
 function toggleDetail(button) {
   var detail = document.getElementById(button.getAttribute("aria-controls"));
   if (detail.innerHTML.trim()) {
-    detail.innerHTML = "";
-    button.setAttribute("aria-expanded", "false");
+    closeDetail(button);
   } else {
+    if (PANEL.matches) {
+      document.querySelectorAll('.row-main[aria-expanded="true"]').forEach(closeDetail);
+    }
     button.setAttribute("aria-expanded", "true");
     htmx.ajax("GET", button.dataset.detailUrl, {target: detail});
   }
@@ -32,8 +40,9 @@ function toggleDetail(button) {
 document.addEventListener("click", function (evt) {
   if (evt.target.id === "flash") { evt.target.hidden = true; }
   // Il menu a scomparsa si chiude cliccando fuori.
+  // Menu e foglio "Altro" si chiudono cliccando fuori (o sullo sfondo del foglio).
   document.querySelectorAll("details.menu[open]").forEach(function (menu) {
-    if (!menu.contains(evt.target)) { menu.open = false; }
+    if (!menu.contains(evt.target) || evt.target.classList.contains("sheet-backdrop")) { menu.open = false; }
   });
 });
 document.addEventListener("keydown", function (evt) {

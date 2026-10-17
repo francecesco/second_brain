@@ -11,7 +11,8 @@ from .. import catalog, library, ota
 from ..devices import DeviceError, rename_device
 from ..models import WebSession
 from ..naming import day_dir
-from .context import base_context, clean_device, page_context
+from .context import base_context, clean_device, page_context, today_local
+from .groups import day_groups
 from .deps import get_db, require_csrf, require_login
 from .templating import templates
 
@@ -59,6 +60,8 @@ def _set_done(request: Request, capture_id: uuid.UUID, done: bool, db: Session, 
     section, device, date_parts = _current_page(request)
     year, month, day = (date_parts + [None] * 3)[:3]
     ctx = page_context(request, db, session, device, year, month) | {"section": section, "day_num": day}
+    if section == "todo":  # le tessere di "Da fare" seguono la spunta (spec UI responsive §2.6)
+        ctx["tiles"] = catalog.todo_tiles(db, device, today_local(request))
     # La riga esce dalla lista in cui stava (archivio e "Da fare" se spuntata, "Completati"
     # se tolta la spunta): la risposta e' vuota per la riga, il resto e' out-of-band.
     return templates.TemplateResponse(request, "_toggle_done.html", ctx)
@@ -80,16 +83,21 @@ def undone_route(request: Request, capture_id: uuid.UUID, db: Session = Depends(
 def todo_page(request: Request, device: str | None = None, db: Session = Depends(get_db),
               session: WebSession = Depends(require_login)):
     device = clean_device(device)
+    today = today_local(request)
+    groups = day_groups(catalog.list_todo(db, device), lambda c: c.day, today)
     return templates.TemplateResponse(request, "todo.html", page_context(request, db, session, device) | {
-        "crumbs": [("Da fare", None)], "captures": catalog.list_todo(db, device), "show_day": True})
+        "crumbs": [("Da fare", None)], "groups": groups, "tiles": catalog.todo_tiles(db, device, today)})
 
 
 @router.get("/done")
 def done_page(request: Request, device: str | None = None, db: Session = Depends(get_db),
               session: WebSession = Depends(require_login)):
     device = clean_device(device)
+    tz = request.app.state.settings.tz_archive
+    groups = day_groups(catalog.list_done(db, device), lambda c: c.done_at.astimezone(tz).date(),
+                        today_local(request))
     return templates.TemplateResponse(request, "done.html", page_context(request, db, session, device) | {
-        "crumbs": [("Completati", None)], "captures": catalog.list_done(db, device), "show_day": True})
+        "crumbs": [("Completati", None)], "groups": groups})
 
 
 @router.post("/captures/{capture_id}/recorded-at")

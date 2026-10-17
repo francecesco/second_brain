@@ -1,5 +1,5 @@
 {% extends "finder.html" %}
+{% block head %}<h1 class="lab page-title">Completati <span class="count">{{ done_count }}</span></h1>{% endblock %}
 {% block main %}
-<p class="empty">Registrazioni spuntate come fatte, dall'ultima spuntata. Togli la spunta per rimetterle nell'archivio e in "Da fare".</p>
-{% for c in captures %}{% include "_row.html" %}{% else %}<p class="empty">Nessuna registrazione completata.</p>{% endfor %}
+{% with empty="Nessuna registrazione completata." %}{% include "_day_groups.html" %}{% endwith %}
 {% endblock %}

@@ -29,9 +29,9 @@ una pagina nuova nasce coerente senza dover leggere tutto il CSS.
 5. **Tema chiaro e scuro dalla preferenza del sistema.** Nessun interruttore in pagina.
    Ogni colore passa da una variabile: se una regola nuova usa un colore letterale, nel
    tema scuro si rompe.
-6. **Mobile senza pagine separate.** Sotto i 700 px la stessa pagina si impila; sotto i
-   1280 px il menu mostra solo le icone. Ogni azione ha `aria-label` e `title`, perché
-   su telefono l'etichetta scompare.
+6. **Mobile senza pagine separate.** Sotto i 700 px la stessa pagina diventa un'app:
+   riga in cima, barra in basso, righe compatte (vedi "Telefono"). Ogni azione ha
+   `aria-label` e `title`, perché alcune etichette restano solo icone.
 
 ## Token
 
@@ -84,13 +84,16 @@ Sì, e solo qui:
 - voce di menu attiva (classe `on`: testo e sottolineatura di 2 px);
 - voce corrente dell'albero (classe `current`: testo e contatore; il bordo solo sulla
   voce più profonda, non sugli antenati) e punto del marchio;
-- orario della riga di cui è aperto il dettaglio (`.row:has(> .detail:not(:empty)) .time`);
+- orario della riga di cui è aperto il dettaglio (`.row:has(> .detail:not(:empty)) .time`) e,
+  con il pannello a destra, filetto di 2 px a sinistra della riga e orario in testa al pannello;
+- tessera-contatore della lista corrente (`.tile.on`: bordo, etichetta e numero);
+- voce attiva della barra in basso del telefono (testo, icona e filetto di 2 px in alto);
 - titolo di una riga o di un risultato al passaggio del mouse;
 - pulsante principale (`button.pri`), uno per modulo: salva, entra (in una vista con più
   moduli separati, come le Impostazioni, uno per modulo);
-- pulsante "Nuova nota" nell'intestazione: l'unico elemento pieno arancione della barra. Su
-  `/new` è nello stato `on` (non pieno), così "Salva" resta l'unico pulsante pieno della vista
-  (che ha un solo modulo);
+- pulsante "Nuova nota" nell'intestazione e "Nuova" nella barra in basso: l'unico elemento
+  pieno arancione della barra. Su `/new` è nello stato `on` (non pieno), così "Salva" resta
+  l'unico pulsante pieno della vista (che ha un solo modulo);
 - LED "in corso" (`.led.run`) e icona "fallita" (`.status.failed`);
 - avvisi (`.notice`, `#flash`): bordo sinistro, icona e link;
 - marcatore "corretto a mano" (`.edited`), badge "data stimata" (`.badge`), errori di
@@ -100,21 +103,43 @@ Sì, e solo qui:
 No:
 
 - tag, briciole, intestazioni di sezione, bordi dei pannelli;
-- contatori, salvo quello della voce corrente dell'albero, che segue il suo testo;
+- contatori, salvo quello della voce corrente dell'albero e della tessera corrente, che
+  seguono il loro testo;
+- barrette di densità dei mesi nell'albero (sempre grigie);
 - link normali: sono in `--fg` e passano a `--acc` solo al passaggio del mouse;
 - più di un pulsante pieno nello stesso modulo.
 
 ## Componenti
 
-**Pannelli e layout.** `header.top` (intestazione, bordo inferiore), `.layout` con
-`aside.tree` (15 rem) e `main`, separati da 8 px di fondo grigio. Una pagina nuova
-estende `finder.html` e riempie `{% block main %}`: eredita intestazione, albero e
-briciole. Le briciole sono etichette con `›` tra una e l'altra.
+**Pannelli e layout.** `header.top` (intestazione fissa in alto, bordo inferiore, altezza
+`--top-h`), `.layout` a griglia con `aside.tree` (15 rem) e `main`, separati da 8 px di
+fondo grigio. Una pagina nuova estende `finder.html` e riempie `{% block main %}`: eredita
+intestazione, albero, barra in basso del telefono e la testata `.page-head` (briciole a
+sinistra, filtro dispositivo a destra sulle liste). Il blocco `{% block head %}` sostituisce
+le briciole (es. le tessere di "Da fare"). Le briciole sono etichette con `›` tra una e
+l'altra; con una sola voce hanno la classe `single` e sul telefono spariscono, perché il
+nome della pagina sta già nella riga in cima.
 
-**Albero** (`aside.tree`). Ispirato ai menu a schede di Nothing: liste annidate di
+**Testata e tessere-contatore** (`_tiles.html`, "Da fare"). Fino a quattro `.tile` nella
+stessa forma delle tessere della griglia (fondo `--bg`, bordo, angoli 6 px): etichetta in
+maiuscoletto e numero in Doto 34 px peso 800. La tessera della lista corrente è `on`. Un LED
+`.led.run` in alto a destra se c'è un'elaborazione in corso. Si aggiornano out-of-band
+con la spunta. Sul telefono non ci sono: il contatore sta nella riga in cima.
+
+**Gruppi per giorno** (`_day_groups.html`, "Da fare" e "Completati"). `section.day-group`
+con `h2.day-head`: etichetta in `--fg` ("Oggi", "Ieri", "Martedì 14 ottobre") e data breve
+in monospazio a destra, hairline in `--fg` sotto (in `--line` sul telefono). Un gruppo che
+resta senza righe dopo una spunta sparisce (`:has`).
+
+**Albero** (`aside.tree`, solo desktop). Due sezioni con un titolo in maiuscoletto
+(`.tree-sec`): **Liste** (Da fare, Completati, con icona) e **Archivio** (anni, con aperto
+l'anno della pagina o il più recente, i suoi mesi dal più recente e, nel mese aperto, i
+giorni). Resta ferma scorrendo (`position: sticky`). Ogni mese ha una barretta di densità
+(`.bar`, 3 rem × 4 px, grigia) proporzionale al mese più pieno dell'anno; la tessera
+dell'anno ha fondo `--bg`. Ispirato ai menu a schede di Nothing: liste annidate di
 tessere, ogni voce è un `<a>` con l'etichetta a sinistra (Space Mono, 11 px, maiuscolo,
 spaziatura 0,1 em) e il contatore a destra dentro lo stesso link (`.count`, Doto 16 px).
-Tessera: fondo `--panel`, bordo 1 px, angoli 6 px, altezza minima 2,6 rem, 4 px di
+Tessera: fondo `--panel`, bordo 1 px, angoli 6 px, altezza minima 2,5 rem, 4 px di
 spazio tra una e l'altra, ogni livello rientrato di 12 px. La voce corrente ha testo e
 contatore d'accento; il bordo d'accento solo sulla voce più profonda. Le tessere della
 griglia nel contenuto (`.grid a`) hanno la stessa forma.
@@ -122,11 +147,11 @@ griglia nel contenuto (`.grid a`) hanno la stessa forma.
 **Pulsanti.** `<button>` ha già lo stile: fondo `--panel`, bordo 1 px, raggio 2 px,
 ombra `0 2px 0 var(--line)` che fa da bordo inferiore, testo in etichetta. Al passaggio
 il bordo diventa `--fg`, alla pressione il tasto scende di 1 px. `button.pri` è pieno
-d'accento. I pulsanti con sola icona tengono l'etichetta in `<span class="label">`, che
-sparisce sotto i 700 px. Dentro `.row-main` e `.top nav` i pulsanti sono "nudi" (niente
+d'accento. I pulsanti tengono l'etichetta in `<span class="label">`. Dentro `.row-main` e `.top nav` i pulsanti sono "nudi" (niente
 bordo né ombra): sono righe e voci di menu, non tasti.
 
-**Misure dei pulsanti.** Una sola taglia per tutti i tasti: `button`, `a.btn`, il
+**Misure dei pulsanti.** Una sola taglia per tutti i tasti (più alta al tocco, vedi
+"Breakpoint", ma uguale per tutti): `button`, `a.btn`, il
 `summary` del menu e "Nuova nota". Padding `.35rem .7rem`, etichetta a 10,5 px (maiuscolo,
 spaziatura 0,12 em, peso 600), `line-height` 1,4, icona a 1,1 em (la regola `.icon`, mai
 ingrandita), bordo 1 px e ombra di 2 px: circa 30 px di altezza, la stessa dei campi
@@ -135,7 +160,7 @@ dell'intestazione. Regole:
 - un tasto si distingue per **colore** (pieno d'accento, stato `on`), **mai per misura**:
   niente `min-height`, padding o icone propri. Un tasto nuovo parte da `button`/`.btn` e
   cambia solo i colori;
-- sotto i 700 px cambia solo l'etichetta, che sparisce; padding e icona restano uguali;
+- al tocco cambia il padding di tutti i tasti insieme; le etichette restano;
 - nella stessa riga (intestazione, `.actions`) tutti i tasti hanno la stessa altezza;
 - nessuna eccezione per pagina o modulo: anche "Salva"/"Annulla" di Nuova nota ed
   "Entra" del login hanno la taglia comune. La **larghezza** può seguire il layout del
@@ -158,9 +183,10 @@ campi passano a `--panel`. Il focus è un anello di 2 px d'accento.
 
 **Menu** (`details.menu` in `finder.html`). Tutte le sezioni stanno in un menu a
 scomparsa a destra dell'intestazione, accanto alla ricerca: il pulsante (`summary`, stile
-dei pulsanti) mostra l'icona e il nome della sezione corrente (solo l'icona sotto i
-700 px); il pannello è un elenco verticale di voci con icona ed etichetta, la voce
+dei pulsanti) mostra l'icona e il nome della sezione corrente; il pannello è un elenco verticale di voci con icona ed etichetta, la voce
 corrente con bordo sinistro e testo d'accento, "Esci" separato da una hairline in fondo.
+Ordine: Da fare, Completati, Archivio, poi il resto. Sul telefono il menu non c'è: le
+stesse voci stanno nella barra in basso e nel foglio "Altro".
 Si chiude cliccando fuori o con Esc (`base.html`). I contatori "Da fare" e "Completati"
 stanno in `_nav_counts.html`, che le risposte htmx rimandano out-of-band. Non c'è una
 voce "Ricerca": basta il campo "Cerca nelle note".
@@ -168,10 +194,31 @@ voce "Ricerca": basta il campo "Cerca nelle note".
 **Righe della lista** (`_row.html`). `.row` con hairline sotto, a due colonne: a sinistra
 la casella "fatta" (`.check`), a destra `.row-main`, un `<button>` che apre il dettaglio
 in `.detail` e lo richiude al secondo clic (`toggleDetail` in `base.html`, che tiene
-aggiornato `aria-expanded`); il dettaglio occupa tutta la larghezza. Nel cestino la
-casella non c'è e `.row-main` prende entrambe le colonne. Ordine dentro il pulsante:
-orario (`--mute`, Doto), titolo, tag, LED di stato, meta a destra (dispositivo, durata,
-dimensione in monospazio). La riga aperta si riconosce dall'orario arancione. Spuntata,
+aggiornato `aria-expanded`). Nel cestino la casella non c'è e `.row-main` prende entrambe
+le colonne. Dentro il pulsante, a colonne: orario (`<time>`, `--mute`, Doto, solo ore e
+minuti; data e secondi nel `title`), titolo (15 px) con tag e LED sotto, meta a destra
+(dispositivo, durata, dimensione in monospazio). Al passaggio del mouse la riga prende una
+tinta leggera di `--bg`. La riga aperta si riconosce dall'orario arancione.
+
+**Pannello del dettaglio** (da 1100 px). Il `.detail` della riga, quando non è vuoto,
+diventa con il solo CSS un pannello fisso a destra (`--panel-w`, 27 rem) sotto
+l'intestazione, con scroll proprio; `main` lascia lo spazio. In testa `.detail-head`
+(nascosta altrove): orario d'accento in Doto 22 px, giorno e dispositivo in etichetta, ×
+per chiudere, titolo a 18 px. La riga aperta ha fondo `--bg` e filetto d'accento a
+sinistra. Una sola nota aperta per volta (`toggleDetail`). Sotto i 1100 px il dettaglio si
+apre nella riga a tutta larghezza.
+
+**Telefono: riga in cima, barra in basso, foglio "Altro"** (≤ 700 px). Intestazione e
+albero spariscono. `.mhead`: riga fissa in cima con il punto arancione, il nome della
+pagina in etichetta e il contatore in Doto. `nav.tabbar`: barra fissa in basso con cinque
+voci a icona (22 px) ed etichetta a 9,5 px: Da fare, Archivio, Nuova (icona su un quadrato
+pieno d'accento, come "Nuova nota"), Cerca, Altro; rispetta `safe-area-inset-bottom`
+(`viewport-fit=cover` in `base.html`). "Altro" è un `details.menu.more`: apre `.sheet`, un
+foglio dal basso con le altre sezioni (come le voci del menu del desktop), il filtro
+dispositivo ed Esci, sopra uno sfondo scuro (`.sheet-backdrop`) che lo chiude al tocco.
+Righe compatte: orario 16 px in una colonna di 3,1 rem, titolo accanto, tag e meta sotto,
+casella da 20 px. Dettaglio: etichette sopra i valori, azioni in una griglia di tre tasti
+con il testo, titolo e data su righe intere. Spuntata,
 la riga esce dalla lista in cui sta (archivio e "Da fare" → "Completati", e viceversa).
 
 **Casella "fatta"** (`.row .check`). Quadrato di 18 px, bordo 1,5 px `--mute`, angoli
@@ -215,10 +262,12 @@ stesso tratto; niente icon font, niente immagini. Un'icona non più usata si tog
 
 ## Breakpoint
 
-- `≤ 1280 px`: il menu mostra solo le icone (la riga dell'intestazione resta una).
-- `≤ 700 px`: layout a blocchi, albero richiudibile con l'etichetta "Archivio ▾",
-  ricerca dietro l'icona lente, meta delle righe su una riga propria, etichette dei
-  pulsanti nascoste.
+- `≥ 1100 px`: il dettaglio di una nota si apre nel pannello a destra.
+- `701–1099 px`: albero a sinistra, dettaglio nella riga.
+- `≤ 700 px`: telefono: riga in cima, barra in basso, foglio "Altro", righe compatte,
+  niente albero né tessere, etichette dei tasti del dettaglio visibili.
+- `pointer: coarse` o `≤ 700 px`: tasti più alti (padding `.6rem .8rem`, sempre una taglia
+  sola per tutti) e campi a 16 px, così iOS non ingrandisce la pagina al tocco.
 
 ## Come si aggiunge una pagina o un componente
 
@@ -275,3 +324,8 @@ senza, dopo un deploy il tunnel serviva il foglio di stile vecchio con l'HTML nu
 - **2026-10-13** — Card Home Assistant: righe con `datalist` e nome in `--mute`, anteprima
   pixelata 2×. Corretta la regola dei pulsanti pieni: uno per modulo (le Impostazioni hanno
   più moduli separati, ognuno col suo "Salva"), non uno per vista.
+- **2026-10-17** — UI responsive (spec `docs/specs/2026-10-17-backend-ui-responsive-design.md`,
+  scelta su mockup a 390 e 1440 px): "Da fare" come home, raggruppata per giorno, con le
+  tessere-contatore; albero sempre a sinistra con Liste e mesi dell'anno aperto, barrette di
+  densità grigie; dettaglio in un pannello a destra da 1100 px. Telefono con riga in cima,
+  barra in basso e foglio "Altro" al posto di intestazione e albero; tasti più alti al tocco.

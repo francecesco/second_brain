@@ -1,0 +1,7 @@
+{# Lista raggruppata per giorno (spec UI responsive §2.2); un gruppo svuotato dalle spunte sparisce via CSS. #}
+{% for g in groups %}
+<section class="day-group" id="day-{{ g.key }}">
+  <h2 class="day-head"><span class="lab">{{ g.label }}</span><span class="dnum">{{ g.short }}</span></h2>
+  {% for c in g.items %}{% include "_row.html" %}{% endfor %}
+</section>
+{% else %}<p class="empty">{{ empty }}</p>{% endfor %}

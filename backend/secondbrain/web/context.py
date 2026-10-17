@@ -66,15 +66,27 @@ def ai_notice(db: Session, box: store.SecretBox) -> str | None:
     return text_model_notice(db, box)
 
 
+def today_local(request: Request):
+    """Il giorno di oggi nel fuso dell'archivio (gruppi "Oggi"/"Ieri", tessere)."""
+    return request.app.state.clock().astimezone(request.app.state.settings.tz_archive).date()
+
+
 def page_context(request: Request, db: Session, session: WebSession, device: str | None = None,
                  year: int | None = None, month: int | None = None) -> dict:
+    years = catalog.year_counts(db, device)
+    # L'albero tiene aperto l'anno della pagina o, fuori dall'archivio, il più recente
+    # (spec UI responsive §2.5): i mesi sono sempre a un clic.
+    tree_year = year or (years[0][0] if years else None)
+    months = catalog.month_counts(db, tree_year, device) if tree_year else []
     return base_context(request, db, session, device) | {
         "ai_notice": ai_notice(db, request.app.state.box),
         "year": year,
         "month": month,
         "tree": {
-            "years": catalog.year_counts(db, device),
-            "months": catalog.month_counts(db, year, device) if year else [],
+            "years": years,
+            "year": tree_year,
+            "months": months,
+            "month_max": max((n for _, n in months), default=0),
             "days": catalog.day_counts(db, year, month, device) if year and month else [],
         },
     }

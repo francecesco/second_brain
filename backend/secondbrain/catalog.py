@@ -1,12 +1,15 @@
 """Accesso al catalogo Postgres: engine, sessioni, query (spec §8)."""
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import Integer, cast, create_engine, extract, func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, selectinload, sessionmaker
 
-from .models import Capture, Device
+from .jobs import ACTIVE, RUNNING
+from .models import Capture, Device, Job
+
+WEEK_DAYS = 7  # tessera "Ultimi 7 giorni" di Da fare
 
 
 def make_engine(url: str) -> Engine:
@@ -99,6 +102,22 @@ def count_todo(s: Session, device_id: str | None = None) -> int:
 def list_todo(s: Session, device_id: str | None = None) -> list[Capture]:
     stmt = select(Capture).order_by(Capture.recorded_at.desc()).options(selectinload(Capture.job))
     return list(s.scalars(_open(_active(stmt, device_id))))
+
+
+def todo_tiles(s: Session, device_id: str | None, today: date) -> dict:
+    """Contatori delle tessere di "Da fare" (spec UI responsive §2.6): tutte, di oggi, degli
+    ultimi 7 giorni (oggi compreso) e quelle con un'elaborazione in coda o in corso."""
+    base = _open(_active(select(func.count()).select_from(Capture), device_id))
+    week_start = today - timedelta(days=WEEK_DAYS - 1)
+    jobs = base.join(Job, Job.capture_id == Capture.id)
+    running = s.scalar(jobs.where(Job.status == RUNNING))
+    return {
+        "todo": s.scalar(base),
+        "today": s.scalar(base.where(Capture.day == today)),
+        "week": s.scalar(base.where(Capture.day >= week_start, Capture.day <= today)),
+        "processing": s.scalar(jobs.where(Job.status.in_(ACTIVE))),
+        "running": bool(running),
+    }
 
 
 def _done(stmt):

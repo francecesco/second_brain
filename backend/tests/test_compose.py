@@ -72,8 +72,9 @@ def test_trash_has_no_listen_link_for_text_note(ui, db):
 
 
 def test_new_note_button_is_current_on_new_page(ui):
-    assert 'aria-current="page"' in ui.client.get("/new").text
-    assert 'aria-current="page"' not in ui.client.get("/todo").text
+    assert 'class="new-note on" href="/new" aria-current="page"' in ui.client.get("/new").text
+    todo = ui.client.get("/todo").text
+    assert 'class="new-note" href="/new" aria-label' in todo and 'href="/new" aria-current' not in todo
 
 
 def _form(ui, text="Comprare il latte"):

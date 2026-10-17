@@ -167,7 +167,7 @@ def test_wrong_password_page(client, user):
 
 def test_login_sets_a_safe_cookie(client, user):
     r = client.post("/login", data={"password": PASSWORD}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/browse"
+    assert r.status_code == 303 and r.headers["location"] == "/todo"
     cookie = r.headers["set-cookie"].lower()
     assert "httponly" in cookie and "samesite=lax" in cookie and "secure" not in cookie
 
@@ -192,7 +192,7 @@ def test_pages_require_login(client, user):
     assert (r.status_code, r.headers["hx-redirect"]) == (401, "/login")
     client.post("/login", data={"password": PASSWORD}, follow_redirects=False)
     r = client.get("/", follow_redirects=False)
-    assert (r.status_code, r.headers["location"]) == (303, "/browse")
+    assert (r.status_code, r.headers["location"]) == (303, "/todo")
 
 
 def test_logout_requires_csrf(client, user, db):

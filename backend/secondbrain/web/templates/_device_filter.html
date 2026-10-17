@@ -1,0 +1,9 @@
+{# Filtro dispositivo: sulle liste resta sulla pagina, altrove porta a "Da fare". #}
+{% set here = request.url.path %}
+{% set on_list = here == "/todo" or here == "/done" or here == "/fix" or here.startswith("/browse") %}
+<form method="get" class="device-filter" action="{{ here if on_list else '/todo' }}">
+  <select name="device" aria-label="Dispositivo" onchange="this.form.submit()">
+    <option value="">Tutti i dispositivi</option>
+    {% for d in devices %}<option value="{{ d.id }}"{% if d.id == device %} selected{% endif %}>{{ d.name }}</option>{% endfor %}
+  </select>
+</form>

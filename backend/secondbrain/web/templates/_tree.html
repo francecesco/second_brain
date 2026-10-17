@@ -1,17 +1,23 @@
+{% from "_icons.html" import icon %}
+  {# Colonna sinistra del desktop (spec UI responsive §2.5): liste e archivio per anni e mesi. #}
   <aside class="tree" id="tree"{% if oob %} hx-swap-oob="outerHTML"{% endif %}>
-    <input type="checkbox" id="tree-toggle" hidden>
-    <label for="tree-toggle" class="tree-toggle">Archivio</label>
+    <div class="tree-sec">Liste</div>
+    <ul>
+      <li><a href="/todo{{ qs }}"{% if section == "todo" %} class="current"{% endif %}>{{ icon("todo") }}<span class="t">Da fare</span><span class="count">{{ todo_count }}</span></a></li>
+      <li><a href="/done{{ qs }}"{% if section == "done" %} class="current"{% endif %}>{{ icon("done") }}<span class="t">Completati</span><span class="count">{{ done_count }}</span></a></li>
+    </ul>
+    <div class="tree-sec">Archivio</div>
     <ul>
     {% for y, n in tree.years %}
-      <li><a href="/browse/{{ y }}{{ qs }}"{% if y == year %} class="current"{% endif %}>{{ y }}<span class="count">{{ n }}</span></a>
-      {% if y == year and tree.months %}
+      <li><a class="year{% if y == year %} current{% endif %}" href="/browse/{{ y }}{{ qs }}"><span class="t">{{ y }}</span><span class="count">{{ n }}</span></a>
+      {% if y == tree.year and tree.months %}
         <ul>
-        {% for m, mn in tree.months %}
-          <li><a href="/browse/{{ y }}/{{ '%02d' % m }}{{ qs }}"{% if m == month %} class="current"{% endif %}>{{ MONTHS[m - 1] }}<span class="count">{{ mn }}</span></a>
-          {% if m == month and tree.days %}
+        {% for m, mn in tree.months|reverse %}
+          <li><a href="/browse/{{ y }}/{{ '%02d' % m }}{{ qs }}"{% if y == year and m == month %} class="current"{% endif %}><span class="t">{{ MONTHS[m - 1] }}</span><span class="bar" aria-hidden="true"><i style="width:{{ (mn * 100 / tree.month_max)|round|int }}%"></i></span><span class="count">{{ mn }}</span></a>
+          {% if y == year and m == month and tree.days %}
             <ul>
             {% for d, dn in tree.days %}
-              <li><a href="/browse/{{ y }}/{{ '%02d' % m }}/{{ '%02d' % d }}{{ qs }}"{% if d == day_num %} class="current"{% endif %}>{{ weekday_short(date(y, m, d)) }}<span class="count">{{ dn }}</span></a></li>
+              <li><a href="/browse/{{ y }}/{{ '%02d' % m }}/{{ '%02d' % d }}{{ qs }}"{% if d == day_num %} class="current"{% endif %}><span class="t">{{ weekday_short(date(y, m, d)) }}</span><span class="count">{{ dn }}</span></a></li>
             {% endfor %}
             </ul>
           {% endif %}

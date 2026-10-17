@@ -1,9 +1,10 @@
 {% from "_icons.html" import icon %}
 {% set done = c.done_at is not none %}
+{% set rec = c.recorded_at.astimezone(tz) %}
 <div class="row{% if done %} done{% endif %}" id="row-{{ c.id }}">
   {% if not c.trashed_at %}<label class="check" title="{{ 'Segna come da fare' if done else 'Segna come fatta' }}"><input type="checkbox"{% if done %} checked{% endif %} hx-post="/captures/{{ c.id }}/{{ 'undone' if done else 'done' }}" hx-target="#row-{{ c.id }}" hx-swap="outerHTML" aria-label="{{ 'Segna come da fare' if done else 'Segna come fatta' }}"></label>{% endif %}
   <button type="button" class="row-main" aria-expanded="{{ 'true' if open_id == c.id else 'false' }}" aria-controls="detail-{{ c.id }}" data-detail-url="/captures/{{ c.id }}" onclick="toggleDetail(this)">
-    <span class="time">{% if show_day %}{{ c.recorded_at.astimezone(tz).strftime('%d/%m/%Y') }} {% endif %}{{ c.recorded_at.astimezone(tz).strftime('%H:%M:%S') }}</span>
+    <time class="time" datetime="{{ rec.isoformat() }}" title="{{ rec.strftime('%d/%m/%Y %H:%M:%S') }}">{% if show_day %}{{ rec.strftime('%d/%m') }} {% endif %}{{ rec.strftime('%H:%M') }}</time>
     {% include "_row_head.html" %}
     {% if c.date_estimated %}<span class="badge">data stimata</span>{% endif %}
     <span class="meta">{{ device_names.get(c.device_id, c.device_id) }} · {% if is_text_capture(c) %}{{ (c.transcript or '')|wordcount }} parole{% else %}{{ c.duration_s|duration }} · {{ c.size_bytes|size }}{% endif %}</span>
