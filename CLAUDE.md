@@ -34,7 +34,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `wifi_select.c`, `ota_manifest.c`, `wifi_bssid.c`) con test unity sull'host in
   `host_test/`. Prima il test che fallisce, poi l'implementazione. Test host:
   `cd firmware/host_test && idf.py build && timeout 10 ./build/host_test.elf`
-  (l'eseguibile non termina da solo). Al 2026-10-12 sono 43 e devono restare verdi.
+  (l'eseguibile non termina da solo). Al 2026-10-13 sono 52 e devono restare verdi.
 - Build senza warning (`-Werror` su format-truncation è attivo).
 - Ogni task del piano finisce con una verifica sull'hardware (log seriale o esito visibile)
   prima del commit; se la verifica scopre un bug, il fix va nello stesso commit o nel
@@ -173,12 +173,12 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   completo verificato (upload dal device, trascrizione con Groq, nota con titolo nel vault
   `/mnt/Storage1/secondbrain/vault/Captures/`). Sul Mac resta il backend di sviluppo
   (`backend/.env` e `backend/data/` locali e gitignored).
-- **Note scritte** (spec `docs/specs/2026-10-12-backend-note-scritte-design.md`): sul
-  dal pulsante "Nuova nota" si scrive una nota che segue la pipeline delle registrazioni.
+- **Note scritte** (spec `docs/specs/2026-10-12-backend-note-scritte-design.md`): con il
+  pulsante "Nuova nota" si scrive una nota che segue la pipeline delle registrazioni.
   Provata dall'autore in locale, in `master` e **sulla ZimaBoard dal 2026-10-12** (backup
   del DB prima del deploy in `/mnt/Storage1/secondbrain/backup/`).
 - **Home Assistant e schermata Oggi** (spec `docs/specs/2026-10-13-homeassistant-oggi-design.md`,
-  branch `homeassistant-oggi`, non ancora in `master` né sulla ZimaBoard): card
+  branch `homeassistant-oggi`, fuso in `master` e sulla ZimaBoard dal 2026-10-13): card
   "Connessione Home Assistant" nelle Impostazioni (URL e token di lunga durata cifrati,
   calendari, fino a 6 sensori con etichetta, lista della spesa), lettura del worker ogni
   5 min con istantanea tenuta sugli errori, `GET /digest/today` (immagine 1 bit 200×136 di
