@@ -9,7 +9,7 @@ from secondbrain.ai.base import NO_HINTS, CheckResult, Enrichment, Transcript
 from secondbrain.ai.registry import PROVIDER_SPECS
 from secondbrain.archive import Archive
 from secondbrain.vault import Vault
-from secondbrain.notefile import Note
+from secondbrain.notefile import Note, validate_actions
 
 from .helpers import NOW, make_wav
 
@@ -70,9 +70,12 @@ class FakeProvider:
     def enrich(self, text, language, hints=NO_HINTS):
         self.calls.append(("enrich", text))
         self.hints.append(hints)
-        title, summary, tags = _next(self.enrichments, DEFAULT_ENRICHMENT)
+        item = _next(self.enrichments, DEFAULT_ENRICHMENT)
+        title, summary, tags = item[:3]
+        # quarta voce facoltativa: le azioni come le darebbe il modello (lista di dict)
+        actions = validate_actions({"actions": list(item[3])}) if len(item) > 3 else None
         return Enrichment(title=title, summary=summary, tags=tuple(tags),
-                          model=f"{self.name}-llm", raw={"title": title})
+                          model=f"{self.name}-llm", raw={"title": title}, actions=actions)
 
     def check(self):
         return CheckResult(True, "ok")

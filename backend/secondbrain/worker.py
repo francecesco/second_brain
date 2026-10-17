@@ -31,6 +31,7 @@ from . import ha_store, homeassistant, jobs, notefile, notes, search, textnotes,
 from . import settings_store as store
 from .ai import chain
 from .ai.audio import AudioError, AudioSource
+from .action_context import action_context
 from .ai.base import ContentError, Hints
 from .ai.registry import ProviderConfig
 from .archive import AI_SUFFIX, Archive
@@ -47,6 +48,7 @@ LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 POLL_INTERVAL_S = 5.0
 VAULT_CHECK_INTERVAL_S = 60.0   # modifiche da Obsidian (spec vault §7)
 VAULT_CHECK_KEY = "vault_check"
+HA_EVENT_DAYS = 15    # giorni di calendario letti: oggi per "Oggi", gli altri come contesto delle azioni
 HA_REFRESH_S = 300   # lettura di Home Assistant (spec Home Assistant e Oggi)
 AI_SCHEMA_VERSION = 1
 TEMP_PREFIX = "secondbrain-audio-"
@@ -152,7 +154,7 @@ class Worker:
                 return False
         self._last_ha_refresh = now
         local = now.astimezone(self.tz)
-        end = datetime.combine(local.date() + timedelta(days=2), time.min, tzinfo=self.tz)
+        end = datetime.combine(local.date() + timedelta(days=HA_EVENT_DAYS), time.min, tzinfo=self.tz)
         try:
             reading = homeassistant.read(self.http, config, token, now, end)
             error = None
@@ -194,8 +196,8 @@ class Worker:
                 if text is None:
                     return
             # Indizi riletti dopo la trascrizione: i tag gia' usati non contano questa nota.
-            self._enrich(lease, text, configs, language, self._hints(lease.capture_id),
-                         tags_only=stage == jobs.STAGE_RETAG)
+            mode = stage if stage in (jobs.STAGE_RETAG, jobs.STAGE_ACTIONS) else jobs.STAGE_ENRICH
+            self._enrich(lease, text, configs, language, self._hints(lease.capture_id), mode=mode)
         except Shutdown:
             self._release(lease)
             raise
@@ -211,10 +213,15 @@ class Worker:
 
     def _hints(self, capture_id: uuid.UUID | None = None) -> Hints:
         """Vocabolario e tag piu' usati (spec tag e nomi §4), letti a ogni lavoro: una
-        modifica al vocabolario vale dalla nota successiva."""
+        modifica al vocabolario vale dalla nota successiva. Con la nota, anche il contesto
+        delle azioni: quando e' stata registrata e gli impegni dei giorni dopo."""
         with self.sessionmaker() as s:
             known = tuple(tag for tag, _ in search.tag_counts(s, exclude=capture_id)[:KNOWN_TAGS])
-            return Hints(names=store.vocabulary(s), known_tags=known)
+            context: tuple[str, ...] = ()
+            capture = s.get(Capture, capture_id) if capture_id is not None else None
+            if capture is not None:
+                context = action_context(capture.recorded_at, ha_store.get_snapshot(s), self.tz)
+            return Hints(names=store.vocabulary(s), known_tags=known, context=context)
 
     def _hold(self, s: Session, lease: _Lease) -> tuple[Capture, Job] | None:
         """Nota e lavoro bloccati, in quest'ordine, se il risultato si può ancora scrivere.
@@ -260,7 +267,7 @@ class Worker:
                     and "transcript" in capture.edited):
                 stage = jobs.STAGE_ENRICH  # trascrizione corretta a mano: non si rifà
                 until = jobs.advance(s, lease.capture_id, stage, now).locked_until
-            if stage == jobs.STAGE_RETAG and not (text or "").strip():  # niente da ritaggare
+            if stage in (jobs.STAGE_RETAG, jobs.STAGE_ACTIONS) and not (text or "").strip():  # niente da rifare
                 jobs.mark_done(s, lease.capture_id, now)
                 s.commit()
                 return None
@@ -310,7 +317,8 @@ class Worker:
         return note.transcript or None
 
     def _enrich(self, lease: _Lease, text: str, configs: list[ProviderConfig],
-                language: str, hints: Hints, *, tags_only: bool = False) -> None:
+                language: str, hints: Hints, *, mode: str = jobs.STAGE_ENRICH) -> None:
+        """Arricchimento completo, o solo i tag (`retag`) o solo le azioni (`actions`)."""
         config, enrichment = chain.enrich(configs, self.factory, text, language, self._on_call,
                                           hints)
         now = self.clock()
@@ -325,20 +333,27 @@ class Worker:
                 log.warning("nota %s senza trascrizione nel catalogo: di nuovo da trascrivere",
                             lease.capture_id)
                 return
-            if tags_only:  # retag: titolo, riassunto e provenienza restano
-                note = notefile.apply_tags(notes.note_from_capture(capture), enrichment.tags)
+            actions = enrichment.actions
+            if actions is not None:   # scadenze lette male (anno sbagliato) scartate
+                actions = notefile.sane_due(actions, capture.day)
+            current = notes.note_from_capture(capture)   # rilegge `edited` sotto il lock
+            if mode == jobs.STAGE_RETAG:  # titolo, riassunto, azioni e provenienza restano
+                note = notefile.apply_tags(current, enrichment.tags)
+            elif mode == jobs.STAGE_ACTIONS:  # solo le azioni
+                note = current if actions is None else notefile.apply_actions(current, actions)
             else:
-                note = notefile.apply_enrichment(  # rilegge `edited` sotto il lock
-                    notes.note_from_capture(capture), enrichment.title, enrichment.summary,
-                    enrichment.tags, provider=config.name, model=enrichment.model, at=now)
-            self._write_ai_section(capture.rel_path, "retag" if tags_only else "enrich",
+                note = notefile.apply_enrichment(
+                    current, enrichment.title, enrichment.summary, enrichment.tags,
+                    provider=config.name, model=enrichment.model, at=now, actions=actions)
+            self._write_ai_section(capture.rel_path, mode,
                                    _ai_record(config.name, enrichment.model, now, enrichment.raw))
             notes.write_note(s, self.archive, capture, note, self.tz, vault=self.vault,
                              public_url=self.public_url)
             jobs.mark_done(s, lease.capture_id, now)
             s.commit()
             rel_path = capture.rel_path
-        log.info("%s %s con %s", "ritaggata" if tags_only else "elaborata", rel_path, config.name)
+        done = {jobs.STAGE_RETAG: "ritaggata", jobs.STAGE_ACTIONS: "azioni rifatte"}.get(mode, "elaborata")
+        log.info("%s %s con %s", done, rel_path, config.name)
 
     def _write_ai_section(self, rel_wav: str, section: str, record: dict) -> None:
         """Aggiorna solo la sezione di questa fase; un `.ai.json` illeggibile si sostituisce."""

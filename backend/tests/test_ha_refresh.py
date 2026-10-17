@@ -87,7 +87,7 @@ def test_error_keeps_the_previous_snapshot(db, settings, clock):
     assert snap.error and TOKEN not in snap.error
 
 
-def test_window_ends_at_midnight_after_tomorrow(db, settings, clock):
+def test_window_covers_two_weeks_for_the_actions_context(db, settings, clock):
     clock.now = datetime(2026, 10, 13, 22, 30, tzinfo=timezone.utc)  # 00:30 del 14 a Roma
     seen = []
 
@@ -100,5 +100,5 @@ def test_window_ends_at_midnight_after_tomorrow(db, settings, clock):
     configure(db, box)
     assert worker.maybe_refresh_homeassistant() is True
     end = datetime.fromisoformat(seen[0]["end_date_time"])
-    assert end == datetime(2026, 10, 16, 0, 0, tzinfo=ROME)
+    assert end == datetime(2026, 10, 29, 0, 0, tzinfo=ROME)    # oggi + 14 giorni interi (spec azioni §4)
     assert datetime.fromisoformat(seen[0]["start_date_time"]) == clock.now

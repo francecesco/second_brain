@@ -18,8 +18,8 @@ from typing import Any, Protocol
 import httpx
 
 from ..languages import language_name
-from ..notefile import (MAX_SUMMARY_LEN, MAX_TAGS, MAX_TITLE_LEN, EnrichmentInvalid,
-                        validate_enrichment)
+from ..notefile import (MAX_ACTIONS, MAX_SUMMARY_LEN, MAX_TAGS, MAX_TITLE_LEN, Action,
+                        EnrichmentInvalid, validate_actions, validate_enrichment)
 from .audio import AudioError, AudioSource
 
 OK = 200
@@ -68,6 +68,7 @@ class Enrichment:
     tags: tuple[str, ...]
     model: str
     raw: dict[str, Any]
+    actions: tuple[Action, ...] | None = None   # None: il provider non le ha date
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,9 @@ class Hints:
     vocabolario dell'autore e i tag gia' usati nell'archivio."""
     names: tuple[str, ...] = ()
     known_tags: tuple[str, ...] = ()
+    # Contesto per le azioni (spec azioni §4): quando è stata registrata la nota e gli
+    # impegni dei giorni dopo, una riga ciascuno. Solo per l'arricchimento.
+    context: tuple[str, ...] = ()
 
 
 NO_HINTS = Hints()
@@ -214,14 +218,20 @@ def json_body(provider: str, response: httpx.Response) -> dict[str, Any]:
 def enrich_prompt(language: str, hints: Hints = NO_HINTS) -> str:
     prompt = (
         "Ricevi la trascrizione di una nota vocale. Rispondi solo con un oggetto JSON con "
-        'tre chiavi: "title" (titolo breve su una riga, al massimo '
+        'quattro chiavi: "title" (titolo breve su una riga, al massimo '
         f'{MAX_TITLE_LEN} caratteri), "summary" (riassunto di una o due frasi, al massimo '
-        f'{MAX_SUMMARY_LEN} caratteri) e "tags" (elenco da 1 a {MAX_TAGS} tag minuscoli, '
-        "senza #). Nei tag metti sempre, scritti per intero, tutte le persone e tutti i "
+        f'{MAX_SUMMARY_LEN} caratteri), "tags" (elenco da 1 a {MAX_TAGS} tag minuscoli, '
+        'senza #) e "actions" (elenco, anche vuoto, di al massimo '
+        f'{MAX_ACTIONS} cose concrete che chi parla deve fare, ognuna come oggetto con "text", '
+        'una frase breve all\'infinito, e "due", la scadenza come data AAAA-MM-GG se la nota '
+        'dice quando, altrimenti null; niente azioni per idee, osservazioni o cose già '
+        'fatte; le date relative come "domani", "venerdì" o "fine mese" si contano dal '
+        'momento della registrazione). '
+        "Nei tag metti sempre, scritti per intero, tutte le persone e tutti i "
         "programmi, app, prodotti, servizi e dispositivi nominati nella nota (per esempio "
         '"home assistant", "marco"); poi da 1 a 3 temi della nota. Niente tag generici come '
         "saluti, domande, idee, giorni o momenti della giornata. "
-        f"Scrivi titolo, riassunto e tag in {language_name(language)}."
+        f"Scrivi titolo, riassunto, tag e azioni in {language_name(language)}."
     )
     if hints.names:
         prompt += (" Nomi propri noti, da scrivere esattamente così nei tag e nel testo quando "
@@ -230,6 +240,8 @@ def enrich_prompt(language: str, hints: Hints = NO_HINTS) -> str:
     if hints.known_tags:
         prompt += (" Tag già usati nell'archivio, da riusare quando calzano invece di "
                    f"inventarne di simili: {', '.join(hints.known_tags)}.")
+    if hints.context:
+        prompt += " Contesto: " + " ".join(hints.context)
     return prompt
 
 
@@ -279,7 +291,8 @@ def parse_enrichment(provider: str, model: str, content: object,
         title, summary, tags = validate_enrichment(data)
     except EnrichmentInvalid as exc:
         raise ServiceError(provider, f"arricchimento fuori schema: {exc}") from None
-    return Enrichment(title=title, summary=summary, tags=tags, model=model, raw=raw)
+    return Enrichment(title=title, summary=summary, tags=tags, model=model, raw=raw,
+                      actions=validate_actions(data))
 
 
 def check_models(available: set[str], wanted: Iterable[str]) -> CheckResult:

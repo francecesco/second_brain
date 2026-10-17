@@ -35,6 +35,11 @@
     <input type="hidden" name="csrf" value="{{ csrf }}">
     <button type="submit"{% if not retag_count %} disabled{% endif %}>{{ icon("tag") }}<span>Rifai i tag delle note ({{ retag_count }})</span></button>
   </form>
+  <p>Le azioni (le cose da fare, con la scadenza se la nota la dice) si ricavano da sole per le note nuove. Per quelle già archiviate e non completate si possono ricavare ora: le azioni corrette o spuntate a mano restano.</p>
+  <form method="post" action="/settings/actions" class="actions">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button type="submit"{% if not actions_count %} disabled{% endif %}>{{ icon("todo") }}<span>Ricava le azioni delle note aperte ({{ actions_count }})</span></button>
+  </form>
 </section>
 
 {% include "_homeassistant_card.html" %}

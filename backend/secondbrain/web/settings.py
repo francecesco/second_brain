@@ -109,6 +109,7 @@ def render_settings(request: Request, db: Session, session: WebSession, queued: 
         "paused": store.is_paused(db), "language": store.get_language(db), "languages": LANGUAGES,
         "counts": jobs.queue_counts(db), "backfill_count": jobs.count_backfill(db),
         "vocabulary": store.vocabulary(db), "retag_count": jobs.count_retag(db),
+        "actions_count": jobs.count_actions(db),
         "queued_now": queued,
         "vault_dir": str(state.settings.vault_dir), "vault_check": _vault_check(db),
         "ha": ha or ha_view(db, state.box)}, status_code=status_code)
@@ -143,6 +144,13 @@ def save_vocabulary(vocabulary: str = Form(""), db: Session = Depends(get_db),
 @router.post("/settings/retag")
 def retag(request: Request, db: Session = Depends(get_db), session: WebSession = Depends(require_csrf)):
     n = jobs.enqueue_retag(db, request.app.state.clock())
+    db.commit()
+    return RedirectResponse(f"/settings?queued={n}", status_code=303)
+
+
+@router.post("/settings/actions")
+def actions(request: Request, db: Session = Depends(get_db), session: WebSession = Depends(require_csrf)):
+    n = jobs.enqueue_actions(db, request.app.state.clock())
     db.commit()
     return RedirectResponse(f"/settings?queued={n}", status_code=303)
 

@@ -26,8 +26,13 @@ ENRICH_SCHEMA = {
         "title": {"type": "STRING"},
         "summary": {"type": "STRING"},
         "tags": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "actions": {"type": "ARRAY", "items": {
+            "type": "OBJECT",
+            "properties": {"text": {"type": "STRING"}, "due": {"type": "STRING", "nullable": True}},
+            "required": ["text"],
+        }},
     },
-    "required": ["title", "summary", "tags"],
+    "required": ["title", "summary", "tags", "actions"],
 }
 
 

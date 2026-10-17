@@ -15,7 +15,8 @@ from . import jobs
 from .archive import NOTE_SUFFIX, TRASH, Archive
 from .models import Capture, Job
 from .naming import day_dir, local_day
-from .notefile import EDITABLE_FIELDS, MAX_TITLE_LEN, apply_edit
+from . import notefile
+from .notefile import EDITABLE_FIELDS, MAX_TITLE_LEN, Action, apply_edit
 from .notes import lock_capture, note_from_capture, place_note, write_note
 from .vault import Vault
 from .search import refresh_search_vector
@@ -70,12 +71,71 @@ def set_title(s: Session, archive: Archive, capture_id: uuid.UUID, title: str, *
 def set_done(s: Session, archive: Archive, capture_id: uuid.UUID, done: bool, now: datetime, *,
              vault: Vault | None = None, tz: ZoneInfo | None = None,
              public_url: str | None = None) -> Capture:
-    """Spunta o toglie la spunta (spec note da fare §3): sidecar, catalogo e frontmatter."""
+    """Spunta o toglie la spunta (spec note da fare §3): sidecar, catalogo e frontmatter.
+
+    Con delle azioni (spec azioni §2.2): spuntare la nota spunta anche le azioni aperte;
+    togliere la spunta a una nota con tutte le azioni fatte le riapre tutte."""
     capture = _get(s, capture_id)
     if done != (capture.done_at is not None):
         capture.done_at = now if done else None
-    if vault is not None and tz is not None:
+    note = note_from_capture(capture)
+    all_done = bool(note.actions) and all(a.done is not None for a in note.actions)
+    if note.actions and capture.trashed_at is None and (done != all_done):
+        note = notefile.set_all_actions_done(note, now if done else None)
+        write_note(s, archive, capture, note, tz or UTC, vault=vault, public_url=public_url)
+    elif vault is not None and tz is not None:
         place_note(vault, capture, tz, public_url)
+    _save(s, archive, capture)
+    return capture
+
+
+def _follow_actions(capture: Capture, note: notefile.Note, now: datetime) -> None:
+    """La spunta della nota segue le azioni (spec azioni §2.2): tutte fatte → completata,
+    almeno una aperta → di nuovo da fare. Una nota senza azioni non cambia."""
+    if not note.actions:
+        return
+    if all(a.done is not None for a in note.actions):
+        capture.done_at = capture.done_at or now
+    else:
+        capture.done_at = None
+
+
+def _editable(capture: Capture) -> None:
+    if capture.trashed_at is not None:
+        raise InTrash("la registrazione è nel cestino")
+    if capture.transcript is None:
+        raise NotProcessed("la nota non è ancora stata elaborata")
+
+
+def set_action_done(s: Session, archive: Archive, tz: ZoneInfo, capture_id: uuid.UUID,
+                    action_id: str, done: bool, now: datetime, *, vault: Vault | None = None,
+                    public_url: str | None = None) -> Capture:
+    """Spunta un'azione (o toglie la spunta): `.md`, catalogo e, se cambia, la nota intera."""
+    capture = _get(s, capture_id)
+    _editable(capture)
+    try:
+        note = notefile.set_action_done(note_from_capture(capture), action_id, now if done else None)
+    except KeyError:
+        raise NotFound(f"{capture_id}/{action_id}") from None
+    _follow_actions(capture, note, now)
+    write_note(s, archive, capture, note, tz, vault=vault, public_url=public_url)
+    _save(s, archive, capture)
+    return capture
+
+
+def edit_actions(s: Session, archive: Archive, tz: ZoneInfo, capture_id: uuid.UUID,
+                 actions: list[Action], now: datetime | None = None, *,
+                 vault: Vault | None = None, public_url: str | None = None) -> Capture:
+    """Azioni riscritte a mano dal dettaglio: testo e scadenza dalla UI, la spunta resta
+    quella dell'azione con lo stesso id; le azioni senza id sono nuove."""
+    capture = _get(s, capture_id)
+    _editable(capture)
+    note = note_from_capture(capture)
+    done = {a.id: a.done for a in note.actions}
+    merged = [Action(a.id if a.id in done else "", a.text, a.due, done.get(a.id)) for a in actions]
+    note = notefile.edit_actions(note, merged)
+    _follow_actions(capture, note, now or datetime.now(UTC))
+    write_note(s, archive, capture, note, tz, vault=vault, public_url=public_url)
     _save(s, archive, capture)
     return capture
 

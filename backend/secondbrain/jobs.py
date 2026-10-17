@@ -18,6 +18,7 @@ ACTIVE = (QUEUED, RUNNING)
 STAGE_TRANSCRIBE = "transcribe"
 STAGE_ENRICH = "enrich"
 STAGE_RETAG = "retag"  # rifà solo i tag (spec tag e nomi §3): niente trascrizione, titolo e riassunto restano
+STAGE_ACTIONS = "actions"  # rifà solo le azioni (spec azioni §4): il resto della nota resta
 PRIORITY_NORMAL = 100  # note appena arrivate e "Rielabora"
 PRIORITY_LOW = 10      # arretrato e rescan: passano dopo le note nuove
 BACKOFF = (timedelta(minutes=1), timedelta(minutes=5), timedelta(minutes=30),
@@ -131,6 +132,31 @@ def enqueue_retag(s: Session, now: datetime, capture_id: uuid.UUID | None = None
     ids = list(s.scalars(stmt))
     for cid in ids:
         enqueue(s, cid, now, priority=PRIORITY_LOW, stage=STAGE_RETAG)
+    return len(ids)
+
+
+def _actions():
+    """Note aperte (non completate, fuori dal cestino) con un testo, azioni non corrette a
+    mano, non gia' in coda (spec azioni §4)."""
+    return (select(Capture.id).outerjoin(Job, Job.capture_id == Capture.id)
+            .where(Capture.trashed_at.is_(None), Capture.done_at.is_(None),
+                   Capture.transcript.is_not(None), Capture.transcript != "",
+                   ~Capture.edited.contains(["actions"]),
+                   or_(Job.status.is_(None), Job.status.not_in(ACTIVE))))
+
+
+def count_actions(s: Session) -> int:
+    return s.scalar(select(func.count()).select_from(_actions().subquery()))
+
+
+def enqueue_actions(s: Session, now: datetime, capture_id: uuid.UUID | None = None) -> int:
+    """Rifà le azioni delle note aperte (o di una sola), a priorita' bassa. Niente commit."""
+    stmt = _actions().order_by(Capture.recorded_at.desc())
+    if capture_id is not None:
+        stmt = stmt.where(Capture.id == capture_id)
+    ids = list(s.scalars(stmt))
+    for cid in ids:
+        enqueue(s, cid, now, priority=PRIORITY_LOW, stage=STAGE_ACTIONS)
     return len(ids)
 
 

@@ -111,7 +111,7 @@ def test_enrich_request_and_parsing():
     assert payload["contents"][0]["parts"][0]["text"] == "Devo chiamare Marco"
     config = payload["generationConfig"]
     assert config["responseMimeType"] == "application/json"
-    assert config["responseSchema"]["required"] == ["title", "summary", "tags"]
+    assert config["responseSchema"]["required"] == ["title", "summary", "tags", "actions"]
     assert (e.title, e.summary, e.tags, e.model) == ("Chiamare Marco", "Entro venerdì.",
                                                      ("lavoro",), "gemini-3.8-flash")
 
