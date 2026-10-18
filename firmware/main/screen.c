@@ -5,7 +5,8 @@
 
 // Geometria della schermata di stato (pixel).
 #define MARGIN        8
-#define BAR_H         30     // barra in alto: ora e batteria
+#define BAR_H         30     // barra in alto: ora, data e batteria
+#define DATE_GAP      6      // spazio tra ora e data
 #define BAT_W         36     // corpo dell'icona, bordo compreso
 #define BAT_H         20
 #define BAT_TIP_W     3
@@ -142,12 +143,16 @@ static void draw_battery(uint8_t *fb, const screen_status_t *st, bool neg)
     draw_text(fb, f, bx - 4 - w, ty, txt, w, ink);
 }
 
-// Barra in alto: ora a sinistra, batteria a destra.
+// Barra in alto: ora a sinistra con la data "gg/mm" in un corpo piu' piccolo a fianco (allineate
+// in basso), batteria a destra. Nel caso peggiore ("23:59 31/12" con "100%") restano pochi pixel
+// di margine: la data nello stesso corpo dell'ora non ci starebbe.
 static void draw_bar(uint8_t *fb, const screen_status_t *st, bool neg)
 {
     if (neg) rect(fb, 0, 0, SCREEN_W, BAR_H, true);
-    draw_text(fb, &font_grotesk_20, MARGIN, (BAR_H - font_grotesk_20.height) / 2 + 1,
-              st->clock ? st->clock : "--:--", 90, !neg);
+    const font_t *cf = &font_grotesk_20, *df = &font_grotesk_16;
+    int cy = (BAR_H - cf->height) / 2 + 1;
+    int w = draw_text(fb, cf, MARGIN, cy, st->clock ? st->clock : "--:--", 60, !neg);
+    if (st->date) draw_text(fb, df, MARGIN + w + DATE_GAP, cy + cf->height - df->height, st->date, 50, !neg);
     draw_battery(fb, st, neg);
 }
 

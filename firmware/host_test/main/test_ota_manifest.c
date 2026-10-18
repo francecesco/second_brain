@@ -96,6 +96,8 @@ void test_screen_today_bars_always_negative(void);
 void test_screen_status_header_stays_positive(void);
 void test_screen_today_null_digest(void);
 void test_screen_today_no_network_shows_capture_outcome(void);
+void test_screen_date_next_to_clock(void);
+void test_screen_date_does_not_touch_battery(void);
 
 void app_main(void) {
     UNITY_BEGIN();
@@ -151,5 +153,7 @@ void app_main(void) {
     RUN_TEST(test_screen_status_header_stays_positive);
     RUN_TEST(test_screen_today_null_digest);
     RUN_TEST(test_screen_today_no_network_shows_capture_outcome);
+    RUN_TEST(test_screen_date_next_to_clock);
+    RUN_TEST(test_screen_date_does_not_touch_battery);
     UNITY_END();
 }
