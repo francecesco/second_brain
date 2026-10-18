@@ -122,6 +122,23 @@ def publish_bytes(s: Session, firmware_dir: Path, data: bytes, type_: str,
             pass
 
 
+def set_current(s: Session, type_: str, version: str) -> FirmwareRelease:
+    """Rende corrente una release già pubblicata, indietro o avanti: dopo un rollback la più
+    nuova resta in elenco e questo è l'unico modo per tornarci (ripubblicarla è rifiutato)."""
+    release = s.scalar(select(FirmwareRelease).where(
+        FirmwareRelease.type == type_, FirmwareRelease.version == version))
+    if release is None:
+        raise OtaError(f"release {type_} {version} non trovata")
+    if release.current:
+        return release
+    s.execute(update(FirmwareRelease).where(FirmwareRelease.type == type_)
+              .values(current=False))
+    s.flush()
+    release.current = True
+    s.flush()
+    return release
+
+
 def rollback(s: Session, type_: str) -> FirmwareRelease:
     current = current_release(s, type_)
     if current is None:

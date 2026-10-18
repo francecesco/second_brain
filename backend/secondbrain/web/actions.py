@@ -248,13 +248,8 @@ def devices_page(request: Request, db: Session = Depends(get_db),
     all_releases = ota.list_releases(db)
     types = sorted({d.type for d in ctx["devices"]} | {r.type for r in all_releases}
                    - {ota.WEB_DEVICE_TYPE})
-    firmware = []
-    for t in types:
-        rels = [r for r in all_releases if r.type == t]
-        current = next((r for r in rels if r.current), None)
-        # "Torna alla precedente" vale solo se c'è una release pubblicata prima della corrente
-        firmware.append({"type": t, "releases": rels[::-1],
-                         "can_rollback": current is not None and any(r.id < current.id for r in rels)})
+    firmware = [{"type": t, "releases": [r for r in all_releases if r.type == t][::-1]}
+                for t in types]
     q = request.query_params
     return templates.TemplateResponse(request, "devices.html", ctx | {
         "crumbs": [("Dispositivi", None)], "releases": releases, "firmware": firmware,
@@ -288,13 +283,15 @@ async def publish_firmware_route(request: Request, type_: str, file: UploadFile 
     return _fw_back(pubblicata=release.version)
 
 
-@router.post("/devices/firmware/{type_}/rollback")
-def rollback_firmware_route(request: Request, type_: str, db: Session = Depends(get_db),
-                            session: WebSession = Depends(require_csrf)):
+@router.post("/devices/firmware/{type_}/current")
+def set_current_firmware_route(request: Request, type_: str, version: str = Form(""),
+                               db: Session = Depends(get_db),
+                               session: WebSession = Depends(require_csrf)):
+    """"Rendi corrente" su una riga della tabella: indietro o avanti tra le release."""
     if not is_valid_device_type(type_):
         raise HTTPException(404, "tipo sconosciuto")
     try:
-        release = ota.rollback(db, type_)
+        release = ota.set_current(db, type_, version)
     except ota.OtaError as exc:
         return _fw_back(errore=str(exc))
     db.commit()

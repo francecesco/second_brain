@@ -12,7 +12,7 @@ Branch `backend-firmware-ui`. Le checkbox non si spuntano: lo stato è nei commi
 - [ ] **Task 3 — Route e card**: `POST /devices/firmware/{type}` e `.../rollback`, template
   `devices.html` con la card, notice su `pubblicata`, `corrente`, `errore`. Test con il
   client loggato: upload buono (303, release corrente, file su disco), file non firmware
-  (303 con `errore`), rollback, CSRF obbligatorio.
+  (303 con `errore`), "Rendi corrente" avanti e indietro, CSRF obbligatorio.
 - [ ] **Task 4 — CLI**: `--version` opzionale in `firmware publish`. Test.
 - [ ] **Task 5 — Script `firmware/tools/release.sh`**, `CLAUDE.md` (procedura standard,
   cavo solo per il recupero), `README.md` se cita il publish da CLI.

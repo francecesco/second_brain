@@ -457,6 +457,7 @@ td .actions { margin: 0; }
   .sheet-device { padding: .55rem 1.1rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
   .sheet-device select { width: 100%; max-width: none; }
   .actions .label { display: inline; }
+  .fw-table .actions .label { display: none; }   /* "Rendi corrente" solo icona: la tabella scorre di lato */
   .search-page { position: sticky; top: 2.6rem; z-index: 5; background: var(--panel); padding: .4rem 0; }
 }
 /* Al tocco e sul telefono: tasti più alti (una taglia per tutti, regola invariata) e campi a

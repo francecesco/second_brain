@@ -114,8 +114,8 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   si preme "Pubblica": la versione la legge il backend dall'intestazione ESP-IDF del binario.
   Il device la scarica al prossimo wake (entro 5 min) e si riavvia; nei log della ZimaBoard
   (`docker compose logs app | grep firmware`) si vede il `GET` del `.bin`, poi solo manifest.
-  "Torna alla precedente" nella stessa card è il rollback. Il cavo (`esptool`) resta per il
-  recupero. Da CLI: `docker compose cp <bin> app:/tmp/fw.bin` e `docker compose exec app
+  "Rendi corrente" su una release in elenco torna indietro o di nuovo avanti (ripubblicare
+  una versione già pubblicata è rifiutato). Il cavo (`esptool`) resta per il recupero. Da CLI: `docker compose cp <bin> app:/tmp/fw.bin` e `docker compose exec app
   secondbrain firmware publish /tmp/fw.bin` (`--version` opzionale, altrimenti dal binario);
   sulla ZimaBoard prima `scp <bin> zima:/tmp/` e i comandi dentro
   `ssh zima 'cd ~/second_brain/backend && ...'`. "Ultimo contatto" e "firmware" nella tabella
@@ -491,8 +491,11 @@ ridisegno utile. 54 test host.
 
 **2026-10-18 — Firmware dalla pagina Dispositivi** (`docs/specs/2026-10-18-backend-firmware-ui-design.md`,
 branch `backend-firmware-ui`). L'autore vuole l'OTA dalla ZimaBoard come strada normale: card
-"Firmware" in Dispositivi con elenco delle release, upload del `.bin` e "Pubblica", "Torna
-alla precedente" con conferma, avviso che il device si aggiorna al prossimo risveglio. La
+"Firmware" in Dispositivi con elenco delle release, upload del `.bin` e "Pubblica", "Rendi
+corrente" su ogni release non corrente, avviso che il device si aggiorna al prossimo
+risveglio. Prima c'era "Torna alla precedente": provandolo sul backend del Mac l'autore è
+finito alla 0.7.8 senza poter tornare alla 0.8.0 (ripubblicarla è rifiutato), da lì il
+pulsante per riga. La
 versione non si digita: il backend legge l'`esp_app_desc_t` del binario (offset 32, magic
 `0xABCD5432`, progetto `secondbrain_fw`) e rifiuta file che non sono il nostro firmware.
 Script `firmware/tools/release.sh` per compilare la release sul Mac. La 0.9.1 (data sul

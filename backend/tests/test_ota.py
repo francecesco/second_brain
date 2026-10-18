@@ -4,7 +4,7 @@ import pytest
 
 from secondbrain.cli import main
 from secondbrain.ota import (OtaError, current_release, list_releases, publish, publish_bytes,
-                             read_app_desc, rollback)
+                             read_app_desc, rollback, set_current)
 from tests.helpers import NOW, TEST_DB
 
 FW = b"\xe9firmware-di-prova" * 100
@@ -48,6 +48,19 @@ def test_publish_rejects_duplicates_and_missing_files(db, settings, fw_file, tmp
         publish(db, settings.firmware_dir, fw_file, "epaper154", "0.7.0", NOW)
     with pytest.raises(OtaError, match="non trovato"):
         publish(db, settings.firmware_dir, tmp_path / "manca.bin", "epaper154", "0.7.1", NOW)
+
+
+def test_set_current_goes_back_and_forward(db, settings, fw_file):
+    publish(db, settings.firmware_dir, fw_file, "epaper154", "0.7.0", NOW)
+    publish(db, settings.firmware_dir, fw_file, "epaper154", "0.7.1", NOW)
+    assert set_current(db, "epaper154", "0.7.0").current
+    assert [(r.version, r.current) for r in list_releases(db)] == [("0.7.0", True), ("0.7.1", False)]
+    assert set_current(db, "epaper154", "0.7.1").version == "0.7.1"
+    assert current_release(db, "epaper154").version == "0.7.1"
+    set_current(db, "epaper154", "0.7.1")   # già corrente: resta
+    assert [r.current for r in list_releases(db)] == [False, True]
+    with pytest.raises(OtaError, match="non trovata"):
+        set_current(db, "epaper154", "0.0.1")
 
 
 def test_rollback(db, settings, fw_file):

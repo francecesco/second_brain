@@ -165,28 +165,34 @@ def test_publish_firmware_rejects_bad_files(recordings, settings):
     assert r.status_code in (303, 422)
 
 
-def test_rollback_firmware_from_the_devices_page(recordings, db, settings):
+def test_set_current_firmware_from_the_devices_page(recordings, db, settings):
     c = recordings.client
     publish(db, settings.firmware_dir, _write(settings, "0.9.0"), "epaper154", "0.9.0", NOW)
     publish(db, settings.firmware_dir, _write(settings, "0.9.1"), "epaper154", "0.9.1", NOW)
     db.commit()
-    r = c.post("/devices/firmware/epaper154/rollback", data={"csrf": recordings.csrf},
+    text = c.get("/devices").text
+    # "Rendi corrente" solo sulle release non correnti
+    assert text.count('name="version"') == 1 and 'value="0.9.0"' in text
+    r = c.post("/devices/firmware/epaper154/current", data={"csrf": recordings.csrf, "version": "0.9.0"},
                follow_redirects=False)
     assert (r.status_code, r.headers["location"]) == (303, "/devices?corrente=0.9.0#firmware")
     text = c.get(r.headers["location"]).text
-    assert "Release corrente: 0.9.0" in text
-    # senza una precedente il pulsante è disabilitato e la richiesta dà errore
-    assert "disabled" in text.split('id="firmware"', 1)[1]
-    r = c.post("/devices/firmware/epaper154/rollback", data={"csrf": recordings.csrf},
+    assert "Release corrente: 0.9.0" in text and 'value="0.9.1"' in text
+    # e di nuovo avanti, dove il rollback non arriverebbe
+    r = c.post("/devices/firmware/epaper154/current", data={"csrf": recordings.csrf, "version": "0.9.1"},
+               follow_redirects=False)
+    assert r.headers["location"] == "/devices?corrente=0.9.1#firmware"
+    r = c.post("/devices/firmware/epaper154/current", data={"csrf": recordings.csrf, "version": "9.9.9"},
                follow_redirects=False)
     assert "errore=" in r.headers["location"]
+    assert "non trovata" in c.get(r.headers["location"]).text
 
 
 def test_firmware_routes_require_csrf(recordings):
     c = recordings.client
     assert c.post("/devices/firmware/epaper154",
                   files={"file": ("fw.bin", _image("0.9.1"), "application/octet-stream")}).status_code == 403
-    assert c.post("/devices/firmware/epaper154/rollback").status_code == 403
+    assert c.post("/devices/firmware/epaper154/current", data={"version": "0.9.1"}).status_code == 403
 
 
 def _write(settings, version):

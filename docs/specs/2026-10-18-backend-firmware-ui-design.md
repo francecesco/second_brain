@@ -2,11 +2,10 @@
 
 **Data:** 2026-10-18
 **Stato:** implementata sul branch `backend-firmware-ui` il 2026-10-18; 756 test del backend
-verdi, screenshot a 1280 e 390 px (chiaro e scuro). Deviazioni: "Torna alla precedente" è
-disabilitato quando non esiste una release pubblicata prima della corrente (dopo un rollback
-la più nuova resta in elenco ma non è "precedente"); gli errori arrivano con l'iniziale
-maiuscola; la colonna "corrente" sta nella cella della versione per il telefono. Da provare in
-locale dall'autore, poi deploy sulla ZimaBoard su sua decisione.
+verdi, screenshot a 1280 e 390 px (chiaro e scuro). Dopo la prima prova dell'autore in locale
+"Torna alla precedente" è diventato "Rendi corrente" per riga (vedi §2.2); 757 test.
+Deviazioni: gli errori arrivano con l'iniziale maiuscola; "corrente" sta nella cella della
+versione. Da provare di nuovo in locale, poi deploy sulla ZimaBoard su decisione dell'autore.
 
 ## 1. Obiettivo
 
@@ -27,8 +26,11 @@ e dopo al massimo 5 minuti la riga del device mostra la nuova versione.
    nome del progetto a offset 80 su 32 byte). Il backend accetta solo file con il magic
    giusto e progetto `secondbrain_fw`; la versione deve essere `X.Y.Z` e non già pubblicata.
 2. Una **card "Firmware" nella pagina Dispositivi**, una per tipo di dispositivo presente:
-   release corrente, elenco delle precedenti, campo file + "Pubblica", "Torna alla
-   precedente" con conferma, avviso che il device si aggiorna al prossimo risveglio.
+   release corrente, elenco delle precedenti, campo file + "Pubblica", "Rendi corrente" su
+   ogni release non corrente (con conferma), avviso che il device si aggiorna al prossimo
+   risveglio. Il primo giro aveva "Torna alla precedente" (il rollback della CLI): provandolo
+   l'autore è tornato indietro senza poter tornare avanti, perché ripubblicare una versione
+   già in elenco è rifiutato; il pulsante per riga copre le due direzioni.
 3. **Il flusso sul Mac** è uno script: `firmware/tools/release.sh X.Y.Z` scrive
    `version.txt`, compila, copia il binario versionato in `~/Downloads/`, rimette
    `version.txt` a `0.1.0`. Scritto in `CLAUDE.md` come procedura standard.
@@ -41,12 +43,13 @@ e dopo al massimo 5 minuti la riga del device mostra la nuova versione.
   Errori (file non firmware, progetto diverso, versione non valida o già pubblicata, file
   vuoto, oltre `max_upload_bytes`): redirect a `/devices?errore=<testo>#firmware`, la pagina
   mostra un `.notice` con `role="alert"`.
-- `POST /devices/firmware/{type}/rollback` (`csrf`): come `secondbrain firmware rollback`,
-  redirect a `/devices?corrente=X.Y.Z#firmware`; errore come sopra.
+- `POST /devices/firmware/{type}/current` (`csrf`, `version`): rende corrente una release in
+  elenco (`ota.set_current`), redirect a `/devices?corrente=X.Y.Z#firmware`; errore come
+  sopra. `secondbrain firmware rollback` resta nella CLI.
 - La card segue `docs/stile-ui.md`: `.card` con `h2` "Firmware <tipo>", tabella delle
   release (versione, data, sha corto, "corrente"), form `.actions` con `<input type=file
-  accept=".bin">` e pulsante pieno "Pubblica"; "Torna alla precedente" pulsante normale con
-  `onsubmit` di conferma, disabilitato senza una release precedente.
+  accept=".bin">` e pulsante pieno "Pubblica"; "Rendi corrente" pulsante normale nella riga
+  della release, con `onsubmit` di conferma.
 - Solo utente loggato (come il resto della UI) e CSRF. Il file passa in memoria (1,2 MB,
   limite `max_upload_bytes` già usato per i WAV) e va su disco con la `publish` esistente.
 
