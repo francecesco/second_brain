@@ -154,14 +154,14 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   prima era PWR), oppure push di un firmware, oppure `esptool ... --after hard_reset chip_id`
   con il cavo dati.
 
-## Stato al 2026-10-17
+## Stato al 2026-10-18
 
 - Tutto su `master`, compreso il backend (`backend-fase1b` e `backend-elaborazione-ai` uniti).
   `origin` (`github.com/francecesco/second_brain`, pubblico) allineato a `master` il
   2026-10-11 (push su richiesta dell'autore).
-- **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.9.0 (build
-  del codice corrente di `master` con la schermata "Oggi", flashata via cavo e pubblicata
-  come release corrente sulla ZimaBoard il 2026-10-13; `version.txt` in git resta 0.1.0), con
+- **Hardware e firmware: chiusi**, batteria collegata. Firmware sul device: 0.9.1 dal
+  2026-10-18 via OTA (prima 0.9.0 con la schermata "Oggi", flashata via cavo il 2026-10-13;
+  `version.txt` in git resta 0.1.0), con
   `SERVER_BASE_URL "https://secondbrain.cescohomelab.com"` e il token generato sulla
   ZimaBoard. Dal 2026-10-07 il firmware parla HTTPS (bundle di certificati) e manda il token
   (spec `docs/specs/2026-10-07-firmware-https-token-design.md`): un solo URL per tutte le
@@ -221,6 +221,12 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   dettaglio in un pannello a destra da 1100 px; telefono con riga in cima e barra in basso
   (Da fare, Archivio, Nuova, Cerca, Altro). 702 test backend. Provata dall'autore sul Mac il
   2026-10-17 e approvata.
+- **Firmware dalla pagina Dispositivi** (spec `docs/specs/2026-10-18-backend-firmware-ui-design.md`):
+  in `master` e **sulla ZimaBoard dal 2026-10-18** (backup `pre-deploy-20261018-063255.sql.gz`),
+  insieme all'icona dell'app che era in `master` ma non ancora deployata. Firmware sul device:
+  **0.9.1** (data `gg/mm` a fianco dell'ora), release corrente sulla ZimaBoard, arrivata via
+  OTA e vista dall'autore sul display. Da qui in poi gli aggiornamenti passano dalla card
+  "Firmware" (vedi "Come si lavora con l'hardware").
 - Le catture di prova di `capture_server.py` sono state cancellate il 2026-09-29.
 
 ## Prossima sessione
