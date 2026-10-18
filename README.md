@@ -120,8 +120,10 @@ scrive l'audio dall'I2S alla SD mentre il task principale aggiorna il display.
   batteria l'RTC si azzera quando si toglie l'alimentazione.
 - **OTA**: due partizioni app con rollback. *Pull*: a fine sync il device legge
   `<SERVER_BASE_URL>/firmware/manifest.json` (`{version, url, sha256}`) e se la versione è più
-  nuova scarica, verifica lo sha256 e riavvia. *Push* (solo DEV): `POST /ota` con il
-  binario nel corpo. Un'immagine appena installata si conferma dopo l'init del display;
+  nuova scarica, verifica lo sha256 e riavvia. La release si pubblica dalla pagina
+  Dispositivi del backend (card "Firmware", upload del `.bin` compilato con
+  `firmware/tools/release.sh X.Y.Z`; la versione la legge il backend dal binario). *Push*
+  (solo DEV): `POST /ota` con il binario nel corpo. Un'immagine appena installata si conferma dopo l'init del display;
   se crasha prima, il bootloader torna alla precedente.
 - **HTTPS e token**: gli URL `https://` sono verificati col bundle di certificati di
   ESP-IDF; ogni richiesta al backend porta `Authorization: Bearer <DEVICE_TOKEN>` se il

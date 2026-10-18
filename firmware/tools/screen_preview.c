@@ -22,11 +22,11 @@ int main(int argc, char **argv)
     const char *dir = argc > 1 ? argv[1] : ".";
     static uint8_t fb[SCREEN_FB_BYTES];
     const struct { const char *name; screen_status_t st; } cases[] = {
-        { "batteria",  { "15:45", SCREEN_BAT_DISCHARGING, 77, "FASTWEB-45H7P7", 0, "sync ok" } },
-        { "carica",    { "09:02", SCREEN_BAT_CHARGING, 84, "iPhone di Francesco", 2, "2 inviate" } },
-        { "piena",     { "23:59", SCREEN_BAT_FULL, 100, "Advenias", 0, "sync ok" } },
-        { "scarica",   { "07:30", SCREEN_BAT_DISCHARGING, 8, NULL, 3, "no sync" } },
-        { "usb",       { "--:--", SCREEN_BAT_NONE, -1, NULL, 1, "Batteria scarica" } },
+        { "batteria",  { "15:45", SCREEN_BAT_DISCHARGING, 77, "FASTWEB-45H7P7", 0, "sync ok", false, "18/10" } },
+        { "carica",    { "09:02", SCREEN_BAT_CHARGING, 84, "iPhone di Francesco", 2, "2 inviate", false, "01/03" } },
+        { "piena",     { "23:59", SCREEN_BAT_FULL, 100, "Advenias", 0, "sync ok", false, "31/12" } },
+        { "scarica",   { "07:30", SCREEN_BAT_DISCHARGING, 8, NULL, 3, "no sync", false, "07/03" } },
+        { "usb",       { "--:--", SCREEN_BAT_NONE, -1, NULL, 1, "Batteria scarica", false, NULL } },
     };
     for (unsigned i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
         screen_render_status(fb, &cases[i].st);
@@ -48,9 +48,9 @@ int main(int argc, char **argv)
     if (!loaded)
         for (int y = 0; y < SB_DIGEST_H; y++)
             if ((y / 8) % 2 == 0) memset(&digest[y * (SB_DIGEST_W / 8)], 0xAA, SB_DIGEST_W / 8);
-    const screen_status_t today = { "15:45", SCREEN_BAT_DISCHARGING, 77, "FASTWEB-45HT2K", 0, "sync ok", false };
-    screen_status_t alert = { "07:30", SCREEN_BAT_DISCHARGING, 8, NULL, 3, "no sync", true };
-    const screen_status_t alert_net = { "07:30", SCREEN_BAT_DISCHARGING, 8, "FASTWEB-45HT2K", 3, "token ko", true };
+    const screen_status_t today = { "15:45", SCREEN_BAT_DISCHARGING, 77, "FASTWEB-45HT2K", 0, "sync ok", false, "18/10" };
+    screen_status_t alert = { "07:30", SCREEN_BAT_DISCHARGING, 8, NULL, 3, "no sync", true, "07/03" };
+    const screen_status_t alert_net = { "07:30", SCREEN_BAT_DISCHARGING, 8, "FASTWEB-45HT2K", 3, "token ko", true, "31/12" };
     screen_render_today(fb, &today, digest);
     save(dir, "today", fb);
     screen_render_today(fb, &alert, digest);

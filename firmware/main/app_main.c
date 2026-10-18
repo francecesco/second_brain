@@ -243,14 +243,20 @@ static void do_sync(cycle_state_t *st)
     }
 }
 
-// Ora locale in alto a sinistra ("--:--" se l'RTC non e' valido). La versione del
-// firmware compare solo nella schermata DEV.
-static void fmt_clock(char *out, size_t n)
+// Ora locale in alto a sinistra ("--:--" se l'RTC non e' valido) con la data "gg/mm" a fianco
+// (vuota se l'RTC non e' valido: la schermata non la mostra). La versione del firmware
+// compare solo nella schermata DEV.
+static void fmt_clock(char *out, size_t n, char *date, size_t dn)
 {
     time_t now = time(NULL); struct tm lt; struct tm utc;
     gmtime_r(&now, &utc); localtime_r(&now, &lt);
-    if (capture_name_rtc_valid(&utc)) snprintf(out, n, "%02d:%02d", lt.tm_hour, lt.tm_min);
-    else strlcpy(out, "--:--", n);
+    if (capture_name_rtc_valid(&utc)) {
+        snprintf(out, n, "%02d:%02d", lt.tm_hour, lt.tm_min);
+        snprintf(date, dn, "%02d/%02d", lt.tm_mday, lt.tm_mon + 1);
+    } else {
+        strlcpy(out, "--:--", n);
+        date[0] = 0;
+    }
 }
 
 // Icona della batteria in alto a destra.
@@ -275,8 +281,8 @@ static void fmt_wifi_line(bool wifi_ok, char *out, size_t n)
 // altrimenti la schermata di stato classica.
 static void show_status(const cycle_state_t *st, const uint8_t *digest)
 {
-    char l1[8], l2[32], l3[32], l4[48];
-    fmt_clock(l1, sizeof(l1));
+    char l1[8], l1d[8], l2[32], l3[32], l4[48];
+    fmt_clock(l1, sizeof(l1), l1d, sizeof(l1d));
     fmt_wifi_line(st->wifi_ok, l2, sizeof(l2));
     char bl[20];
     battery_label(bl, sizeof(bl));
@@ -292,10 +298,11 @@ static void show_status(const cycle_state_t *st, const uint8_t *digest)
     else if (st->capture_msg[0]) strlcpy(l4, st->capture_msg, sizeof(l4));
     else if (!st->sd_ok) strlcpy(l4, "SD assente", sizeof(l4));
     else strlcpy(l4, "sync ok", sizeof(l4));
-    ESP_LOGI(TAG, "stato: [%s] [%s] [%s] [%s]", l1, l2, l3, l4);
+    ESP_LOGI(TAG, "stato: [%s %s] [%s] [%s] [%s]", l1, l1d, l2, l3, l4);
     const power_state_t *ps = battery_last();
     const screen_status_t scr = {
         .clock = l1,
+        .date = l1d[0] ? l1d : NULL,
         .battery = screen_battery(ps),
         .pct = ps->valid ? ps->pct : -1,
         .network = st->wifi_ok ? wifi_current_ssid() : NULL,

@@ -34,7 +34,7 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   `wifi_select.c`, `ota_manifest.c`, `wifi_bssid.c`) con test unity sull'host in
   `host_test/`. Prima il test che fallisce, poi l'implementazione. Test host:
   `cd firmware/host_test && idf.py build && timeout 10 ./build/host_test.elf`
-  (l'eseguibile non termina da solo). Al 2026-10-13 sono 52 e devono restare verdi.
+  (l'eseguibile non termina da solo). Al 2026-10-18 sono 54 e devono restare verdi.
 - Build senza warning (`-Werror` su format-truncation è attivo).
 - Ogni task del piano finisce con una verifica sull'hardware (log seriale o esito visibile)
   prima del commit; se la verifica scopre un bug, il fix va nello stesso commit o nel
@@ -107,10 +107,19 @@ stanno in `docs/specs/`, i piani eseguiti in `docs/plans/`, la guida d'uso in `R
   (`secondbrain firmware list` sul backend, `ota_serve/firmware/manifest.json` con
   `capture_server.py`), il device si aggiorna a quel binario al primo ciclo. Dopo un flash
   via USB, `secondbrain firmware rollback` o pubblicare la versione flashata.
-- OTA col backend: `docker compose cp <bin> app:/tmp/fw.bin` e `docker compose exec app
-  secondbrain firmware publish /tmp/fw.bin --version X.Y.Z`; il manifest è generato
-  dalla release corrente. Sulla ZimaBoard prima `scp <bin> zima:/tmp/` e i comandi dentro
-  `ssh zima 'cd ~/second_brain/backend && ...'`.
+- **Aggiornamento del firmware, procedura standard (dal 2026-10-18): OTA dalla ZimaBoard.**
+  Sul Mac `firmware/tools/release.sh X.Y.Z` (scrive `version.txt`, compila, lascia
+  `~/Downloads/secondbrain-X.Y.Z.bin` e rimette `version.txt` a 0.1.0), poi su
+  `https://secondbrain.cescohomelab.com/devices` nella card "Firmware" si carica il `.bin` e
+  si preme "Pubblica": la versione la legge il backend dall'intestazione ESP-IDF del binario.
+  Il device la scarica al prossimo wake (entro 5 min) e si riavvia; nei log della ZimaBoard
+  (`docker compose logs app | grep firmware`) si vede il `GET` del `.bin`, poi solo manifest.
+  "Rendi corrente" su una release in elenco torna indietro o di nuovo avanti (ripubblicare
+  una versione già pubblicata è rifiutato). Il cavo (`esptool`) resta per il recupero. Da CLI: `docker compose cp <bin> app:/tmp/fw.bin` e `docker compose exec app
+  secondbrain firmware publish /tmp/fw.bin` (`--version` opzionale, altrimenti dal binario);
+  sulla ZimaBoard prima `scp <bin> zima:/tmp/` e i comandi dentro
+  `ssh zima 'cd ~/second_brain/backend && ...'`. "Ultimo contatto" e "firmware" nella tabella
+  dei dispositivi si aggiornano solo con un upload, non con il manifest.
 - Audio: l'amplificatore dell'altoparlante (GPIO46) è **attivo alto** e impiega centinaia
   di ms a svegliarsi; il canale I2S TX va aperto solo per il beep (il full-duplex spostava
   il microfono sullo slot sbagliato) con `auto_clear` (altrimenti in underrun ripete
@@ -471,6 +480,27 @@ e campi a 16 px. Deviazioni dai mockup: ora `HH:MM` ovunque (data e secondi nel 
 "Ultimi 7 giorni" al posto di "Questa settimana", pannello a destra solo da 1100 px.
 Emerso in verifica: `capture_by` nei test fa `expire_all`, quindi va chiamato prima di
 modificare oggetti già caricati. 702 test backend; screenshot dell'app vera in chiaro e scuro.
+
+**2026-10-18 — Data sul display.** Richiesta dell'autore: la data `gg/mm` a fianco dell'ora
+nella barra in alto (schermata di stato e intestazione della "Oggi"). Due varianti mostrate
+in anteprima renderizzata sul Mac: nello stesso corpo dell'ora (20 px) nel caso peggiore
+`23:59 31/12` con `100%` finiva addosso alla percentuale; scelta la data a 16 px allineata in
+basso con l'ora (restano pochi pixel di margine). Senza RTC valido resta `--:--` senza data.
+Come l'ora, la data non fa ridisegnare da sola ai wake da timer: cambia col prossimo
+ridisegno utile. 54 test host.
+
+**2026-10-18 — Firmware dalla pagina Dispositivi** (`docs/specs/2026-10-18-backend-firmware-ui-design.md`,
+branch `backend-firmware-ui`). L'autore vuole l'OTA dalla ZimaBoard come strada normale: card
+"Firmware" in Dispositivi con elenco delle release, upload del `.bin` e "Pubblica", "Rendi
+corrente" su ogni release non corrente, avviso che il device si aggiorna al prossimo
+risveglio. Prima c'era "Torna alla precedente": provandolo sul backend del Mac l'autore è
+finito alla 0.7.8 senza poter tornare alla 0.8.0 (ripubblicarla è rifiutato), da lì il
+pulsante per riga. La
+versione non si digita: il backend legge l'`esp_app_desc_t` del binario (offset 32, magic
+`0xABCD5432`, progetto `secondbrain_fw`) e rifiuta file che non sono il nostro firmware.
+Script `firmware/tools/release.sh` per compilare la release sul Mac. La 0.9.1 (data sul
+display) è stata pubblicata ancora da CLI e il device l'ha scaricata al primo wake. 756 test
+backend; screenshot chiaro/scuro e a 390 px.
 
 **2026-10-17 — Repo e deploy sulla ZimaBoard.** Prima il deploy copiava `backend/` dal Mac
 con `git archive | ssh ... tar` in `~/secondbrain`. Ora sulla ZimaBoard c'è un clone del repo

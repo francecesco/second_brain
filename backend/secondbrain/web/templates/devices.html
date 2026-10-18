@@ -18,4 +18,29 @@
 {% endfor %}
 </table></div>
 {% else %}<p class="empty">Nessun dispositivo: si registrano con <code>secondbrain device add</code>.</p>{% endif %}
+
+<div id="firmware">
+{% if fw_error %}<p class="notice" role="alert">{{ icon("fix") }}<span>{{ fw_error[:1]|upper }}{{ fw_error[1:] }}</span></p>
+{% elif published_now %}<p class="notice" role="status">{{ icon("done") }}<span>Pubblicata {{ published_now }}: il dispositivo la scarica al prossimo risveglio, entro 5 minuti.</span></p>
+{% elif current_now %}<p class="notice" role="status">{{ icon("restore") }}<span>Release corrente: {{ current_now }}. Il dispositivo passa a quella versione al prossimo risveglio.</span></p>{% endif %}
+{% for fw in firmware %}
+<section class="card">
+  <h2>Firmware {{ fw.type }}</h2>
+  {% if fw.releases %}
+  <div class="table-wrap fw-table"><table>
+  <tr><th>Versione</th><th>Pubblicata</th><th>SHA-256</th><th></th></tr>
+  {% for r in fw.releases %}<tr><td class="mono">{{ r.version }}{% if r.current %} <span class="count">corrente</span>{% endif %}</td><td>{{ local(r.published_at) }}</td><td class="mono">{{ r.sha256[:12] }}</td>
+    <td>{% if not r.current %}<form method="post" action="/devices/firmware/{{ fw.type }}/current" class="actions" onsubmit="return confirm('Rendere corrente la {{ r.version }}? Il dispositivo la scarica al prossimo risveglio.')"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="version" value="{{ r.version }}"><button type="submit" aria-label="Rendi corrente" title="Rendi corrente">{{ icon("restore") }}<span class="label">Rendi corrente</span></button></form>{% endif %}</td></tr>
+  {% endfor %}
+  </table></div>
+  {% else %}<p class="empty">nessuna release pubblicata</p>{% endif %}
+  <p>Carica il <code>.bin</code> compilato sul Mac (<code>firmware/tools/release.sh X.Y.Z</code>): la versione si legge dal file e diventa la release corrente. Il dispositivo si aggiorna da solo al prossimo risveglio. "Rendi corrente" su una release in elenco serve a tornare indietro, o di nuovo avanti.</p>
+  <form method="post" action="/devices/firmware/{{ fw.type }}" enctype="multipart/form-data" class="actions fw-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="file" name="file" accept=".bin,application/octet-stream" required aria-label="File del firmware">
+    <button type="submit" class="pri" aria-label="Pubblica" title="Pubblica">{{ icon("up") }}<span class="label">Pubblica</span></button>
+  </form>
+</section>
+{% endfor %}
+</div>
 {% endblock %}

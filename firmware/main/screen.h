@@ -26,9 +26,10 @@ typedef struct {
     int              queue;      // file in coda
     const char      *outcome;    // esito del ciclo, in grande
     bool             alert;      // schermata Oggi: piede con prefisso "! "
+    const char      *date;       // "18/10" a fianco dell'ora, NULL senza data (RTC non valido)
 } screen_status_t;
 
-// Schermata di stato: ora e batteria in alto, rete e coda al centro, esito in basso.
+// Schermata di stato: ora, data e batteria in alto, rete e coda al centro, esito in basso.
 void screen_render_status(uint8_t *fb, const screen_status_t *st);
 
 // Schermata "Oggi": intestazione come screen_render_status (ora e batteria, ma in negativo), immagine del

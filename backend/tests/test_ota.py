@@ -3,7 +3,8 @@ import hashlib
 import pytest
 
 from secondbrain.cli import main
-from secondbrain.ota import OtaError, current_release, list_releases, publish, rollback
+from secondbrain.ota import (OtaError, current_release, list_releases, publish, publish_bytes,
+                             read_app_desc, rollback, set_current)
 from tests.helpers import NOW, TEST_DB
 
 FW = b"\xe9firmware-di-prova" * 100
@@ -47,6 +48,19 @@ def test_publish_rejects_duplicates_and_missing_files(db, settings, fw_file, tmp
         publish(db, settings.firmware_dir, fw_file, "epaper154", "0.7.0", NOW)
     with pytest.raises(OtaError, match="non trovato"):
         publish(db, settings.firmware_dir, tmp_path / "manca.bin", "epaper154", "0.7.1", NOW)
+
+
+def test_set_current_goes_back_and_forward(db, settings, fw_file):
+    publish(db, settings.firmware_dir, fw_file, "epaper154", "0.7.0", NOW)
+    publish(db, settings.firmware_dir, fw_file, "epaper154", "0.7.1", NOW)
+    assert set_current(db, "epaper154", "0.7.0").current
+    assert [(r.version, r.current) for r in list_releases(db)] == [("0.7.0", True), ("0.7.1", False)]
+    assert set_current(db, "epaper154", "0.7.1").version == "0.7.1"
+    assert current_release(db, "epaper154").version == "0.7.1"
+    set_current(db, "epaper154", "0.7.1")   # già corrente: resta
+    assert [r.current for r in list_releases(db)] == [False, True]
+    with pytest.raises(OtaError, match="non trovata"):
+        set_current(db, "epaper154", "0.0.1")
 
 
 def test_rollback(db, settings, fw_file):
@@ -120,3 +134,52 @@ def test_cli_publish_list_rollback(monkeypatch, db, settings, fw_file, capsys):
     out = capsys.readouterr().out
     assert "* epaper154 0.7.0" in out and "  epaper154 0.7.1" in out
     assert main(["firmware", "publish", str(fw_file), "--version", "0.7.0"]) == 1
+
+
+# --- intestazione ESP-IDF (spec firmware-ui §2.1) ---
+
+def make_image(version="0.9.1", project="secondbrain_fw", magic=b"\x32\x54\xcd\xab"):
+    """Binario finto con l'esp_app_desc_t a offset 32 come lo scrive ESP-IDF."""
+    head = b"\xe9" + b"\0" * 31
+    desc = magic + b"\0" * 12 + version.encode().ljust(32, b"\0") + project.encode().ljust(32, b"\0")
+    return head + desc + b"\xaa" * 500
+
+
+def test_read_app_desc():
+    assert read_app_desc(make_image()) == ("0.9.1", "secondbrain_fw")
+    assert read_app_desc(make_image("10.20.30")) == ("10.20.30", "secondbrain_fw")
+
+
+@pytest.mark.parametrize("data,msg", [
+    (b"", "non è un firmware"),
+    (FW, "non è un firmware"),
+    (make_image(magic=b"\0\0\0\0"), "non è un firmware"),
+    (make_image(project="altro"), "secondbrain_fw"),
+    (make_image(version="0.9"), "X.Y.Z"),
+    (make_image(version="v0.9.1"), "X.Y.Z"),
+])
+def test_read_app_desc_rejects(data, msg):
+    with pytest.raises(OtaError, match=msg):
+        read_app_desc(data)
+
+
+def test_publish_bytes_takes_the_version_from_the_image(db, settings):
+    release = publish_bytes(db, settings.firmware_dir, make_image("0.9.1"), "epaper154", NOW)
+    db.commit()
+    assert (release.version, release.current) == ("0.9.1", True)
+    assert (settings.firmware_dir / "epaper154" / "secondbrain-0.9.1.bin").read_bytes() == make_image("0.9.1")
+    with pytest.raises(OtaError, match="già pubblicata"):
+        publish_bytes(db, settings.firmware_dir, make_image("0.9.1"), "epaper154", NOW)
+    # nessun file temporaneo dimenticato
+    assert sorted(p.name for p in (settings.firmware_dir / "epaper154").iterdir()) == ["secondbrain-0.9.1.bin"]
+
+
+def test_cli_publish_reads_the_version_from_the_image(db, settings, tmp_path, monkeypatch):
+    path = tmp_path / "fw.bin"
+    path.write_bytes(make_image("0.9.2"))
+    monkeypatch.setenv("DATABASE_URL", TEST_DB)
+    monkeypatch.setenv("FIRMWARE_DIR", str(settings.firmware_dir))
+    monkeypatch.setenv("ARCHIVE_DIR", str(settings.archive_dir))
+    assert main(["firmware", "publish", str(path)]) == 0
+    db.expire_all()
+    assert current_release(db, "epaper154").version == "0.9.2"

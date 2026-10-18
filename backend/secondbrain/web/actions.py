@@ -1,16 +1,16 @@
 """Azioni sulle registrazioni e pagine cestino, da sistemare, dispositivi (spec §7)."""
 import uuid
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from .. import catalog, library, ota
 from ..devices import DeviceError, rename_device
 from ..models import WebSession
-from ..naming import day_dir
+from ..naming import day_dir, is_valid_device_type
 from .context import base_context, clean_device, page_context, today_local
 from .groups import day_groups, due_groups
 from ..notefile import Action, clean_action_text, parse_due
@@ -243,8 +243,59 @@ def devices_page(request: Request, db: Session = Depends(get_db),
                  session: WebSession = Depends(require_login)):
     ctx = page_context(request, db, session)
     releases = {d.type: ota.current_release(db, d.type) for d in ctx["devices"]}
+    # card Firmware per ogni tipo che ha un dispositivo o una release (il tipo `web` è l'app
+    # stessa: niente firmware)
+    all_releases = ota.list_releases(db)
+    types = sorted({d.type for d in ctx["devices"]} | {r.type for r in all_releases}
+                   - {ota.WEB_DEVICE_TYPE})
+    firmware = [{"type": t, "releases": [r for r in all_releases if r.type == t][::-1]}
+                for t in types]
+    q = request.query_params
     return templates.TemplateResponse(request, "devices.html", ctx | {
-        "crumbs": [("Dispositivi", None)], "releases": releases})
+        "crumbs": [("Dispositivi", None)], "releases": releases, "firmware": firmware,
+        "published_now": q.get("pubblicata"), "current_now": q.get("corrente"),
+        "fw_error": q.get("errore")})
+
+
+def _fw_back(**params: str) -> RedirectResponse:
+    query = "&".join(f"{k}={quote(v)}" for k, v in params.items())
+    return RedirectResponse(f"/devices?{query}#firmware", status_code=303)
+
+
+@router.post("/devices/firmware/{type_}")
+async def publish_firmware_route(request: Request, type_: str, file: UploadFile | None = File(None),
+                                 db: Session = Depends(get_db),
+                                 session: WebSession = Depends(require_csrf)):
+    """Upload del binario dalla card Firmware: la versione è quella nell'intestazione."""
+    if not is_valid_device_type(type_):
+        raise HTTPException(404, "tipo sconosciuto")
+    if file is None:
+        return _fw_back(errore="scegli il file .bin del firmware")
+    state = request.app.state
+    data = await file.read(state.settings.max_upload_bytes + 1)
+    if len(data) > state.settings.max_upload_bytes:
+        return _fw_back(errore="file troppo grande")
+    try:
+        release = ota.publish_bytes(db, state.settings.firmware_dir, data, type_, state.clock())
+    except ota.OtaError as exc:
+        return _fw_back(errore=str(exc))
+    db.commit()
+    return _fw_back(pubblicata=release.version)
+
+
+@router.post("/devices/firmware/{type_}/current")
+def set_current_firmware_route(request: Request, type_: str, version: str = Form(""),
+                               db: Session = Depends(get_db),
+                               session: WebSession = Depends(require_csrf)):
+    """"Rendi corrente" su una riga della tabella: indietro o avanti tra le release."""
+    if not is_valid_device_type(type_):
+        raise HTTPException(404, "tipo sconosciuto")
+    try:
+        release = ota.set_current(db, type_, version)
+    except ota.OtaError as exc:
+        return _fw_back(errore=str(exc))
+    db.commit()
+    return _fw_back(corrente=release.version)
 
 
 @router.post("/devices/{device_id}/name")
