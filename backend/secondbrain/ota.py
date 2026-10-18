@@ -7,6 +7,7 @@ import hashlib
 import os
 import re
 import shutil
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -23,6 +24,16 @@ from .naming import DEFAULT_DEVICE_TYPE, is_valid_device_type
 VERSION_RE = re.compile(r"\d+\.\d+\.\d+")
 FILE_RE = re.compile(r"secondbrain-\d+\.\d+\.\d+\.bin")
 
+# esp_app_desc_t come lo scrive ESP-IDF: dopo l'intestazione dell'immagine (24 byte) e quella
+# del primo segmento (8 byte) ci sono magic, secure_version, 8 byte riservati, versione e nome
+# del progetto (stringhe da 32 byte terminate da NUL).
+APP_DESC_OFFSET = 32
+APP_DESC_MAGIC = b"\x32\x54\xcd\xab"   # 0xABCD5432 little-endian
+APP_DESC_VERSION = slice(APP_DESC_OFFSET + 16, APP_DESC_OFFSET + 48)
+APP_DESC_PROJECT = slice(APP_DESC_OFFSET + 48, APP_DESC_OFFSET + 80)
+FIRMWARE_PROJECT = "secondbrain_fw"
+WEB_DEVICE_TYPE = "web"   # l'app stessa (note scritte): non ha firmware
+
 
 class OtaError(ValueError):
     """Operazione non valida sulle release firmware."""
@@ -30,6 +41,27 @@ class OtaError(ValueError):
 
 def release_filename(version: str) -> str:
     return f"secondbrain-{version}.bin"
+
+
+def _c_string(raw: bytes) -> str:
+    return raw.split(b"\0", 1)[0].decode("ascii", errors="replace")
+
+
+def read_app_desc(data: bytes) -> tuple[str, str]:
+    """Versione e nome del progetto dall'intestazione del binario ESP-IDF.
+
+    Così la versione non si digita (e non si sbaglia): è quella di `version.txt` compilata
+    nel firmware. Rifiuta tutto quello che non è un firmware Second Brain.
+    """
+    if len(data) < APP_DESC_PROJECT.stop or data[APP_DESC_OFFSET:APP_DESC_OFFSET + 4] != APP_DESC_MAGIC:
+        raise OtaError("il file non è un firmware ESP-IDF")
+    version = _c_string(data[APP_DESC_VERSION])
+    project = _c_string(data[APP_DESC_PROJECT])
+    if project != FIRMWARE_PROJECT:
+        raise OtaError(f"il firmware è del progetto {project!r}, non {FIRMWARE_PROJECT}")
+    if VERSION_RE.fullmatch(version) is None:
+        raise OtaError(f"versione nel firmware non nel formato X.Y.Z: {version!r}")
+    return version, project
 
 
 def current_release(s: Session, type_: str) -> FirmwareRelease | None:
@@ -69,6 +101,25 @@ def publish(s: Session, firmware_dir: Path, src: Path, type_: str, version: str,
     s.add(release)
     s.flush()
     return release
+
+
+def publish_bytes(s: Session, firmware_dir: Path, data: bytes, type_: str,
+                  now: datetime) -> FirmwareRelease:
+    """Pubblica un binario ricevuto in memoria (upload dalla UI) con la versione che porta
+    nell'intestazione. Il file temporaneo sta nella cartella del firmware (stesso disco:
+    la copia finale è un rename) e sparisce comunque."""
+    version, _ = read_app_desc(data)
+    firmware_dir.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix="upload-", suffix=".bin", dir=firmware_dir)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        return publish(s, firmware_dir, Path(tmp), type_, version, now)
+    finally:
+        try:
+            os.unlink(tmp)
+        except FileNotFoundError:
+            pass
 
 
 def rollback(s: Session, type_: str) -> FirmwareRelease:

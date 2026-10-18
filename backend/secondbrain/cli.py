@@ -127,9 +127,12 @@ def _add_rescan_command(sub) -> None:
 def _firmware_publish(args: argparse.Namespace) -> None:
     with open_session() as (s, settings):
         try:
+            version = args.version
+            if version is None:   # dall'intestazione del binario, come fa la UI
+                version, _ = ota.read_app_desc(Path(args.file).read_bytes())
             release = ota.publish(s, settings.firmware_dir, Path(args.file), args.type,
-                                  args.version, utcnow())
-        except ota.OtaError as exc:
+                                  version, utcnow())
+        except (ota.OtaError, OSError) as exc:
             raise CliError(str(exc)) from None
         s.commit()
     print(f"Pubblicata {release.type} {release.version} (sha256 {release.sha256}).")
@@ -158,7 +161,7 @@ def _add_firmware_commands(sub) -> None:
     actions = group.add_subparsers(dest="action", required=True)
     pub = actions.add_parser("publish", help="pubblica un binario come release corrente")
     pub.add_argument("file")
-    pub.add_argument("--version", required=True, help="X.Y.Z, come version.txt del firmware")
+    pub.add_argument("--version", help="X.Y.Z; se manca si legge dal binario (version.txt compilato)")
     pub.add_argument("--type", default=DEFAULT_DEVICE_TYPE)
     pub.set_defaults(func=_firmware_publish)
     back = actions.add_parser("rollback", help="torna alla release precedente")

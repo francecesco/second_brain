@@ -106,3 +106,91 @@ def test_cli_trash_purge(recordings, db, settings, monkeypatch, capsys):
     monkeypatch.setenv("ARCHIVE_DIR", str(settings.archive_dir))
     assert main(["trash", "purge"]) == 0
     assert "Eliminate definitivamente 1" in capsys.readouterr().out
+
+
+# --- firmware dalla pagina Dispositivi (spec firmware-ui §3) ---
+
+def _image(version):
+    from tests.test_ota import make_image
+    return make_image(version)
+
+
+def test_devices_page_firmware_card_without_releases(recordings):
+    text = recordings.client.get("/devices").text
+    assert 'id="firmware"' in text
+    assert "nessuna release" in text
+    assert 'action="/devices/firmware/epaper154"' in text
+
+
+def test_publish_firmware_from_the_devices_page(recordings, db, settings):
+    c = recordings.client
+    r = c.post("/devices/firmware/epaper154", data={"csrf": recordings.csrf},
+               files={"file": ("secondbrain_fw.bin", _image("0.9.1"), "application/octet-stream")},
+               follow_redirects=False)
+    assert (r.status_code, r.headers["location"]) == (303, "/devices?pubblicata=0.9.1#firmware")
+    text = c.get(r.headers["location"]).text
+    assert "Pubblicata 0.9.1" in text and "corrente" in text
+    assert (settings.firmware_dir / "epaper154" / "secondbrain-0.9.1.bin").read_bytes() == _image("0.9.1")
+    # la tabella dei dispositivi mostra la release pubblicata accanto al firmware del device
+    assert "pubblicata 0.9.1" in text
+    # il manifest per il device la espone
+    from tests.test_ota import auth
+    from secondbrain.devices import create_device
+    _, tok = create_device(db, "001122334455", "nuovo", "epaper154", NOW)
+    db.commit()
+    assert c.get("/firmware/manifest.json", headers=auth(tok)).json()["version"] == "0.9.1"
+
+
+def test_publish_firmware_rejects_bad_files(recordings, settings):
+    c = recordings.client
+    r = c.post("/devices/firmware/epaper154", data={"csrf": recordings.csrf},
+               files={"file": ("x.bin", b"\xe9non-un-firmware" * 50, "application/octet-stream")},
+               follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/devices?errore=")
+    assert "non è un firmware" in c.get(r.headers["location"]).text
+    assert not (settings.firmware_dir / "epaper154").exists()
+    # due volte la stessa versione
+    for _ in range(2):
+        r = c.post("/devices/firmware/epaper154", data={"csrf": recordings.csrf},
+                   files={"file": ("fw.bin", _image("0.9.1"), "application/octet-stream")},
+                   follow_redirects=False)
+    assert "errore=" in r.headers["location"]
+    assert "già pubblicata" in c.get(r.headers["location"]).text
+    # tipo sconosciuto e file mancante
+    r = c.post("/devices/firmware/../x", data={"csrf": recordings.csrf},
+               files={"file": ("fw.bin", _image("0.9.2"), "application/octet-stream")},
+               follow_redirects=False)
+    assert r.status_code in (303, 404)
+    r = c.post("/devices/firmware/epaper154", data={"csrf": recordings.csrf}, follow_redirects=False)
+    assert r.status_code in (303, 422)
+
+
+def test_rollback_firmware_from_the_devices_page(recordings, db, settings):
+    c = recordings.client
+    publish(db, settings.firmware_dir, _write(settings, "0.9.0"), "epaper154", "0.9.0", NOW)
+    publish(db, settings.firmware_dir, _write(settings, "0.9.1"), "epaper154", "0.9.1", NOW)
+    db.commit()
+    r = c.post("/devices/firmware/epaper154/rollback", data={"csrf": recordings.csrf},
+               follow_redirects=False)
+    assert (r.status_code, r.headers["location"]) == (303, "/devices?corrente=0.9.0#firmware")
+    text = c.get(r.headers["location"]).text
+    assert "Release corrente: 0.9.0" in text
+    # senza una precedente il pulsante è disabilitato e la richiesta dà errore
+    assert "disabled" in text.split('id="firmware"', 1)[1]
+    r = c.post("/devices/firmware/epaper154/rollback", data={"csrf": recordings.csrf},
+               follow_redirects=False)
+    assert "errore=" in r.headers["location"]
+
+
+def test_firmware_routes_require_csrf(recordings):
+    c = recordings.client
+    assert c.post("/devices/firmware/epaper154",
+                  files={"file": ("fw.bin", _image("0.9.1"), "application/octet-stream")}).status_code == 403
+    assert c.post("/devices/firmware/epaper154/rollback").status_code == 403
+
+
+def _write(settings, version):
+    settings.firmware_dir.mkdir(parents=True, exist_ok=True)
+    p = settings.firmware_dir / f"src-{version}.bin"
+    p.write_bytes(_image(version))
+    return p
