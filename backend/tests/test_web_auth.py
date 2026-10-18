@@ -160,6 +160,22 @@ def test_base_page_has_a_flash_element_for_htmx_errors(client):
     assert "htmx:responseError" in r.text
 
 
+def test_base_page_links_the_app_icons(client):
+    # Scheda del browser (SVG col tema del sistema, PNG per chi non legge l'SVG) e schermata Home di iOS.
+    r = client.get("/login")
+    for rel, name in [("icon", "favicon.svg"), ("icon", "favicon-32.png"), ("apple-touch-icon", "apple-touch-icon.png")]:
+        assert f'rel="{rel}"' in r.text and f"/static/{name}?v=" in r.text
+    assert '<meta name="apple-mobile-web-app-title" content="Second Brain">' in r.text
+
+
+@pytest.mark.parametrize("name,media_type", [("favicon.svg", "image/svg+xml"), ("favicon-32.png", "image/png"),
+                                             ("apple-touch-icon.png", "image/png")])
+def test_app_icons_served_without_login(client, name, media_type):
+    # iOS scarica l'icona quando la pagina si aggiunge alla Home: deve arrivare anche senza sessione.
+    r = client.get(f"/static/{name}")
+    assert (r.status_code, r.headers["content-type"].split(";")[0]) == (200, media_type)
+
+
 def test_wrong_password_page(client, user):
     r = client.post("/login", data={"password": "no"})
     assert r.status_code == 401 and "Password errata" in r.text

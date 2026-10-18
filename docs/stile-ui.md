@@ -280,6 +280,17 @@ orizzontale su telefono.
 currentColor`, `aria-hidden`. Un'icona nuova si aggiunge lì, disegnata a mano nello
 stesso tratto; niente icon font, niente immagini. Un'icona non più usata si toglie.
 
+**Icona dell'app** (`favicon.svg`, `favicon-32.png`, `apple-touch-icon.png` in
+`web/static/`, collegate in `base.html` con `static_url`). Un neurone: corpo arancione al
+centro e sei dendriti in `--fg` che finiscono in punti, su una tessera `--panel` con bordo
+`--line`. L'arancione è il punto del marchio, l'unico elemento acceso. `favicon.svg` segue
+il tema del sistema con `prefers-color-scheme` e i colori dei token copiati come valori
+(un SVG usato come icona non vede le variabili della pagina); `favicon-32.png` è la stessa
+icona chiara per i browser che non leggono l'SVG; `apple-touch-icon.png` (180 px, quadrata,
+senza trasparenza: la maschera arrotondata la mette iOS) è sempre chiara, perché iOS non ha
+una variante scura per le app web. Il nome sotto l'icona viene da
+`apple-mobile-web-app-title`. Cambiando i token vanno rigenerati i tre file.
+
 ## Breakpoint
 
 - `≥ 1100 px`: il dettaglio di una nota si apre nel pannello a destra.
@@ -352,3 +363,6 @@ senza, dopo un deploy il tunnel serviva il foglio di stile vecchio con l'HTML nu
 - **2026-10-17** — Azioni (spec `docs/specs/2026-10-17-backend-azioni-design.md`): azioni
   sotto le righe con casella piccola ed etichetta di scadenza, sezione In scadenza in cima a
   Da fare, tessere Azioni aperte e In scadenza; arancione solo per le scadenze passate.
+- **2026-10-18** — Icona dell'app: scelta tra sette segni astratti e sei "neurali" con
+  anteprime a 180, 64, 32 e 16 px; vinto il neurone, leggibile anche a 16 px nella scheda
+  del browser.
